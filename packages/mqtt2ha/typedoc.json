@@ -1,0 +1,5 @@
+{
+  "entryPoints": ["./src"],
+  "plugin": ["typedoc-material-theme"],
+  "themeColor": "#4ba7ee"
+}

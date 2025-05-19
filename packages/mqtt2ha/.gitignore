@@ -1,0 +1,8 @@
+node_modules
+dist
+docs
+vitest-ctrf
+.env
+
+test-environment/homeassistant
+test-environment/mosquitto/data
