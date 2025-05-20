@@ -42,7 +42,7 @@ async function main() {
   const mqttSettings: MqttSettings = {
     host: 'mosquitto.test-environment.orb.local',
     port: 1883,
-    client_name: 'ha-mqtt-d-js'
+    client_name: 'mqtt2ha'
   };
 
   const device: DeviceConfiguration = {

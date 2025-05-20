@@ -26,6 +26,18 @@ import { BaseComponentConfiguration, ResolvedComponentConfiguration } from '../c
 import { Discoverable } from './discoverable';
 import { ComponentSettings } from './settings';
 
+interface CommandTopicConfiguration {
+  name: string;
+  topic: string;
+}
+
+type CommandCallback<TUserData, TCommandMessage> = (
+  client: MqttClient,
+  topicName: string,
+  message: TCommandMessage,
+  userData?: TUserData
+) => Promise<void>;
+
 /**
  * A base class for Home Assistant MQTT entities that can receive commands. Extends Discoverable to add command handling
  * capabilities.
@@ -41,8 +53,7 @@ export class Subscriber<
   TUserData,
   TCommandMessage
 > extends Discoverable<TComponentConfiguration, TState> {
-  /** MQTT topic where commands for this entity are received */
-  protected commandTopic: string;
+  protected commandTopics: CommandTopicConfiguration[] = [];
 
   /**
    * Gets the complete configuration for this entity including command topic
@@ -52,45 +63,72 @@ export class Subscriber<
   protected override getConfig(): ResolvedComponentConfiguration {
     return {
       ...super.getConfig(),
-      command_topic: this.commandTopic
+      ...Object.fromEntries(Array.from(this.commandTopics.values()).map((cfg) => [cfg.name, cfg.topic]))
     };
   }
+
+  private commandCallback: CommandCallback<TUserData, TCommandMessage>;
+  private userData?: TUserData;
 
   /**
    * Creates a new subscribable entity
    *
    * @param settings - The component settings including MQTT configuration
+   * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
    * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
-    commandCallback: (client: MqttClient, message: TCommandMessage, userData?: TUserData) => Promise<void>,
+    commandTopicNames: string[],
+    commandCallback: CommandCallback<TUserData, TCommandMessage>,
     userData?: TUserData
   ) {
-    super(settings, () => {
-      this.logger.debug(`Subscribing to command topic ${this.commandTopic} for ${this.identifier}...`);
-      this.mqttClient.subscribe(this.commandTopic, { qos: 1 });
+    if (commandTopicNames.length === 0) {
+      throw new Error('No command topics provided');
+    }
+
+    super(settings, async () => {
+      await this.subscribeToCommandTopics();
     });
 
-    this.commandTopic = `${settings.mqtt.state_prefix || 'mqtt2ha'}/${this.baseTopicName}/command`;
+    this.commandCallback = commandCallback;
+    this.userData = userData;
 
-    // Attach callback
+    this.commandTopics = commandTopicNames.map((topicName) => ({
+      name: topicName,
+      topic: `${settings.mqtt.state_prefix || 'mqtt2ha'}/${this.baseTopicName}/${topicName.endsWith('_topic') ? topicName.slice(0, -6) : topicName}`
+    }));
+
     this.mqttClient.on('message', async (topic, message) => {
-      if (topic === this.commandTopic) {
-        const stringMessage = message.toString();
-        this.logger.debug(`Received command message for ${this.identifier} on topic ${topic}: ${stringMessage}`);
-
-        let parsedMessage: TCommandMessage;
-
-        try {
-          parsedMessage = JSON.parse(stringMessage);
-        } catch {
-          parsedMessage = stringMessage as unknown as TCommandMessage;
-        }
-
-        await commandCallback(this.mqttClient, parsedMessage, userData);
-      }
+      await this.handleCommandMessage(topic, message);
     });
+  }
+
+  private async subscribeToCommandTopics() {
+    for (const topicConfiguration of this.commandTopics) {
+      this.logger.debug(
+        `Subscribing to command topic '${topicConfiguration.name}: ${topicConfiguration.topic}' for ${this.identifier}...`
+      );
+      await this.mqttClient.subscribeAsync(topicConfiguration.topic, { qos: 1 });
+    }
+  }
+
+  private async handleCommandMessage(topic: string, message: Buffer<ArrayBufferLike>) {
+    const commandTopic = this.commandTopics.find((t) => t.topic === topic);
+    if (commandTopic) {
+      const stringMessage = message.toString();
+      this.logger.debug(`Received command message for ${this.identifier} on topic ${topic}: ${stringMessage}`);
+
+      let parsedMessage: TCommandMessage;
+
+      try {
+        parsedMessage = JSON.parse(stringMessage);
+      } catch {
+        parsedMessage = stringMessage as unknown as TCommandMessage;
+      }
+
+      await this.commandCallback(this.mqttClient, commandTopic.name, parsedMessage, this.userData);
+    }
   }
 }

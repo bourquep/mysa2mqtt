@@ -49,9 +49,9 @@ export class Button<TUserData> extends Subscriber<ButtonInfo, never, TUserData, 
    */
   constructor(
     settings: ComponentSettings<ButtonInfo>,
-    commandCallback: (client: MqttClient, message: string, userData?: TUserData) => Promise<void>,
+    commandCallback: (client: MqttClient, topicName: string, message: string, userData?: TUserData) => Promise<void>,
     userData?: TUserData
   ) {
-    super(settings, commandCallback, userData);
+    super(settings, ['command_topic'], commandCallback, userData);
   }
 }

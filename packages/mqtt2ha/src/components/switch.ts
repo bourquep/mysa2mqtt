@@ -51,18 +51,19 @@ export class Switch<TUserData> extends Subscriber<SwitchInfo, string, TUserData,
    */
   constructor(
     settings: ComponentSettings<SwitchInfo>,
-    commandCallback: (client: MqttClient, message: string, userData?: TUserData) => Promise<void>,
+    commandCallback: (client: MqttClient, topicName: string, message: string, userData?: TUserData) => Promise<void>,
     userData?: TUserData
   ) {
     super(
       settings,
-      async (client: MqttClient, message: string, userData?: TUserData) => {
+      ['command_topic'],
+      async (client: MqttClient, topicName: string, message: string, userData?: TUserData) => {
         if (message === (this.component.payload_on || 'ON')) {
           await this.on();
         } else if (message === (this.component.payload_off || 'OFF')) {
           await this.off();
         }
-        await commandCallback(client, message, userData);
+        await commandCallback(client, topicName, message, userData);
       },
       userData
     );
