@@ -43,16 +43,17 @@ type CommandCallback<TUserData, TCommandMessage> = (
  * capabilities.
  *
  * @typeParam TComponentConfiguration - The configuration type specific to this component
- * @typeParam TState - The type of state data this component can handle
+ * @typeParam TStateMap - The type of state data this component can handle
  * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  * @typeParam TCommandMessage - Type of command messages this component can receive
  */
 export class Subscriber<
   TComponentConfiguration extends BaseComponentConfiguration,
-  TState,
+  TStateMap extends Record<string, unknown>,
   TUserData,
   TCommandMessage
-> extends Discoverable<TComponentConfiguration, TState> {
+> extends Discoverable<TComponentConfiguration, TStateMap> {
+  /** List of MQTT topics for entity commands. */
   protected commandTopics: CommandTopicConfiguration[] = [];
 
   /**
@@ -74,12 +75,14 @@ export class Subscriber<
    * Creates a new subscribable entity
    *
    * @param settings - The component settings including MQTT configuration
+   * @param stateTopicNames - Array of state topic names
    * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
    * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
+    stateTopicNames: Extract<keyof TStateMap, string>[],
     commandTopicNames: string[],
     commandCallback: CommandCallback<TUserData, TCommandMessage>,
     userData?: TUserData
@@ -88,7 +91,7 @@ export class Subscriber<
       throw new Error('No command topics provided');
     }
 
-    super(settings, async () => {
+    super(settings, stateTopicNames, async () => {
       await this.subscribeToCommandTopics();
     });
 

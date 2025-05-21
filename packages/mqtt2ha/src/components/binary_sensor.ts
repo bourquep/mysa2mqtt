@@ -25,6 +25,10 @@ import { ComponentConfiguration } from '@/configuration/component_configuration'
 import { Discoverable } from '../api/discoverable';
 import { ComponentSettings } from '../api/settings';
 
+type StateTopicMap = {
+  state_topic: string;
+};
+
 /** Configuration interface for a binary sensor component */
 export interface BinarySensorInfo extends ComponentConfiguration<'binary_sensor'> {
   /** The payload that represents an ON/active state. Default is "ON". */
@@ -34,35 +38,43 @@ export interface BinarySensorInfo extends ComponentConfiguration<'binary_sensor'
 }
 
 /**
- * Represents a binary sensor in Home Assistant A binary sensor can only be in one of two states: ON/active or
- * OFF/inactive
+ * Represents a binary sensor in Home Assistant. A binary sensor can only be in one of two states: ON/active or
+ * OFF/inactive.
  */
-export class BinarySensor extends Discoverable<BinarySensorInfo, string> {
+export class BinarySensor extends Discoverable<BinarySensorInfo, StateTopicMap> {
+  private _isOn?: boolean;
+
+  /** @returns Returns the current state of the sensor. */
+  get isOn() {
+    return this._isOn;
+  }
+
   /**
    * Creates a new binary sensor instance
    *
    * @param settings - Configuration settings for the binary sensor
+   * @param isOn - Initial state of the sensor
    */
-  constructor(settings: ComponentSettings<BinarySensorInfo>) {
-    super(settings);
+  constructor(settings: ComponentSettings<BinarySensorInfo>, isOn?: boolean) {
+    super(settings, ['state_topic']);
+    this._isOn = isOn;
   }
 
   /** Sets the sensor state to ON/active */
   async on() {
-    await this.setState(this.component.payload_on || 'ON');
+    await this.setState('state_topic', this.component.payload_on || 'ON');
+    this._isOn = true;
   }
 
   /** Sets the sensor state to OFF/inactive */
   async off() {
-    await this.setState(this.component.payload_off || 'OFF');
+    await this.setState('state_topic', this.component.payload_off || 'OFF');
+    this._isOn = false;
   }
 
-  /**
-   * Toggles the sensor state between ON and OFF If currently ON, switches to OFF; if currently OFF or undefined,
-   * switches to ON
-   */
+  /** Toggles the sensor state */
   async toggle() {
-    if (this.lastSetState === (this.component.payload_on || 'ON')) {
+    if (this._isOn) {
       await this.off();
     } else {
       await this.on();

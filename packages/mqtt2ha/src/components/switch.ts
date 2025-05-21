@@ -26,6 +26,10 @@ import { MqttClient } from 'mqtt';
 import { ComponentSettings } from '../api/settings';
 import { Subscriber } from '../api/subscriber';
 
+type StateTopicMap = {
+  state_topic: string;
+};
+
 /** Configuration interface for a switch component */
 export interface SwitchInfo extends ComponentConfiguration<'switch'> {
   /** The payload to publish for turning the switch on. Default is "ON". */
@@ -41,7 +45,7 @@ export interface SwitchInfo extends ComponentConfiguration<'switch'> {
  *
  * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  */
-export class Switch<TUserData> extends Subscriber<SwitchInfo, string, TUserData, string> {
+export class Switch<TUserData> extends Subscriber<SwitchInfo, StateTopicMap, TUserData, string> {
   /**
    * Creates a new switch instance
    *
@@ -56,6 +60,7 @@ export class Switch<TUserData> extends Subscriber<SwitchInfo, string, TUserData,
   ) {
     super(
       settings,
+      ['state_topic'],
       ['command_topic'],
       async (client: MqttClient, topicName: string, message: string, userData?: TUserData) => {
         if (message === (this.component.payload_on || 'ON')) {
@@ -71,11 +76,11 @@ export class Switch<TUserData> extends Subscriber<SwitchInfo, string, TUserData,
 
   /** Turns the switch on Publishes the configured ON payload or "ON" if not configured */
   async on() {
-    await this.setState(this.component.payload_on || 'ON');
+    await this.setState('state_topic', this.component.payload_on || 'ON');
   }
 
   /** Turns the switch off Publishes the configured OFF payload or "OFF" if not configured */
   async off() {
-    await this.setState(this.component.payload_off || 'OFF');
+    await this.setState('state_topic', this.component.payload_off || 'OFF');
   }
 }

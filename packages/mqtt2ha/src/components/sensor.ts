@@ -25,6 +25,15 @@ import { ComponentConfiguration } from '@/configuration/component_configuration'
 import { Discoverable } from '../api/discoverable';
 import { ComponentSettings } from '../api/settings';
 
+type StateTopicMap = {
+  state_topic: {
+    /** The current value of the sensor, can be numeric or string */
+    state: string | number;
+    /** Optional timestamp of when the sensor was last reset */
+    last_reset?: string;
+  };
+};
+
 /** Configuration interface for a sensor component */
 export interface SensorInfo extends ComponentConfiguration<'sensor'> {
   /** Unit of measurement for the sensor's value (e.g., °C, hPa, %) */
@@ -39,22 +48,14 @@ export interface SensorInfo extends ComponentConfiguration<'sensor'> {
   suggested_display_precision?: number;
 }
 
-/** Represents the state of a sensor */
-export interface SensorState {
-  /** The current value of the sensor, can be numeric or string */
-  state: string | number;
-  /** Optional timestamp of when the sensor was last reset */
-  last_reset?: string;
-}
-
 /** Represents a sensor in Home Assistant A sensor reports state values that can be either numeric or string */
-export class Sensor extends Discoverable<SensorInfo, SensorState> {
+export class Sensor extends Discoverable<SensorInfo, StateTopicMap> {
   /**
    * Creates a new sensor instance
    *
    * @param settings - Configuration settings for the sensor
    */
   constructor(settings: ComponentSettings<SensorInfo>) {
-    super(settings);
+    super(settings, ['state_topic']);
   }
 }

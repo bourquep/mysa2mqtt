@@ -27,6 +27,11 @@ import { Logger, VoidLogger } from '../lib/logger';
 import { cleanString } from '../lib/utils';
 import { ComponentSettings } from './settings';
 
+interface StateTopicConfiguration {
+  name: string;
+  topic: string;
+}
+
 /**
  * Base class for Home Assistant MQTT discoverable entities. Handles the MQTT discovery protocol and provides common
  * functionality for all entity types.
@@ -34,10 +39,10 @@ import { ComponentSettings } from './settings';
  * @typeParam TComponentConfiguration - The configuration type specific to this component
  * @typeParam TState - The type of state data this component can handle
  */
-export class Discoverable<TComponentConfiguration extends BaseComponentConfiguration, TState> {
-  /** The last state that was set for this entity */
-  lastSetState: TState | undefined;
-
+export class Discoverable<
+  TComponentConfiguration extends BaseComponentConfiguration,
+  TStateMap extends Record<string, unknown>
+> {
   /** The component settings including MQTT configuration */
   protected settings: ComponentSettings<TComponentConfiguration>;
   /** The component configuration containing entity-specific settings */
@@ -52,8 +57,8 @@ export class Discoverable<TComponentConfiguration extends BaseComponentConfigura
   protected baseTopicName: string;
   /** MQTT topic for entity configuration */
   protected configTopic: string;
-  /** MQTT topic for entity state updates */
-  protected stateTopic: string;
+  /** List of MQTT topics for entity state */
+  protected stateTopics: StateTopicConfiguration[];
   /** MQTT topic for entity attributes */
   protected attributesTopic: string;
   /** MQTT topic for entity availability status */
@@ -69,11 +74,11 @@ export class Discoverable<TComponentConfiguration extends BaseComponentConfigura
   protected getConfig(): ResolvedComponentConfiguration {
     return {
       ...this.component,
-      state_topic: this.stateTopic,
       json_attributes_topic: this.attributesTopic,
       availability: this.component.availability
         ? { ...this.component.availability, topic: this.availabilityTopic }
-        : { topic: this.availabilityTopic }
+        : { topic: this.availabilityTopic },
+      ...Object.fromEntries(Array.from(this.stateTopics.values()).map((cfg) => [cfg.name, cfg.topic]))
     };
   }
 
@@ -81,9 +86,18 @@ export class Discoverable<TComponentConfiguration extends BaseComponentConfigura
    * Creates a new discoverable entity
    *
    * @param settings - The component settings including MQTT configuration
+   * @param stateTopicNames - Array of state topic names
    * @param onConnect - Optional callback to be called when MQTT connection is established
    */
-  constructor(settings: ComponentSettings<TComponentConfiguration>, onConnect?: () => void) {
+  constructor(
+    settings: ComponentSettings<TComponentConfiguration>,
+    stateTopicNames: Extract<keyof TStateMap, string>[],
+    onConnect?: () => void
+  ) {
+    if (stateTopicNames.length === 0) {
+      throw new Error('No state topics provided');
+    }
+
     this.settings = settings;
     this.component = settings.component;
     this.logger = settings.logger ?? new VoidLogger();
@@ -103,9 +117,13 @@ export class Discoverable<TComponentConfiguration extends BaseComponentConfigura
     const statePrefix = settings.mqtt.state_prefix || 'mqtt2ha';
 
     this.configTopic = `${discoveryPrefix}/${this.baseTopicName}/config`;
-    this.stateTopic = `${statePrefix}/${this.baseTopicName}/state`;
     this.attributesTopic = `${statePrefix}/${this.baseTopicName}/attributes`;
     this.availabilityTopic = `${statePrefix}/${this.baseTopicName}/availability`;
+
+    this.stateTopics = stateTopicNames.map((topicName) => ({
+      name: topicName,
+      topic: `${statePrefix}/${this.baseTopicName}/${topicName.endsWith('_topic') ? topicName.slice(0, -6) : topicName}`
+    }));
 
     this.logger.debug(`Creating MQTT client for ${identifier}...`);
     const client = connect({
@@ -178,13 +196,23 @@ export class Discoverable<TComponentConfiguration extends BaseComponentConfigura
   /**
    * Sets the state of the entity
    *
+   * @param topicName - The name of the MQTT topic to publish the state to
    * @param state - The new state to set
    */
-  async setState(state: TState) {
+  async setState<K extends Extract<keyof TStateMap, string>>(topicName: K, state: TStateMap[K]) {
+    const topicConfiguration = this.stateTopics.find((cfg) => cfg.name === topicName);
+
+    if (!topicConfiguration) {
+      throw new Error(`Topic '${topicName}' is not part of the 'stateTopicNames' provided to this class constructor.`);
+    }
+
     this.logger.debug(`Setting state for ${this.identifier}...`);
-    await this.mqttClient.publishAsync(this.stateTopic, typeof state === 'string' ? state : JSON.stringify(state), {
-      retain: true
-    });
-    this.lastSetState = state;
+    await this.mqttClient.publishAsync(
+      topicConfiguration.topic,
+      typeof state === 'string' ? state : JSON.stringify(state),
+      {
+        retain: true
+      }
+    );
   }
 }

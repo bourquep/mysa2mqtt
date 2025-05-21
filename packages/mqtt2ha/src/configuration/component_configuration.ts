@@ -99,7 +99,10 @@ export interface BaseComponentConfiguration {
   /** The maximum QoS level to be used when receiving and publishing messages. Default is 0. */
   qos?: number;
 
-  /** Additional properties to serialize as part of the configuration payload. Typically used for command topics. */
+  /**
+   * Additional properties to serialize as part of the configuration payload. Typically used for command and state
+   * topics.
+   */
   [key: string]: unknown;
 }
 
@@ -122,8 +125,6 @@ export interface ComponentConfiguration<T extends ComponentType> extends BaseCom
  * automatically generated topic paths. Used when publishing the component configuration to Home Assistant.
  */
 export interface ResolvedComponentConfiguration extends BaseComponentConfiguration {
-  /** The MQTT topic where the component's state will be published */
-  state_topic: string;
   /** The MQTT topic where the component's attributes will be published */
   json_attributes_topic: string;
   /** Configuration for availability reporting, including the resolved availability topic */
