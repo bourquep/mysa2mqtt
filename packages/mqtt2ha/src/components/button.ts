@@ -26,6 +26,10 @@ import { MqttClient } from 'mqtt';
 import { ComponentSettings } from '../api/settings';
 import { Subscriber } from '../api/subscriber';
 
+type CommandTopicMap = {
+  command_topic: string;
+};
+
 /** Configuration interface for a button component */
 export interface ButtonInfo extends ComponentConfiguration<'button'> {
   /** The payload to publish when the button is pressed. Default is "PRESS". */
@@ -39,7 +43,7 @@ export interface ButtonInfo extends ComponentConfiguration<'button'> {
  *
  * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  */
-export class Button<TUserData> extends Subscriber<ButtonInfo, never, TUserData, string> {
+export class Button<TUserData> extends Subscriber<ButtonInfo, never, CommandTopicMap, TUserData> {
   /**
    * Creates a new button instance
    *

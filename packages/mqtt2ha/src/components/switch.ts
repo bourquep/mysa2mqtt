@@ -30,6 +30,10 @@ type StateTopicMap = {
   state_topic: string;
 };
 
+type CommandTopicMap = {
+  command_topic: string;
+};
+
 /** Configuration interface for a switch component */
 export interface SwitchInfo extends ComponentConfiguration<'switch'> {
   /** The payload to publish for turning the switch on. Default is "ON". */
@@ -45,7 +49,7 @@ export interface SwitchInfo extends ComponentConfiguration<'switch'> {
  *
  * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  */
-export class Switch<TUserData> extends Subscriber<SwitchInfo, StateTopicMap, TUserData, string> {
+export class Switch<TUserData> extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMap, TUserData> {
   /**
    * Creates a new switch instance
    *
