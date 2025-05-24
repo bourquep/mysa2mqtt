@@ -23,7 +23,7 @@ SOFTWARE.
 
 import { MqttClient } from 'mqtt';
 import { BaseComponentConfiguration, ResolvedComponentConfiguration } from '../configuration/component_configuration';
-import { Discoverable } from './discoverable';
+import { Discoverable, StateChangedHandler } from './discoverable';
 import { ComponentSettings } from './settings';
 
 interface CommandTopicConfiguration {
@@ -37,7 +37,7 @@ interface CommandTopicConfiguration {
  * @typeParam TUserData - Type of custom user data that can be passed to the callback
  * @typeParam TCommandMap - A mapping of command topic names to their respective message types
  */
-type CommandCallback<TUserData, TCommandMap extends Record<string, unknown>> = <
+export type CommandCallback<TUserData, TCommandMap extends Record<string, unknown>> = <
   TTopicName extends keyof TCommandMap & string
 >(
   client: MqttClient,
@@ -45,6 +45,7 @@ type CommandCallback<TUserData, TCommandMap extends Record<string, unknown>> = <
   message: TCommandMap[TTopicName],
   userData?: TUserData
 ) => Promise<void>;
+
 /**
  * A base class for Home Assistant MQTT entities that can receive commands. Extends Discoverable to add command handling
  * capabilities.
@@ -83,6 +84,7 @@ export class Subscriber<
    *
    * @param settings - The component settings including MQTT configuration
    * @param stateTopicNames - Array of state topic names
+   * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
    * @param userData - Optional user data to be passed to the command callback
@@ -90,6 +92,7 @@ export class Subscriber<
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
     stateTopicNames: Extract<keyof TStateMap, string>[],
+    onStateChange: StateChangedHandler<TStateMap>,
     commandTopicNames: Extract<keyof TCommandMap, string>[],
     commandCallback: CommandCallback<TUserData, TCommandMap>,
     userData?: TUserData
@@ -98,7 +101,7 @@ export class Subscriber<
       throw new Error('No command topics provided');
     }
 
-    super(settings, stateTopicNames, async () => {
+    super(settings, stateTopicNames, onStateChange, async () => {
       await this.subscribeToCommandTopics();
     });
 

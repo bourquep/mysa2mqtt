@@ -27,6 +27,18 @@ import { Logger, VoidLogger } from '../lib/logger';
 import { cleanString } from '../lib/utils';
 import { ComponentSettings } from './settings';
 
+/**
+ * A function type for handling state changes.
+ *
+ * @typeParam TStateMap - A mapping of state topic names to their respective message types
+ */
+export type StateChangedHandler<TStateMap extends Record<string, unknown>> = <
+  TStateName extends keyof TStateMap & string
+>(
+  topicName: TStateName,
+  message: TStateMap[TStateName]
+) => Promise<void>;
+
 interface StateTopicConfiguration {
   name: string;
   topic: string;
@@ -65,6 +77,8 @@ export class Discoverable<
   protected availabilityTopic: string;
   /** Flag indicating whether configuration has been written to MQTT */
   protected wroteConfiguration = false;
+  /** Callback function to handle state changes */
+  protected stateChangedHandler: StateChangedHandler<TStateMap>;
 
   /**
    * Gets the complete configuration for this entity including MQTT topics
@@ -87,11 +101,13 @@ export class Discoverable<
    *
    * @param settings - The component settings including MQTT configuration
    * @param stateTopicNames - Array of state topic names
+   * @param onStateChange - Callback to be called when state changes
    * @param onConnect - Optional callback to be called when MQTT connection is established
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
     stateTopicNames: Extract<keyof TStateMap, string>[],
+    onStateChange: StateChangedHandler<TStateMap>,
     onConnect?: () => void
   ) {
     if (stateTopicNames.length === 0) {
@@ -101,6 +117,8 @@ export class Discoverable<
     this.settings = settings;
     this.component = settings.component;
     this.logger = settings.logger ?? new VoidLogger();
+
+    this.stateChangedHandler = onStateChange;
 
     // Build topic strings
     const identifier = this.component.unique_id ?? this.component.object_id ?? this.component.name;
@@ -199,20 +217,47 @@ export class Discoverable<
    * @param topicName - The name of the MQTT topic to publish the state to
    * @param state - The new state to set
    */
+  setStateSync<K extends Extract<keyof TStateMap, string>>(topicName: K, state: TStateMap[K]) {
+    const topicConfiguration = this.stateTopics.find((cfg) => cfg.name === topicName);
+
+    if (!topicConfiguration) {
+      this.logger.debug(
+        `Topic '${topicName}' is not part of the 'stateTopicNames' provided to this class constructor.`
+      );
+      return;
+    }
+
+    this.logger.debug(`Setting ${topicConfiguration.name} state for ${this.identifier}...`);
+    this.mqttClient.publish(topicConfiguration.topic, typeof state === 'string' ? state : JSON.stringify(state), {
+      retain: true
+    });
+
+    this.stateChangedHandler(topicName, state);
+  }
+
+  /**
+   * Sets the state of the entity
+   *
+   * @param topicName - The name of the MQTT topic to publish the state to
+   * @param state - The new state to set
+   */
   async setState<K extends Extract<keyof TStateMap, string>>(topicName: K, state: TStateMap[K]) {
     const topicConfiguration = this.stateTopics.find((cfg) => cfg.name === topicName);
 
     if (!topicConfiguration) {
-      throw new Error(`Topic '${topicName}' is not part of the 'stateTopicNames' provided to this class constructor.`);
+      this.logger.debug(
+        `Topic '${topicName}' is not part of the 'stateTopicNames' provided to this class constructor.`
+      );
+      return;
     }
 
-    this.logger.debug(`Setting state for ${this.identifier}...`);
+    this.logger.debug(`Setting ${topicConfiguration.name} state for ${this.identifier}...`);
     await this.mqttClient.publishAsync(
       topicConfiguration.topic,
       typeof state === 'string' ? state : JSON.stringify(state),
-      {
-        retain: true
-      }
+      { retain: true }
     );
+
+    this.stateChangedHandler(topicName, state);
   }
 }

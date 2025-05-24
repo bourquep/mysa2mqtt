@@ -107,7 +107,7 @@ export interface BaseComponentConfiguration {
 }
 
 /** Valid types of components that can be created. Each type corresponds to a specific entity type in Home Assistant */
-export type ComponentType = 'binary_sensor' | 'button' | 'sensor' | 'switch';
+export type ComponentType = 'binary_sensor' | 'button' | 'sensor' | 'switch' | 'climate';
 
 /**
  * Type-safe configuration interface for specific component types. Extends the base configuration with type-specific

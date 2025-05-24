@@ -56,20 +56,20 @@ export class BinarySensor extends Discoverable<BinarySensorInfo, StateTopicMap> 
    * @param isOn - Initial state of the sensor
    */
   constructor(settings: ComponentSettings<BinarySensorInfo>, isOn?: boolean) {
-    super(settings, ['state_topic']);
+    super(settings, ['state_topic'], async (_, state) => {
+      this._isOn = state === (this.component.payload_on || 'ON');
+    });
     this._isOn = isOn;
   }
 
   /** Sets the sensor state to ON/active */
   async on() {
     await this.setState('state_topic', this.component.payload_on || 'ON');
-    this._isOn = true;
   }
 
   /** Sets the sensor state to OFF/inactive */
   async off() {
     await this.setState('state_topic', this.component.payload_off || 'OFF');
-    this._isOn = false;
   }
 
   /** Toggles the sensor state */

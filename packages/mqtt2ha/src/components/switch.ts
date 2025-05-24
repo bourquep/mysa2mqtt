@@ -65,6 +65,7 @@ export class Switch<TUserData> extends Subscriber<SwitchInfo, StateTopicMap, Com
     super(
       settings,
       ['state_topic'],
+      async () => {},
       ['command_topic'],
       async (client: MqttClient, topicName: string, message: string, userData?: TUserData) => {
         if (message === (this.component.payload_on || 'ON')) {

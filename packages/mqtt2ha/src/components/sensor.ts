@@ -56,6 +56,6 @@ export class Sensor extends Discoverable<SensorInfo, StateTopicMap> {
    * @param settings - Configuration settings for the sensor
    */
   constructor(settings: ComponentSettings<SensorInfo>) {
-    super(settings, ['state_topic']);
+    super(settings, ['state_topic'], async () => {});
   }
 }
