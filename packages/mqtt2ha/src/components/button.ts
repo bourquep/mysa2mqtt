@@ -43,19 +43,17 @@ export interface ButtonInfo extends ComponentConfiguration<'button'> {
  *
  * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  */
-export class Button<TUserData> extends Subscriber<ButtonInfo, never, CommandTopicMap, TUserData> {
+export class Button extends Subscriber<ButtonInfo, never, CommandTopicMap> {
   /**
    * Creates a new button instance
    *
    * @param settings - Configuration settings for the button
    * @param commandCallback - Callback function to handle button press events
-   * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<ButtonInfo>,
-    commandCallback: (client: MqttClient, topicName: string, message: string, userData?: TUserData) => Promise<void>,
-    userData?: TUserData
+    commandCallback: (client: MqttClient, topicName: string, message: string) => Promise<void>
   ) {
-    super(settings, ['state_topic'], async () => {}, ['command_topic'], commandCallback, userData);
+    super(settings, ['state_topic'], async () => {}, ['command_topic'], commandCallback);
   }
 }

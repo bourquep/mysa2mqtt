@@ -34,16 +34,14 @@ interface CommandTopicConfiguration {
 /**
  * A callback type for handling commands received via MQTT.
  *
- * @typeParam TUserData - Type of custom user data that can be passed to the callback
  * @typeParam TCommandMap - A mapping of command topic names to their respective message types
  */
-export type CommandCallback<TUserData, TCommandMap extends Record<string, unknown>> = <
+export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
   TTopicName extends keyof TCommandMap & string
 >(
   client: MqttClient,
   topicName: TTopicName,
-  message: TCommandMap[TTopicName],
-  userData?: TUserData
+  message: TCommandMap[TTopicName]
 ) => Promise<void>;
 
 /**
@@ -52,14 +50,12 @@ export type CommandCallback<TUserData, TCommandMap extends Record<string, unknow
  *
  * @typeParam TComponentConfiguration - The configuration type specific to this component
  * @typeParam TStateMap - The type of state data this component can handle
- * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
  * @typeParam TCommandMessage - Type of command messages this component can receive
  */
 export class Subscriber<
   TComponentConfiguration extends BaseComponentConfiguration,
   TStateMap extends Record<string, unknown>,
-  TCommandMap extends Record<string, unknown>,
-  TUserData
+  TCommandMap extends Record<string, unknown>
 > extends Discoverable<TComponentConfiguration, TStateMap> {
   /** List of MQTT topics for entity commands. */
   protected commandTopics: CommandTopicConfiguration[] = [];
@@ -76,8 +72,7 @@ export class Subscriber<
     };
   }
 
-  private commandCallback: CommandCallback<TUserData, TCommandMap>;
-  private userData?: TUserData;
+  private commandCallback: CommandCallback<TCommandMap>;
 
   /**
    * Creates a new subscribable entity
@@ -87,15 +82,13 @@ export class Subscriber<
    * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
-   * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
     stateTopicNames: Extract<keyof TStateMap, string>[],
     onStateChange: StateChangedHandler<TStateMap>,
     commandTopicNames: Extract<keyof TCommandMap, string>[],
-    commandCallback: CommandCallback<TUserData, TCommandMap>,
-    userData?: TUserData
+    commandCallback: CommandCallback<TCommandMap>
   ) {
     if (commandTopicNames.length === 0) {
       throw new Error('No command topics provided');
@@ -106,7 +99,6 @@ export class Subscriber<
     });
 
     this.commandCallback = commandCallback;
-    this.userData = userData;
 
     this.commandTopics = commandTopicNames.map((topicName) => ({
       name: topicName,
@@ -144,8 +136,7 @@ export class Subscriber<
       await this.commandCallback(
         this.mqttClient,
         commandTopic.name,
-        parsedMessage as TCommandMap[(typeof commandTopic)['name']],
-        this.userData
+        parsedMessage as TCommandMap[(typeof commandTopic)['name']]
       );
     }
   }

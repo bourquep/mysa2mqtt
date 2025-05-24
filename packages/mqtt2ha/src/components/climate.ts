@@ -279,12 +279,8 @@ export interface ClimateInfo extends ComponentConfiguration<'climate'> {
   temp_step?: number;
 }
 
-/**
- * Represents a thermostat in Home Assistant.
- *
- * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
- */
-export class Climate<TUserData> extends Subscriber<ClimateInfo, StateTopicMap, CommandTopicMap, TUserData> {
+/** Represents a thermostat in Home Assistant. */
+export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopicMap> {
   private _lastOnMode?: string;
   private _currentAction: ClimateAction = 'off';
   private _currentMode?: string;
@@ -417,25 +413,16 @@ export class Climate<TUserData> extends Subscriber<ClimateInfo, StateTopicMap, C
    * @param stateTopicNames - Array of state topic names to expose
    * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names to subscribe to
-   * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<ClimateInfo>,
     stateTopicNames: Extract<keyof StateTopicMap, string>[],
     onStateChange: StateChangedHandler<StateTopicMap>,
-    commandTopicNames: Extract<keyof CommandTopicMap, string>[],
-    userData?: TUserData
+    commandTopicNames: Extract<keyof CommandTopicMap, string>[]
   ) {
-    super(
-      settings,
-      stateTopicNames,
-      onStateChange,
-      commandTopicNames,
-      async (_, topicName, message) => {
-        await this.handleCommand(topicName, message);
-      },
-      userData
-    );
+    super(settings, stateTopicNames, onStateChange, commandTopicNames, async (_, topicName, message) => {
+      await this.handleCommand(topicName, message);
+    });
   }
 
   private async handleCommand<TTopicName extends keyof CommandTopicMap & string>(

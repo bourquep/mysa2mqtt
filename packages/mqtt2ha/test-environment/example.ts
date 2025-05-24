@@ -67,7 +67,7 @@ async function main() {
     logger: rootLogger.child({ module: 'binary_sensor' })
   });
 
-  const myButton = new Button<never>(
+  const myButton = new Button(
     {
       mqtt: mqttSettings,
       component: {

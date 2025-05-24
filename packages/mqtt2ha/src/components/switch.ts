@@ -44,38 +44,31 @@ export interface SwitchInfo extends ComponentConfiguration<'switch'> {
   optimistic?: boolean;
 }
 
-/**
- * Represents a switch in Home Assistant A switch is a stateful toggle that can be turned on or off
- *
- * @typeParam TUserData - Type of custom user data that can be passed to command callbacks
- */
-export class Switch<TUserData> extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMap, TUserData> {
+/** Represents a switch in Home Assistant A switch is a stateful toggle that can be turned on or off */
+export class Switch extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMap> {
   /**
    * Creates a new switch instance
    *
    * @param settings - Configuration settings for the switch
    * @param commandCallback - Callback function to handle switch state changes
-   * @param userData - Optional user data to be passed to the command callback
    */
   constructor(
     settings: ComponentSettings<SwitchInfo>,
-    commandCallback: (client: MqttClient, topicName: string, message: string, userData?: TUserData) => Promise<void>,
-    userData?: TUserData
+    commandCallback: (client: MqttClient, topicName: string, message: string) => Promise<void>
   ) {
     super(
       settings,
       ['state_topic'],
       async () => {},
       ['command_topic'],
-      async (client: MqttClient, topicName: string, message: string, userData?: TUserData) => {
+      async (client: MqttClient, topicName: string, message: string) => {
         if (message === (this.component.payload_on || 'ON')) {
           await this.on();
         } else if (message === (this.component.payload_off || 'OFF')) {
           await this.off();
         }
-        await commandCallback(client, topicName, message, userData);
-      },
-      userData
+        await commandCallback(client, topicName, message);
+      }
     );
   }
 
