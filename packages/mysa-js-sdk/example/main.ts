@@ -1,5 +1,4 @@
-import { MysaApiClient } from '@/api/MysaApiClient';
-import { MysaSession } from '@/api/MysaSession';
+import { MysaApiClient, MysaSession } from '@/api';
 import 'dotenv/config';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { pino } from 'pino';
