@@ -26,6 +26,7 @@ export * from './api/settings';
 export * from './api/subscriber';
 export * from './components/binary_sensor';
 export * from './components/button';
+export * from './components/climate';
 export * from './components/sensor';
 export * from './components/switch';
 export * from './configuration/availability_configuration';
