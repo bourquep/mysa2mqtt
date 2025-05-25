@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "mqtt2ha": "2.0.0",
+    "mysa-js-sdk": "1.0.0"
+  }
+}
