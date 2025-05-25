@@ -46,7 +46,7 @@
     "build:docs": "typedoc"
   },
   "dependencies": {
-    "@aws-sdk/credential-providers": "3.808.0",
+    "@aws-sdk/credential-providers": "3.817.0",
     "amazon-cognito-identity-js": "6.3.15",
     "aws-iot-device-sdk-v2": "1.21.4",
     "dayjs": "1.11.13",
