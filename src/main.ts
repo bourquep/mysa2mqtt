@@ -25,7 +25,7 @@ const rootLogger = pino({
 
 /** Mysa2mqtt entry-point. */
 async function main() {
-  rootLogger.debug('Starting mysa2mqtt...');
+  rootLogger.info('Starting mysa2mqtt...');
 
   let session: MysaSession | undefined;
   try {
@@ -69,7 +69,7 @@ async function main() {
     try {
       const device = devices.DevicesObj[status.deviceId];
       const watts = status.current !== undefined ? status.current * device.Voltage : undefined;
-      rootLogger.info(
+      rootLogger.debug(
         `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
       );
     } catch (error) {
@@ -80,7 +80,7 @@ async function main() {
   client.emitter.on('stateChanged', (change) => {
     try {
       const device = devices.DevicesObj[change.deviceId];
-      rootLogger.info(change, `'${device.Name}' state changed.`);
+      rootLogger.debug(change, `'${device.Name}' state changed.`);
     } catch (error) {
       rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
     }
