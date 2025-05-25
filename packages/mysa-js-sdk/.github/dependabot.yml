@@ -11,6 +11,9 @@ updates:
       interval: 'daily'
     labels:
       - 'dependencies'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
     groups:
       dev-dependencies:
         patterns:
