@@ -26,12 +26,7 @@ import { Discoverable } from '../api/discoverable';
 import { ComponentSettings } from '../api/settings';
 
 type StateTopicMap = {
-  state_topic: {
-    /** The current value of the sensor, can be numeric or string */
-    state: string | number;
-    /** Optional timestamp of when the sensor was last reset */
-    last_reset?: string;
-  };
+  state_topic: string;
 };
 
 /** Configuration interface for a sensor component */
