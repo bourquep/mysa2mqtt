@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { MysaApiClient, MysaSession } from 'mysa-js-sdk';
 import { pino } from 'pino';
+import { Thermostat } from './thermostat';
 
 configDotenv({
   path: ['.env', '.env.local'],
@@ -64,30 +65,12 @@ async function main() {
   }
 
   const devices = await client.getDevices();
+  const thermostats = Object.entries(devices.DevicesObj).map(
+    ([, device]) => new Thermostat(client, device, rootLogger.child({ module: 'thermostat' }))
+  );
 
-  client.emitter.on('statusChanged', (status) => {
-    try {
-      const device = devices.DevicesObj[status.deviceId];
-      const watts = status.current !== undefined ? status.current * device.Voltage : undefined;
-      rootLogger.debug(
-        `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
-      );
-    } catch (error) {
-      rootLogger.error(`Error processing status update for device '${status.deviceId}':`, error);
-    }
-  });
-
-  client.emitter.on('stateChanged', (change) => {
-    try {
-      const device = devices.DevicesObj[change.deviceId];
-      rootLogger.debug(change, `'${device.Name}' state changed.`);
-    } catch (error) {
-      rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
-    }
-  });
-
-  for (const device of Object.entries(devices.DevicesObj)) {
-    await client.startRealtimeUpdates(device[0]);
+  for (const thermostat of thermostats) {
+    await thermostat.start();
   }
 }
 
