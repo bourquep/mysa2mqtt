@@ -76,6 +76,7 @@ export class Thermostat {
     await this.client.stopRealtimeUpdates(this.device.Id);
     this.client.emitter.off('statusChanged', this.handleStatusUpdate.bind(this));
     this.client.emitter.off('stateChanged', this.handleStateChange.bind(this));
+    await this.mqttPower.setState('state_topic', 'None');
   }
 
   private async handleStatusUpdate(status: Status) {
