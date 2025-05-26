@@ -1,10 +1,11 @@
-import { DeviceConfiguration, Logger, MqttSettings, Sensor } from 'mqtt2ha';
+import { Climate, DeviceConfiguration, Logger, MqttSettings, Sensor } from 'mqtt2ha';
 import { DeviceBase, MysaApiClient, StateChange, Status } from 'mysa-js-sdk';
 
 export class Thermostat {
   private isStarted = false;
   private mqttSettings: MqttSettings;
   private mqttDevice: DeviceConfiguration;
+  private mqttClimate: Climate;
   private mqttPower: Sensor;
 
   constructor(
@@ -30,6 +31,50 @@ export class Thermostat {
       sw_version: undefined // TODO
     };
 
+    this.mqttClimate = new Climate(
+      {
+        mqtt: this.mqttSettings,
+        logger: this.logger,
+        component: {
+          component: 'climate',
+          device: this.mqttDevice,
+          unique_id: `mysa_${device.Id}_climate`,
+          min_temp: undefined, // TODO
+          max_temp: undefined, // TODO
+          modes: ['off', 'heat'], // TODO: AC
+          precision: 0.1,
+          temp_step: 0.5,
+          temperature_unit: 'C' // TODO: Confirm that Mysa always works in C
+        }
+      },
+      [
+        'action_topic',
+        'current_humidity_topic',
+        'current_temperature_topic',
+        'mode_state_topic',
+        'temperature_state_topic'
+      ],
+      async (topic, message) => {
+        // switch (topic) {
+        //   case 'temperature_state_topic':
+        //     if (message === '') {
+        //       this.client.setDeviceState(this.device.Id, undefined, undefined);
+        //     } else {
+        //       this.client.setDeviceState(this.device.Id, parseFloat(message), undefined);
+        //     }
+        //     break;
+        //   case 'mode_state_topic':
+        //     this.client.setDeviceState(
+        //       this.device.Id,
+        //       undefined,
+        //       message === 'off' ? 'off' : message === 'heat' ? 'heat' : undefined
+        //     );
+        //     break;
+        // }
+      },
+      ['mode_command_topic', 'power_command_topic', 'temperature_command_topic']
+    );
+
     this.mqttPower = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
@@ -54,11 +99,18 @@ export class Thermostat {
     this.isStarted = true;
 
     try {
+      this.mqttClimate.currentTemperature = undefined;
+      this.mqttClimate.currentHumidity = undefined;
+      this.mqttClimate.targetTemperature = undefined;
+      this.mqttClimate.currentAction = 'off';
+      this.mqttClimate.currentMode = undefined;
+      await this.mqttClimate.writeConfig();
+
       await this.mqttPower.setState('state_topic', 'None');
       await this.mqttPower.writeConfig();
 
-      this.client.emitter.on('statusChanged', this.handleStatusUpdate.bind(this));
-      this.client.emitter.on('stateChanged', this.handleStateChange.bind(this));
+      this.client.emitter.on('statusChanged', this.handleMysaStatusUpdate.bind(this));
+      this.client.emitter.on('stateChanged', this.handleMysaStateChange.bind(this));
 
       await this.client.startRealtimeUpdates(this.device.Id);
     } catch (error) {
@@ -73,16 +125,34 @@ export class Thermostat {
     }
 
     this.isStarted = false;
+
     await this.client.stopRealtimeUpdates(this.device.Id);
-    this.client.emitter.off('statusChanged', this.handleStatusUpdate.bind(this));
-    this.client.emitter.off('stateChanged', this.handleStateChange.bind(this));
+
+    this.client.emitter.off('statusChanged', this.handleMysaStatusUpdate.bind(this));
+    this.client.emitter.off('stateChanged', this.handleMysaStateChange.bind(this));
+
     await this.mqttPower.setState('state_topic', 'None');
   }
 
-  private async handleStatusUpdate(status: Status) {
-    if (status.deviceId !== this.device.Id) {
+  private async handleMysaStatusUpdate(status: Status) {
+    if (!this.isStarted || status.deviceId !== this.device.Id) {
       return;
     }
+
+    if (this.mqttClimate.currentMode === 'heat') {
+      this.mqttClimate.currentAction =
+        status.current != null
+          ? status.current > 0
+            ? 'heating'
+            : 'idle'
+          : (status.dutyCycle ?? 0) > 0
+            ? 'heating'
+            : 'idle';
+    }
+
+    this.mqttClimate.currentTemperature = status.temperature;
+    this.mqttClimate.currentHumidity = status.humidity;
+    this.mqttClimate.targetTemperature = status.setPoint;
 
     if (status.current != null) {
       const watts = this.device.Voltage * status.current;
@@ -92,7 +162,26 @@ export class Thermostat {
     }
   }
 
-  private async handleStateChange(state: StateChange) {
-    // Handle state change logic here
+  private async handleMysaStateChange(state: StateChange) {
+    if (!this.isStarted || state.deviceId !== this.device.Id) {
+      return;
+    }
+
+    switch (state.mode) {
+      case 'off':
+        this.mqttClimate.currentMode = 'off';
+        this.mqttClimate.currentAction = 'off';
+        break;
+
+      case 'heat':
+        this.mqttClimate.currentMode = 'heat';
+        this.mqttClimate.currentAction = 'heating';
+        break;
+
+      default:
+        this.mqttClimate.currentMode = undefined;
+        this.mqttClimate.currentAction = 'off';
+        break;
+    }
   }
 }
