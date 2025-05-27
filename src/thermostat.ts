@@ -55,25 +55,27 @@ export class Thermostat {
         'mode_state_topic',
         'temperature_state_topic'
       ],
+      async () => {},
+      ['mode_command_topic', 'power_command_topic', 'temperature_command_topic'],
       async (topic, message) => {
-        // switch (topic) {
-        //   case 'temperature_state_topic':
-        //     if (message === '') {
-        //       this.client.setDeviceState(this.device.Id, undefined, undefined);
-        //     } else {
-        //       this.client.setDeviceState(this.device.Id, parseFloat(message), undefined);
-        //     }
-        //     break;
-        //   case 'mode_state_topic':
-        //     this.client.setDeviceState(
-        //       this.device.Id,
-        //       undefined,
-        //       message === 'off' ? 'off' : message === 'heat' ? 'heat' : undefined
-        //     );
-        //     break;
-        // }
-      },
-      ['mode_command_topic', 'power_command_topic', 'temperature_command_topic']
+        switch (topic) {
+          case 'mode_command_topic':
+            this.client.setDeviceState(
+              this.device.Id,
+              undefined,
+              message === 'off' ? 'off' : message === 'heat' ? 'heat' : undefined
+            );
+            break;
+
+          case 'temperature_command_topic':
+            if (message === '') {
+              this.client.setDeviceState(this.device.Id, undefined, undefined);
+            } else {
+              this.client.setDeviceState(this.device.Id, parseFloat(message), undefined);
+            }
+            break;
+        }
+      }
     );
 
     this.mqttPower = new Sensor({
@@ -177,11 +179,6 @@ export class Thermostat {
       case 'heat':
         this.mqttClimate.currentMode = 'heat';
         this.mqttClimate.currentAction = 'heating';
-        break;
-
-      default:
-        this.mqttClimate.currentMode = undefined;
-        this.mqttClimate.currentAction = 'off';
         break;
     }
   }
