@@ -39,6 +39,7 @@ export class Thermostat {
           component: 'climate',
           device: this.mqttDevice,
           unique_id: `mysa_${device.Id}_climate`,
+          name: 'Thermostat',
           min_temp: undefined, // TODO
           max_temp: undefined, // TODO
           modes: ['off', 'heat'], // TODO: AC
