@@ -9,8 +9,8 @@ export class Thermostat {
   private mqttPower: Sensor;
 
   constructor(
-    private client: MysaApiClient,
-    private device: DeviceBase,
+    public client: MysaApiClient,
+    public device: DeviceBase,
     private logger: Logger
   ) {
     this.mqttSettings = {

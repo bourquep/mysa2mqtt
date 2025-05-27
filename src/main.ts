@@ -70,7 +70,9 @@ async function main() {
   );
 
   for (const thermostat of thermostats) {
-    await thermostat.start();
+    if (thermostat.device.Id === 'a4cf121924b4') {
+      await thermostat.start();
+    }
   }
 }
 
