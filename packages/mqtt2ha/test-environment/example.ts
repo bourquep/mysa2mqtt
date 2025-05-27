@@ -129,7 +129,10 @@ async function main() {
     async (topicName, state) => {
       rootLogger.info(`Climate ${topicName} updated to ${state}`);
     },
-    ['mode_command_topic', 'power_command_topic', 'temperature_command_topic']
+    ['mode_command_topic', 'power_command_topic', 'temperature_command_topic'],
+    async (topicName, message) => {
+      rootLogger.info(`Climate ${topicName} received command message ${message}`);
+    }
   );
 
   myClimate.currentTemperature = 19;

@@ -22,7 +22,6 @@ SOFTWARE.
 */
 
 import { ComponentConfiguration } from '@/configuration/component_configuration';
-import { MqttClient } from 'mqtt';
 import { ComponentSettings } from '../api/settings';
 import { Subscriber } from '../api/subscriber';
 
@@ -52,7 +51,7 @@ export class Button extends Subscriber<ButtonInfo, never, CommandTopicMap> {
    */
   constructor(
     settings: ComponentSettings<ButtonInfo>,
-    commandCallback: (client: MqttClient, topicName: string, message: string) => Promise<void>
+    commandCallback: (topicName: string, message: string) => Promise<void>
   ) {
     super(settings, ['state_topic'], async () => {}, ['command_topic'], commandCallback);
   }

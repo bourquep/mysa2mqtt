@@ -22,7 +22,6 @@ SOFTWARE.
 */
 
 import { ComponentConfiguration } from '@/configuration/component_configuration';
-import { MqttClient } from 'mqtt';
 import { ComponentSettings } from '../api/settings';
 import { Subscriber } from '../api/subscriber';
 
@@ -54,20 +53,20 @@ export class Switch extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMa
    */
   constructor(
     settings: ComponentSettings<SwitchInfo>,
-    commandCallback: (client: MqttClient, topicName: string, message: string) => Promise<void>
+    commandCallback: (topicName: string, message: string) => Promise<void>
   ) {
     super(
       settings,
       ['state_topic'],
       async () => {},
       ['command_topic'],
-      async (client: MqttClient, topicName: string, message: string) => {
+      async (topicName: string, message: string) => {
         if (message === (this.component.payload_on || 'ON')) {
           await this.on();
         } else if (message === (this.component.payload_off || 'OFF')) {
           await this.off();
         }
-        await commandCallback(client, topicName, message);
+        await commandCallback(topicName, message);
       }
     );
   }

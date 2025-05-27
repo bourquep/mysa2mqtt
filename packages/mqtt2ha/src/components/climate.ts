@@ -23,7 +23,7 @@ SOFTWARE.
 
 import { StateChangedHandler } from '@/api/discoverable';
 import { ComponentSettings } from '@/api/settings';
-import { Subscriber } from '@/api/subscriber';
+import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
 export type ClimateAction = 'off' | 'heating' | 'cooling' | 'drying' | 'idle' | 'fan';
@@ -413,15 +413,18 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
    * @param stateTopicNames - Array of state topic names to expose
    * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names to subscribe to
+   * @param onCommand - Callback function to handle command messages
    */
   constructor(
     settings: ComponentSettings<ClimateInfo>,
     stateTopicNames: Extract<keyof StateTopicMap, string>[],
     onStateChange: StateChangedHandler<StateTopicMap>,
-    commandTopicNames: Extract<keyof CommandTopicMap, string>[]
+    commandTopicNames: Extract<keyof CommandTopicMap, string>[],
+    onCommand: CommandCallback<CommandTopicMap>
   ) {
-    super(settings, stateTopicNames, onStateChange, commandTopicNames, async (_, topicName, message) => {
+    super(settings, stateTopicNames, onStateChange, commandTopicNames, async (topicName, message) => {
       await this.handleCommand(topicName, message);
+      await onCommand(topicName, message);
     });
   }
 

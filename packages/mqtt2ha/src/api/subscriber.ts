@@ -21,7 +21,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { MqttClient } from 'mqtt';
 import { BaseComponentConfiguration, ResolvedComponentConfiguration } from '../configuration/component_configuration';
 import { Discoverable, StateChangedHandler } from './discoverable';
 import { ComponentSettings } from './settings';
@@ -39,7 +38,6 @@ interface CommandTopicConfiguration {
 export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
   TTopicName extends keyof TCommandMap & string
 >(
-  client: MqttClient,
   topicName: TTopicName,
   message: TCommandMap[TTopicName]
 ) => Promise<void>;
@@ -133,11 +131,7 @@ export class Subscriber<
         parsedMessage = stringMessage;
       }
 
-      await this.commandCallback(
-        this.mqttClient,
-        commandTopic.name,
-        parsedMessage as TCommandMap[(typeof commandTopic)['name']]
-      );
+      await this.commandCallback(commandTopic.name, parsedMessage as TCommandMap[(typeof commandTopic)['name']]);
     }
   }
 }
