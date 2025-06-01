@@ -45,7 +45,8 @@ export class Thermostat {
           modes: ['off', 'heat'], // TODO: AC
           precision: 0.1,
           temp_step: 0.5,
-          temperature_unit: 'C' // TODO: Confirm that Mysa always works in C
+          temperature_unit: 'C', // TODO: Confirm that Mysa always works in C
+          optimistic: true
         }
       },
       [
