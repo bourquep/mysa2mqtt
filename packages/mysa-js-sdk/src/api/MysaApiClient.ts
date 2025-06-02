@@ -6,7 +6,7 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices, Firmwares } from '@/types/rest';
+import { Devices, DeviceStates, Firmwares } from '@/types/rest';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import {
   AuthenticationDetails,
@@ -201,6 +201,24 @@ export class MysaApiClient {
     const session = await this.getFreshSession();
 
     const response = await this._fetcher(`${MysaApiBaseUrl}/devices/firmware`, {
+      headers: {
+        Authorization: `${session.getIdToken().getJwtToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new MysaApiError(response);
+    }
+
+    return response.json();
+  }
+
+  async getDeviceStates(): Promise<DeviceStates> {
+    this._logger.debug(`Fetching device states...`);
+
+    const session = await this.getFreshSession();
+
+    const response = await this._fetcher(`${MysaApiBaseUrl}/devices/state`, {
       headers: {
         Authorization: `${session.getIdToken().getJwtToken()}`
       }
