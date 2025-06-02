@@ -8,6 +8,9 @@ export class Thermostat {
   private mqttClimate: Climate;
   private mqttPower: Sensor;
 
+  private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
+  private readonly mysaStateChangeHandler = this.handleMysaStateChange.bind(this);
+
   constructor(
     public client: MysaApiClient,
     public device: DeviceBase,
@@ -126,8 +129,8 @@ export class Thermostat {
       await this.mqttPower.setState('state_topic', 'None');
       await this.mqttPower.writeConfig();
 
-      this.client.emitter.on('statusChanged', this.handleMysaStatusUpdate.bind(this));
-      this.client.emitter.on('stateChanged', this.handleMysaStateChange.bind(this));
+      this.client.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
+      this.client.emitter.on('stateChanged', this.mysaStateChangeHandler);
 
       await this.client.startRealtimeUpdates(this.device.Id);
     } catch (error) {
@@ -145,8 +148,8 @@ export class Thermostat {
 
     await this.client.stopRealtimeUpdates(this.device.Id);
 
-    this.client.emitter.off('statusChanged', this.handleMysaStatusUpdate.bind(this));
-    this.client.emitter.off('stateChanged', this.handleMysaStateChange.bind(this));
+    this.client.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
+    this.client.emitter.off('stateChanged', this.mysaStateChangeHandler);
 
     await this.mqttPower.setState('state_topic', 'None');
   }
