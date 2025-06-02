@@ -174,7 +174,6 @@ export class Thermostat {
 
       case 'heat':
         this.mqttClimate.currentMode = 'heat';
-        this.mqttClimate.currentAction = 'heating';
         break;
     }
   }
