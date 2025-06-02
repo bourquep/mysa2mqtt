@@ -68,6 +68,14 @@ export class Thermostat {
             );
             break;
 
+          case 'power_command_topic':
+            this.client.setDeviceState(
+              this.device.Id,
+              undefined,
+              message === 'OFF' ? 'off' : message === 'ON' ? 'heat' : undefined
+            );
+            break;
+
           case 'temperature_command_topic':
             if (message === '') {
               this.client.setDeviceState(this.device.Id, undefined, undefined);
