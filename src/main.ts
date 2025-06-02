@@ -64,9 +64,11 @@ async function main() {
     await client.login(username, password);
   }
 
-  const devices = await client.getDevices();
+  const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
+
   const thermostats = Object.entries(devices.DevicesObj).map(
-    ([, device]) => new Thermostat(client, device, rootLogger.child({ module: 'thermostat' }))
+    ([, device]) =>
+      new Thermostat(client, device, rootLogger.child({ module: 'thermostat' }), firmwares.Firmware[device.Id])
   );
 
   for (const thermostat of thermostats) {
@@ -77,6 +79,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  rootLogger.fatal(error);
+  rootLogger.fatal(error, 'Unexpected error');
   process.exit(1);
 });
