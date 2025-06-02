@@ -6,7 +6,7 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices } from '@/types/rest/Devices';
+import { Devices, Firmwares } from '@/types/rest';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import {
   AuthenticationDetails,
@@ -184,7 +184,25 @@ export class MysaApiClient {
 
     const response = await this._fetcher(`${MysaApiBaseUrl}/devices`, {
       headers: {
-        Authorization: `${session.getAccessToken().getJwtToken()}`
+        Authorization: `${session.getIdToken().getJwtToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new MysaApiError(response);
+    }
+
+    return response.json();
+  }
+
+  async getDeviceFirmwares(): Promise<Firmwares> {
+    this._logger.debug(`Fetching device firmwares...`);
+
+    const session = await this.getFreshSession();
+
+    const response = await this._fetcher(`${MysaApiBaseUrl}/devices/firmware`, {
+      headers: {
+        Authorization: `${session.getIdToken().getJwtToken()}`
       }
     });
 
@@ -320,7 +338,7 @@ export class MysaApiClient {
 
     if (
       this._cognitoUserSession.isValid() &&
-      dayjs.unix(this._cognitoUserSession.getAccessToken().getExpiration()).isAfter()
+      dayjs.unix(this._cognitoUserSession.getIdToken().getExpiration()).isAfter()
     ) {
       this._logger.info('Session is valid, no need to refresh');
       return Promise.resolve(this._cognitoUserSession);

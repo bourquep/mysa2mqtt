@@ -92,4 +92,6 @@ async function main() {
   }
 }
 
-main().catch(rootLogger.error);
+main().catch((error) => {
+  rootLogger.error(error, 'Error in main');
+});
