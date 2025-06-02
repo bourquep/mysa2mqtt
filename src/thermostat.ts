@@ -108,9 +108,9 @@ export class Thermostat {
 
       this.mqttClimate.currentTemperature = state.CorrectedTemp.v;
       this.mqttClimate.currentHumidity = state.Humidity.v;
-      this.mqttClimate.targetTemperature = state.SetPoint.v;
       this.mqttClimate.currentMode = state.TstatMode.v === 1 ? 'off' : state.TstatMode.v === 3 ? 'heat' : undefined;
       this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v);
+      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint.v : undefined;
 
       await this.mqttClimate.writeConfig();
 
@@ -151,7 +151,7 @@ export class Thermostat {
     this.mqttClimate.currentAction = this.computeCurrentAction(status.current, status.dutyCycle);
     this.mqttClimate.currentTemperature = status.temperature;
     this.mqttClimate.currentHumidity = status.humidity;
-    this.mqttClimate.targetTemperature = status.setPoint;
+    this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
     if (status.current != null) {
       const watts = this.device.Voltage * status.current;
@@ -170,6 +170,7 @@ export class Thermostat {
       case 'off':
         this.mqttClimate.currentMode = 'off';
         this.mqttClimate.currentAction = 'off';
+        this.mqttClimate.targetTemperature = undefined;
         break;
 
       case 'heat':
