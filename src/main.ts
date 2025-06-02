@@ -1,5 +1,4 @@
 import { configDotenv } from 'dotenv';
-import 'dotenv/config';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { MysaApiClient, MysaSession } from 'mysa-js-sdk';
 import { pino } from 'pino';
