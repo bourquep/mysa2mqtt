@@ -11,7 +11,7 @@ configDotenv({
 
 const rootLogger = pino({
   name: 'mysa2mqtt',
-  level: process.env.MYSA_2_MQTT_LOG_LEVEL,
+  level: process.env.M2M_LOG_LEVEL,
   transport: {
     target: 'pino-pretty',
     options: {
@@ -53,11 +53,11 @@ async function main() {
 
   if (!client.isAuthenticated) {
     rootLogger.info('Logging in...');
-    const username = process.env.MYSA_2_MQTT_USERNAME;
-    const password = process.env.MYSA_2_MQTT_PASSWORD;
+    const username = process.env.M2M_MYSA_USERNAME;
+    const password = process.env.M2M_MYSA_PASSWORD;
 
     if (!username || !password) {
-      throw new Error('Missing MYSA_2_MQTT_USERNAME or MYSA_2_MQTT_PASSWORD environment variables.');
+      throw new Error('Missing M2M_MYSA_USERNAME or M2M_MYSA_PASSWORD environment variables.');
     }
 
     await client.login(username, password);

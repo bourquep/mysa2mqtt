@@ -18,10 +18,10 @@ export class Thermostat {
     public deviceFirmware?: FirmwareDevice
   ) {
     this.mqttSettings = {
-      host: process.env.MYSA_2_MQTT_BROKER_HOST || 'localhost',
-      port: parseInt(process.env.MYSA_2_MQTT_BROKER_PORT || '1883'),
-      username: process.env.MYSA_2_MQTT_BROKER_USERNAME,
-      password: process.env.MYSA_2_MQTT_BROKER_PASSWORD,
+      host: process.env.M2M_MQTT_HOST || 'localhost',
+      port: parseInt(process.env.M2M_MQTT_PORT || '1883'),
+      username: process.env.M2M_MQTT_USERNAME,
+      password: process.env.M2M_MQTT_PASSWORD,
       client_name: 'mysa2mqtt',
       state_prefix: 'mysa2mqtt'
     };
