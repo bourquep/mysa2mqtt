@@ -4,6 +4,7 @@ import { readFile, rm, writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
 import { MysaApiClient, MysaSession } from 'mysa-js-sdk';
 import { pino } from 'pino';
+import { PinoLogger } from './logger';
 import { Thermostat } from './thermostat';
 
 configDotenv({
@@ -118,7 +119,7 @@ async function main() {
   } catch {
     rootLogger.debug('No valid Mysa session file found.');
   }
-  const client = new MysaApiClient(session, { logger: rootLogger.child({ module: 'mysa-js-sdk' }) });
+  const client = new MysaApiClient(session, { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) });
 
   client.emitter.on('sessionChanged', async (newSession) => {
     if (newSession) {
@@ -156,7 +157,7 @@ async function main() {
         client,
         device,
         mqttSettings,
-        rootLogger.child({ module: 'thermostat' }),
+        new PinoLogger(rootLogger.child({ module: 'thermostat' })),
         firmwares.Firmware[device.Id]
       )
   );
