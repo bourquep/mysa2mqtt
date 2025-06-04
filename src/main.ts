@@ -38,6 +38,13 @@ const options = new Command('mysa2mqtt')
       .helpGroup('Configuration')
   )
   .addOption(
+    new Option('-f, --log-format <logFormat>', 'log format')
+      .choices(['pretty', 'json'])
+      .env('M2M_LOG_FORMAT')
+      .default('pretty')
+      .helpGroup('Configuration')
+  )
+  .addOption(
     new Option('-H, --mqtt-host <mqttHost>', 'hostname of the MQTT broker')
       .env('M2M_MQTT_HOST')
       .makeOptionMandatory()
@@ -96,16 +103,19 @@ const options = new Command('mysa2mqtt')
 const rootLogger = pino({
   name: 'mysa2mqtt',
   level: options.logLevel,
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      singleLine: true,
-      ignore: 'hostname,module',
-      messageFormat: '\x1b[33m[{module}]\x1b[39m {msg}'
-    }
-  }
-}).child({ module: 'mysa2mqtt' });
+  transport:
+    options.logFormat === 'pretty'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+            ignore: 'hostname,module',
+            messageFormat: '\x1b[33m[{module}]\x1b[39m {msg}'
+          }
+        }
+      : undefined
+});
 
 /** Mysa2mqtt entry-point. */
 async function main() {
