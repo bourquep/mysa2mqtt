@@ -1,3 +1,4 @@
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
 import { readFile, rm, writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
@@ -10,9 +11,90 @@ configDotenv({
   override: true
 });
 
+/**
+ * Parses a required integer value.
+ *
+ * @param value - The value to parse.
+ * @returns The parsed integer value.
+ * @throws InvalidArgumentError if the value is not a valid integer.
+ */
+function parseRequiredInt(value: string) {
+  const parsedValue = parseInt(value);
+  if (isNaN(parsedValue)) {
+    throw new InvalidArgumentError('Must be a number.');
+  }
+  return parsedValue;
+}
+
+const options = new Command('mysa2mqtt')
+  .version('0.0.0')
+  .description('Expose Mysa smart thermostats to home automation platforms via MQTT.')
+  .addOption(
+    new Option('-l, --log-level <logLevel>', 'log level')
+      .choices(['silent', 'fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+      .env('M2M_LOG_LEVEL')
+      .default('info')
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option('-H, --mqtt-host <mqttHost>', 'hostname of the MQTT broker')
+      .env('M2M_MQTT_HOST')
+      .makeOptionMandatory()
+      .helpGroup('MQTT')
+  )
+  .addOption(
+    new Option('-P, --mqtt-port <mqttPort>', 'port of the MQTT broker')
+      .env('M2M_MQTT_PORT')
+      .argParser(parseRequiredInt)
+      .default(1883)
+      .helpGroup('MQTT')
+  )
+  .addOption(
+    new Option('-U, --mqtt-username <mqttUsername>', 'username of the MQTT broker')
+      .env('M2M_MQTT_USERNAME')
+      .helpGroup('MQTT')
+  )
+  .addOption(
+    new Option('-B, --mqtt-password <mqttPassword>', 'password of the MQTT broker')
+      .env('M2M_MQTT_PASSWORD')
+      .helpGroup('MQTT')
+  )
+  .addOption(
+    new Option('-u, --mysa-username <mysaUsername>', 'Mysa account username')
+      .env('M2M_MYSA_USERNAME')
+      .makeOptionMandatory()
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option('-p, --mysa-password <mysaPassword>', 'Mysa account password')
+      .env('M2M_MYSA_PASSWORD')
+      .makeOptionMandatory()
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option('-s, --mysa-session-file <mysaSessionFile>', 'Mysa session file')
+      .env('M2M_MYSA_SESSION_FILE')
+      .default('session.json')
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option('-N, --mqtt-client-name <mqttClientName>', 'name of the MQTT client')
+      .env('M2M_MQTT_CLIENT_NAME')
+      .default('mysa2mqtt')
+      .helpGroup('MQTT')
+  )
+  .addOption(
+    new Option('-T, --mqtt-topic-prefix <mqttTopicPrefix>', 'prefix of the MQTT topic')
+      .env('M2M_MQTT_TOPIC_PREFIX')
+      .default('mysa2mqtt')
+      .helpGroup('MQTT')
+  )
+  .parse()
+  .opts();
+
 const rootLogger = pino({
   name: 'mysa2mqtt',
-  level: process.env.M2M_LOG_LEVEL,
+  level: options.logLevel,
   transport: {
     target: 'pino-pretty',
     options: {
@@ -31,7 +113,7 @@ async function main() {
   let session: MysaSession | undefined;
   try {
     rootLogger.debug('Loading Mysa session...');
-    const sessionJson = await readFile('session.json', 'utf8');
+    const sessionJson = await readFile(options.mysaSessionFile, 'utf8');
     session = JSON.parse(sessionJson);
   } catch {
     rootLogger.debug('No valid Mysa session file found.');
@@ -41,11 +123,11 @@ async function main() {
   client.emitter.on('sessionChanged', async (newSession) => {
     if (newSession) {
       rootLogger.debug('Saving new Mysa session...');
-      await writeFile('session.json', JSON.stringify(newSession));
+      await writeFile(options.mysaSessionFile, JSON.stringify(newSession));
     } else {
       try {
         rootLogger.debug('Removing Mysa session file...');
-        await rm('session.json');
+        await rm(options.mysaSessionFile);
       } catch {
         // Ignore error if file does not exist
       }
@@ -54,25 +136,18 @@ async function main() {
 
   if (!client.isAuthenticated) {
     rootLogger.info('Logging in...');
-    const username = process.env.M2M_MYSA_USERNAME;
-    const password = process.env.M2M_MYSA_PASSWORD;
-
-    if (!username || !password) {
-      throw new Error('Missing M2M_MYSA_USERNAME or M2M_MYSA_PASSWORD environment variables.');
-    }
-
-    await client.login(username, password);
+    await client.login(options.mysaUsername, options.mysaPassword);
   }
 
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
 
   const mqttSettings: MqttSettings = {
-    host: process.env.M2M_MQTT_HOST || 'localhost',
-    port: parseInt(process.env.M2M_MQTT_PORT || '1883'),
-    username: process.env.M2M_MQTT_USERNAME,
-    password: process.env.M2M_MQTT_PASSWORD,
-    client_name: 'mysa2mqtt',
-    state_prefix: 'mysa2mqtt'
+    host: options.mqttHost,
+    port: options.mqttPort,
+    username: options.mqttUsername,
+    password: options.mqttPassword,
+    client_name: options.mqttClientName,
+    state_prefix: options.mqttTopicPrefix
   };
 
   const thermostats = Object.entries(devices.DevicesObj).map(
