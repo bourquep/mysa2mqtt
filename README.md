@@ -20,6 +20,26 @@ home automation platforms.
 
 ## Installation
 
+### Option 1: Global Installation (Recommended)
+
+Install globally via npm to use the `mysa2mqtt` command anywhere:
+
+```bash
+npm install -g mysa2mqtt
+```
+
+### Option 2: Run with npx (No Installation Required)
+
+Run directly without installing:
+
+```bash
+npx mysa2mqtt --help
+```
+
+### Option 3: Development Setup
+
+For development or custom modifications:
+
 1. Clone the repository:
 
    ```bash
@@ -33,11 +53,33 @@ home automation platforms.
    npm install
    ```
 
-3. Create a `.env` file with your configuration (see [Configuration](#configuration) below)
+3. Build the project:
+
+   ```bash
+   npm run build
+   ```
 
 ## Quick Start
 
-1. **Set up your environment variables** in a `.env` file:
+1. **Install the CLI tool**:
+
+   ```bash
+   npm install -g mysa2mqtt
+   ```
+
+2. **Run with basic configuration**:
+
+   ```bash
+   mysa2mqtt --mqtt-host your-mqtt-broker.local --mysa-username your-email@example.com --mysa-password your-password
+   ```
+
+   Or use npx without installation:
+
+   ```bash
+   npx mysa2mqtt --mqtt-host your-mqtt-broker.local --mysa-username your-email@example.com --mysa-password your-password
+   ```
+
+3. **For persistent configuration**, create a `.env` file:
 
    ```bash
    M2M_MQTT_HOST=your-mqtt-broker.local
@@ -45,13 +87,13 @@ home automation platforms.
    M2M_MYSA_PASSWORD=your-mysa-password
    ```
 
-2. **Run the application**:
+   Then simply run:
 
    ```bash
-   npm run mysa2mqtt
+   mysa2mqtt
    ```
 
-3. **Check Home Assistant** (if using auto-discovery):
+4. **Check Home Assistant** (if using auto-discovery):
    - Go to Settings → Devices & Services
    - Look for automatically discovered Mysa devices
    - Configure and add to your dashboard
@@ -112,13 +154,33 @@ M2M_LOG_FORMAT=pretty
 Then run:
 
 ```bash
-npm run mysa2mqtt
+mysa2mqtt
+```
+
+Or with npx:
+
+```bash
+npx mysa2mqtt
 ```
 
 ### Using Command Line Arguments
 
 ```bash
-npm run mysa2mqtt -- \
+mysa2mqtt \
+  --mqtt-host mosquitto.local \
+  --mqtt-port 1883 \
+  --mqtt-username mqtt-user \
+  --mqtt-password mqtt-password \
+  --mysa-username user@example.com \
+  --mysa-password your-password \
+  --log-level debug \
+  --log-format json
+```
+
+Or with npx:
+
+```bash
+npx mysa2mqtt \
   --mqtt-host mosquitto.local \
   --mqtt-port 1883 \
   --mqtt-username mqtt-user \
@@ -140,7 +202,7 @@ M2M_MYSA_USERNAME=user@example.com
 M2M_MYSA_PASSWORD=your-password
 
 # Command line (will override .env if present)
-npm run mysa2mqtt -- --log-level debug --mqtt-port 8883
+mysa2mqtt --log-level debug --mqtt-port 8883
 ```
 
 ## Home Assistant Integration
@@ -177,7 +239,13 @@ When using Home Assistant, devices will be automatically discovered and appear i
 Enable debug logging to get more detailed information:
 
 ```bash
-npm run mysa2mqtt -- --log-level debug
+mysa2mqtt --log-level debug
+```
+
+Or with npx:
+
+```bash
+npx mysa2mqtt --log-level debug
 ```
 
 Or set in environment:
@@ -196,15 +264,14 @@ M2M_LOG_LEVEL=debug
 If you prefer to run with Docker, you can create a `Dockerfile`:
 
 ```dockerfile
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
 
-COPY . .
+# Install mysa2mqtt globally
+RUN npm install -g mysa2mqtt
 
-CMD ["npm", "run", "mysa2mqtt"]
+CMD ["mysa2mqtt"]
 ```
 
 Build and run:
@@ -218,11 +285,22 @@ docker run -d --name mysa2mqtt \
   mysa2mqtt
 ```
 
+Alternatively, run directly with the official Node.js image:
+
+```bash
+docker run -d --name mysa2mqtt \
+  -e M2M_MQTT_HOST=your-mqtt-broker \
+  -e M2M_MYSA_USERNAME=your-email \
+  -e M2M_MYSA_PASSWORD=your-password \
+  node:22-alpine \
+  sh -c "npm install -g mysa2mqtt && mysa2mqtt"
+```
+
 ## Development
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22+
 - npm
 
 ### Setup
@@ -235,7 +313,8 @@ npm install
 
 ### Scripts
 
-- `npm run mysa2mqtt` - Run the application
+- `npm run dev` - Run the application in development mode
+- `npm run build` - Build the CLI executable
 - `npm run lint` - Run ESLint
 - `npm run style-lint` - Check code formatting with Prettier
 
