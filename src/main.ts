@@ -1,9 +1,9 @@
-import { readFile, rm, writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
-import { MysaApiClient, MysaSession } from 'mysa-js-sdk';
+import { MysaApiClient } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
 import { options } from './options';
+import { loadSession, saveSession } from './session';
 import { Thermostat } from './thermostat';
 
 const rootLogger = pino({
@@ -27,28 +27,11 @@ const rootLogger = pino({
 async function main() {
   rootLogger.info('Starting mysa2mqtt...');
 
-  let session: MysaSession | undefined;
-  try {
-    rootLogger.info('Loading Mysa session...');
-    const sessionJson = await readFile(options.mysaSessionFile, 'utf8');
-    session = JSON.parse(sessionJson);
-  } catch {
-    rootLogger.info('No valid Mysa session file found.');
-  }
+  const session = await loadSession(options.mysaSessionFile, rootLogger);
   const client = new MysaApiClient(session, { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) });
 
   client.emitter.on('sessionChanged', async (newSession) => {
-    if (newSession) {
-      rootLogger.info('Saving Mysa session...');
-      await writeFile(options.mysaSessionFile, JSON.stringify(newSession));
-    } else {
-      try {
-        rootLogger.debug('Removing Mysa session file...');
-        await rm(options.mysaSessionFile);
-      } catch {
-        // Ignore error if file does not exist
-      }
-    }
+    await saveSession(newSession, options.mysaSessionFile, rootLogger);
   });
 
   if (!client.isAuthenticated) {
