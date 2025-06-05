@@ -1,5 +1,6 @@
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
+import packageJson from '../package.json' assert { type: 'json' };
 
 configDotenv({
   path: ['.env', '.env.local'],
@@ -21,9 +22,17 @@ function parseRequiredInt(value: string) {
   return parsedValue;
 }
 
+const extraHelpText = `
+Copyright (c) 2025 Pascal Bourque
+Licensed under the MIT License
+
+Source code and documentation available at: https://github.com/bourquep/mysa2mqtt
+`;
+
 export const options = new Command('mysa2mqtt')
-  .version('0.0.0')
+  .version(packageJson.version || 'unknown')
   .description('Expose Mysa smart thermostats to home automation platforms via MQTT.')
+  .addHelpText('afterAll', extraHelpText)
   .addOption(
     new Option('-l, --log-level <logLevel>', 'log level')
       .choices(['silent', 'fatal', 'error', 'warn', 'info', 'debug', 'trace'])

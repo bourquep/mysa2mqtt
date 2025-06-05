@@ -6,6 +6,8 @@
     "allowJs": false,
     "strict": true,
     "noEmit": true,
+    "resolveJsonModule": true,
+    "module": "ESNext",
     "paths": {
       "@/*": ["./src/*"]
     }
