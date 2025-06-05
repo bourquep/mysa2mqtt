@@ -48,7 +48,7 @@
   "dependencies": {
     "@aws-sdk/credential-providers": "3.823.0",
     "amazon-cognito-identity-js": "6.3.15",
-    "aws-iot-device-sdk-v2": "1.21.4",
+    "aws-iot-device-sdk-v2": "1.21.5",
     "dayjs": "1.11.13",
     "lodash": "4.17.21"
   },
