@@ -1,3 +1,5 @@
+#!node
+
 import { MqttSettings } from 'mqtt2ha';
 import { MysaApiClient } from 'mysa-js-sdk';
 import { pino } from 'pino';
