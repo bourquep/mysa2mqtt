@@ -19,7 +19,7 @@ import {
 } from 'amazon-cognito-identity-js';
 import { iot, mqtt } from 'aws-iot-device-sdk-v2';
 import dayjs from 'dayjs';
-import duration from 'dayjs/plugin/duration';
+import duration from 'dayjs/plugin/duration.js';
 import { MysaApiError, UnauthenticatedError } from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
