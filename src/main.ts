@@ -56,7 +56,7 @@ async function main() {
         client,
         device,
         mqttSettings,
-        new PinoLogger(rootLogger.child({ module: 'thermostat' })),
+        new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
         firmwares.Firmware[device.Id]
       )
   );
