@@ -43,8 +43,7 @@
     "dev": "tsx src/main.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
     "style-lint": "prettier -c .",
-    "build": "tsup",
-    "prepublishOnly": "build"
+    "build": "tsup"
   },
   "dependencies": {
     "commander": "14.0.0",
