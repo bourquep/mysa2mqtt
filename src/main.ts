@@ -1,4 +1,4 @@
-#!node
+#!/usr/bin/env node
 
 import { MqttSettings } from 'mqtt2ha';
 import { MysaApiClient } from 'mysa-js-sdk';
