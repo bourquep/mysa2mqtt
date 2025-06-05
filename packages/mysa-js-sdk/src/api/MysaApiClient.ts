@@ -288,10 +288,10 @@ export class MysaApiClient {
    * @param deviceId - The ID of the device to start receiving updates for.
    */
   async startRealtimeUpdates(deviceId: string) {
-    this._logger.info(`Starting realtime updates for device '${deviceId}'`);
+    this._logger.info(`Starting real-time updates for device '${deviceId}'`);
 
     if (this._realtimeDeviceIds.has(deviceId)) {
-      this._logger.debug(`Realtime updates for device '${deviceId}' already started`);
+      this._logger.debug(`Real-time updates for device '${deviceId}' already started`);
       return;
     }
 
@@ -332,6 +332,8 @@ export class MysaApiClient {
    * @param deviceId - The ID of the device to stop receiving real-time updates for.
    */
   async stopRealtimeUpdates(deviceId: string) {
+    this._logger.info(`Stopping real-time updates for device '${deviceId}'`);
+
     const timer = this._realtimeDeviceIds.get(deviceId);
     if (!timer) {
       this._logger.warn(`No real-time updates are running for device '${deviceId}'`);
@@ -344,7 +346,6 @@ export class MysaApiClient {
     this._logger.debug(`Unsubscribing to MQTT topic '/v1/dev/${deviceId}/out'...`);
     await mqttConnection.unsubscribe(`/v1/dev/${deviceId}/out`);
 
-    this._logger.debug(`Stopping real-time updates for device '${deviceId}'...`);
     clearInterval(timer);
     this._realtimeDeviceIds.delete(deviceId);
   }
@@ -358,18 +359,18 @@ export class MysaApiClient {
       this._cognitoUserSession.isValid() &&
       dayjs.unix(this._cognitoUserSession.getIdToken().getExpiration()).isAfter()
     ) {
-      this._logger.info('Session is valid, no need to refresh');
+      this._logger.debug('Session is valid, no need to refresh');
       return Promise.resolve(this._cognitoUserSession);
     }
 
-    this._logger.info('Session is not valid or expired, refreshing...');
+    this._logger.debug('Session is not valid or expired, refreshing...');
     return new Promise<CognitoUserSession>((resolve, reject) => {
       this._cognitoUser!.refreshSession(this._cognitoUserSession!.getRefreshToken(), (error, session) => {
         if (error) {
           this._logger.error('Failed to refresh session:', error);
           reject(new UnauthenticatedError('Unable to refresh the authentication session.'));
         } else {
-          this._logger.info('Session refreshed successfully');
+          this._logger.debug('Session refreshed successfully');
           this._cognitoUserSession = session;
           this.emitter.emit('sessionChanged', this.session);
           resolve(session);
