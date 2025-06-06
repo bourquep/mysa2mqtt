@@ -57,7 +57,7 @@ function getPackageVersion(): string {
  * @throws InvalidArgumentError if the value is not a valid integer.
  */
 function parseRequiredInt(value: string) {
-  const parsedValue = parseInt(value);
+  const parsedValue = parseInt(value, 10);
   if (isNaN(parsedValue)) {
     throw new InvalidArgumentError('Must be a number.');
   }
