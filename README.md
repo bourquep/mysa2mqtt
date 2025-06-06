@@ -11,6 +11,12 @@ home automation platforms.
 - **Session Management**: Persistent authentication sessions to minimize API calls
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
 
+## Disclaimer
+
+This tool was developed without the consent of the Mysa Smart Thermostats company, and makes use of undocumented and
+unsupported APIs. Use at your own risk, and be aware that Mysa may change the APIs at any time and break this tool
+permanently.
+
 ## Prerequisites
 
 - Node.js 18+
@@ -53,10 +59,10 @@ For development or custom modifications:
    npm install
    ```
 
-3. Build the project:
+3. Run the tool:
 
    ```bash
-   npm run build
+   npm run dev
    ```
 
 ## Quick Start
@@ -71,12 +77,6 @@ For development or custom modifications:
 
    ```bash
    mysa2mqtt --mqtt-host your-mqtt-broker.local --mysa-username your-email@example.com --mysa-password your-password
-   ```
-
-   Or use npx without installation:
-
-   ```bash
-   npx mysa2mqtt --mqtt-host your-mqtt-broker.local --mysa-username your-email@example.com --mysa-password your-password
    ```
 
 3. **For persistent configuration**, create a `.env` file:
@@ -157,30 +157,10 @@ Then run:
 mysa2mqtt
 ```
 
-Or with npx:
-
-```bash
-npx mysa2mqtt
-```
-
 ### Using Command Line Arguments
 
 ```bash
 mysa2mqtt \
-  --mqtt-host mosquitto.local \
-  --mqtt-port 1883 \
-  --mqtt-username mqtt-user \
-  --mqtt-password mqtt-password \
-  --mysa-username user@example.com \
-  --mysa-password your-password \
-  --log-level debug \
-  --log-format json
-```
-
-Or with npx:
-
-```bash
-npx mysa2mqtt \
   --mqtt-host mosquitto.local \
   --mqtt-port 1883 \
   --mqtt-username mqtt-user \
@@ -240,12 +220,6 @@ Enable debug logging to get more detailed information:
 
 ```bash
 mysa2mqtt --log-level debug
-```
-
-Or with npx:
-
-```bash
-npx mysa2mqtt --log-level debug
 ```
 
 Or set in environment:
@@ -352,50 +326,20 @@ Then run:
 docker-compose up -d
 ```
 
-## Development
-
-### Prerequisites
-
-- Node.js 22+
-- npm
-
-### Setup
-
-```bash
-git clone https://github.com/bourquep/mysa2mqtt.git
-cd mysa2mqtt
-npm install
-```
-
-### Scripts
-
-- `npm run dev` - Run the application in development mode
-- `npm run build` - Build the CLI executable
-- `npm run lint` - Run ESLint
-- `npm run style-lint` - Check code formatting with Prettier
-
-### Project Structure
-
-```
-src/
-├── main.ts           # Application entry point
-├── options.ts        # Command-line argument parsing
-├── thermostat.ts     # Thermostat MQTT integration
-├── session.ts        # Session management
-└── logger.ts         # Logging utilities
-```
-
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `npm run lint && npm run style-lint`
-5. Submit a pull request
+If you want to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for details.
+`mysa2mqtt` is licensed under the MIT License. This is a permissive license that allows you to use, modify, and
+redistribute this software in both private and commercial projects. You can change the code and distribute your changes
+without being required to release your source code. The MIT License only requires that you include the original
+copyright notice and license text in any copy of the software or substantial portion of it.
+
+## Copyright
+
+© 2025 Pascal Bourque
 
 ## Support
 
@@ -405,6 +349,11 @@ This project is licensed under the MIT License. See the LICENSE file for details
 ## Acknowledgments
 
 - [mysa-js-sdk](https://github.com/bourquep/mysa-js-sdk) - Mysa API client library
+
+  - This library would not be possible without the amazing work by [@dlenski](https://github.com/dlenski) in his
+    [mysotherm](https://github.com/dlenski/mysotherm) repository. He's the one who reversed-engineered the Mysa MQTT
+    protocol which is being used by this library.
+
 - [mqtt2ha](https://github.com/bourquep/mqtt2ha) - MQTT to Home Assistant bridge library
 - [Commander.js](https://github.com/tj/commander.js) - Command-line argument parsing
 - [Pino](https://github.com/pinojs/pino) - Fast JSON logger
