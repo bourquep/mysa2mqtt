@@ -1,5 +1,3 @@
-ARG VERSION
-
 ################################################################################
 # Builder stage
 FROM node:22-alpine AS builder
@@ -20,6 +18,8 @@ RUN npm run build
 ################################################################################
 # Final stage
 FROM node:22-alpine AS final
+
+ARG VERSION
 
 # Metadata
 LABEL maintainer="Pascal Bourque <pascal@cosmos.moi>"
