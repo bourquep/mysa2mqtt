@@ -261,7 +261,36 @@ M2M_LOG_LEVEL=debug
 
 ## Docker Usage
 
-If you prefer to run with Docker, you can create a `Dockerfile`:
+### Option 1: Pre-built Image (Recommended)
+
+Use the official pre-built Docker image:
+
+```bash
+docker run -d --name mysa2mqtt \
+  -e M2M_MQTT_HOST=your-mqtt-broker \
+  -e M2M_MYSA_USERNAME=your-email \
+  -e M2M_MYSA_PASSWORD=your-password \
+  bourquep/mysa2mqtt:latest
+```
+
+With additional configuration:
+
+```bash
+docker run -d --name mysa2mqtt \
+  -e M2M_MQTT_HOST=your-mqtt-broker \
+  -e M2M_MQTT_PORT=1883 \
+  -e M2M_MQTT_USERNAME=mqtt-user \
+  -e M2M_MQTT_PASSWORD=mqtt-password \
+  -e M2M_MYSA_USERNAME=your-email \
+  -e M2M_MYSA_PASSWORD=your-password \
+  -e M2M_LOG_LEVEL=info \
+  -v $(pwd)/session.json:/app/session.json \
+  bourquep/mysa2mqtt:latest
+```
+
+### Option 2: Build Your Own Image
+
+If you prefer to build your own image, create a `Dockerfile`:
 
 ```dockerfile
 FROM node:22-alpine
@@ -285,7 +314,9 @@ docker run -d --name mysa2mqtt \
   mysa2mqtt
 ```
 
-Alternatively, run directly with the official Node.js image:
+### Option 3: Use Official Node.js Image
+
+Run directly with the official Node.js image:
 
 ```bash
 docker run -d --name mysa2mqtt \
@@ -294,6 +325,31 @@ docker run -d --name mysa2mqtt \
   -e M2M_MYSA_PASSWORD=your-password \
   node:22-alpine \
   sh -c "npm install -g mysa2mqtt && mysa2mqtt"
+```
+
+### Docker Compose
+
+For easier management, create a `docker-compose.yml` file:
+
+```yaml
+services:
+  mysa2mqtt:
+    image: bourquep/mysa2mqtt:latest
+    container_name: mysa2mqtt
+    restart: unless-stopped
+    environment:
+      - M2M_MQTT_HOST=your-mqtt-broker
+      - M2M_MYSA_USERNAME=your-email
+      - M2M_MYSA_PASSWORD=your-password
+      - M2M_LOG_LEVEL=info
+    volumes:
+      - ./session.json:/app/session.json
+```
+
+Then run:
+
+```bash
+docker-compose up -d
 ```
 
 ## Development
