@@ -31,6 +31,7 @@ export default defineConfig({
   clean: true,
   dts: false,
   sourcemap: false,
+  minify: true,
   banner: {
     js: banner
   }
