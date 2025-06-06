@@ -15,6 +15,16 @@ home automation platforms.
 - **Session Management**: Persistent authentication sessions to minimize API calls
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
 
+## Supported hardware
+
+| Model Number | Description                                               | Supported                                                        |
+| ------------ | --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                            |
+| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Should work but not tested                                    |
+| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Should work but not tested; does not report power consumption |
+| `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                    |
+| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | 🚫 Not supported (yet)                                           |
+
 ## Disclaimer
 
 This tool was developed without the consent of the Mysa Smart Thermostats company, and makes use of undocumented and
