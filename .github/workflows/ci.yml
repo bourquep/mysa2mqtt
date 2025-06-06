@@ -94,9 +94,15 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
 
+      - name: Get released version
+        id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> $GITHUB_OUTPUT
+
   docker:
-    # if: github.event_name == 'workflow_dispatch'
-    # needs: release
+    if: github.event_name == 'workflow_dispatch' && needs.release.outputs.version
+    needs: release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -123,5 +129,5 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=0.0.12
-          tags: bourquep/mysa2mqtt:0.0.12,bourquep/mysa2mqtt:latest
+          build-args: VERSION=${{ needs.release.outputs.version }}
+          tags: bourquep/mysa2mqtt:${{ needs.release.outputs.version }},bourquep/mysa2mqtt:latest
