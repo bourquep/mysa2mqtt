@@ -1,15 +1,14 @@
+ARG VERSION
+
 ################################################################################
 # Builder stage
 FROM node:22-alpine AS builder
-
-ARG VERSION
 
 WORKDIR /app
 
 # Copy package files and install all dependencies for building
 COPY package*.json ./
-RUN npm version ${VERSION} --no-git-tag-version && \
-  npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 
 # Copy source code and build
 COPY src ./src
@@ -40,7 +39,8 @@ RUN addgroup -g 1001 -S nodejs && \
 
 # Copy package files and install production dependencies only
 COPY --from=builder /app/package*.json ./
-RUN npm ci --only=production --ignore-scripts && \
+RUN npm version ${VERSION} --no-git-tag-version && \
+  npm ci --only=production --ignore-scripts && \
   npm cache clean --force
 
 # Copy built application

@@ -123,5 +123,5 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=0.0.10
-          tags: bourquep/mysa2mqtt:0.0.10,bourquep/mysa2mqtt:latest
+          build-args: VERSION=0.0.11
+          tags: bourquep/mysa2mqtt:0.0.11,bourquep/mysa2mqtt:latest
