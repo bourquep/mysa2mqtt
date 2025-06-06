@@ -1,73 +1,89 @@
-import { configDotenv } from 'dotenv';
-import { readFile, rm, writeFile } from 'fs/promises';
-import { MysaApiClient, MysaSession } from 'mysa-js-sdk';
-import { pino } from 'pino';
-import { Thermostat } from './thermostat';
+#!/usr/bin/env node
 
-configDotenv({
-  path: ['.env', '.env.local'],
-  override: true
-});
+/*
+mysa2mqtt
+Copyright (C) 2025 Pascal Bourque
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+import { MqttSettings } from 'mqtt2ha';
+import { MysaApiClient } from 'mysa-js-sdk';
+import { pino } from 'pino';
+import { PinoLogger } from './logger';
+import { options } from './options';
+import { loadSession, saveSession } from './session';
+import { Thermostat } from './thermostat';
 
 const rootLogger = pino({
   name: 'mysa2mqtt',
-  level: process.env.MYSA_2_MQTT_LOG_LEVEL,
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      singleLine: true,
-      ignore: 'hostname,module',
-      messageFormat: '\x1b[33m[{module}]\x1b[39m {msg}'
-    }
-  }
-}).child({ module: 'mysa2mqtt' });
+  level: options.logLevel,
+  transport:
+    options.logFormat === 'pretty'
+      ? {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            singleLine: true,
+            ignore: 'hostname,module',
+            messageFormat: '\x1b[33m[{module}]\x1b[39m {msg}'
+          }
+        }
+      : undefined
+});
 
 /** Mysa2mqtt entry-point. */
 async function main() {
   rootLogger.info('Starting mysa2mqtt...');
 
-  let session: MysaSession | undefined;
-  try {
-    rootLogger.debug('Loading Mysa session...');
-    const sessionJson = await readFile('session.json', 'utf8');
-    session = JSON.parse(sessionJson);
-  } catch {
-    rootLogger.debug('No valid Mysa session file found.');
-  }
-  const client = new MysaApiClient(session, { logger: rootLogger.child({ module: 'mysa-js-sdk' }) });
+  const session = await loadSession(options.mysaSessionFile, rootLogger);
+  const client = new MysaApiClient(session, { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) });
 
   client.emitter.on('sessionChanged', async (newSession) => {
-    if (newSession) {
-      rootLogger.debug('Saving new Mysa session...');
-      await writeFile('session.json', JSON.stringify(newSession));
-    } else {
-      try {
-        rootLogger.debug('Removing Mysa session file...');
-        await rm('session.json');
-      } catch {
-        // Ignore error if file does not exist
-      }
-    }
+    await saveSession(newSession, options.mysaSessionFile, rootLogger);
   });
 
   if (!client.isAuthenticated) {
     rootLogger.info('Logging in...');
-    const username = process.env.MYSA_2_MQTT_USERNAME;
-    const password = process.env.MYSA_2_MQTT_PASSWORD;
-
-    if (!username || !password) {
-      throw new Error('Missing MYSA_2_MQTT_USERNAME or MYSA_2_MQTT_PASSWORD environment variables.');
-    }
-
-    await client.login(username, password);
+    await client.login(options.mysaUsername, options.mysaPassword);
   }
 
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
 
+  const mqttSettings: MqttSettings = {
+    host: options.mqttHost,
+    port: options.mqttPort,
+    username: options.mqttUsername,
+    password: options.mqttPassword,
+    client_name: options.mqttClientName,
+    state_prefix: options.mqttTopicPrefix
+  };
+
   const thermostats = Object.entries(devices.DevicesObj).map(
     ([, device]) =>
-      new Thermostat(client, device, rootLogger.child({ module: 'thermostat' }), firmwares.Firmware[device.Id])
+      new Thermostat(
+        client,
+        device,
+        mqttSettings,
+        new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
+        firmwares.Firmware[device.Id]
+      )
   );
 
   for (const thermostat of thermostats) {

@@ -1,26 +1,72 @@
 {
+  "name": "mysa2mqtt",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": false,
+  "description": "Expose Mysa smart thermostats to home automation platforms via MQTT.",
+  "keywords": [
+    "mysa",
+    "thermostat",
+    "mqtt",
+    "homeassistant",
+    "home-assistant"
+  ],
+  "publishConfig": {
+    "provenance": true
+  },
+  "author": {
+    "name": "Pascal Bourque",
+    "email": "pascal@cosmos.moi"
+  },
+  "bugs": {
+    "url": "https://github.com/bourquep/mysa2mqtt/issues"
+  },
+  "homepage": "https://github.com/bourquep/mysa2mqtt",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bourquep/mysa2mqtt.git"
+  },
+  "files": [
+    "README.md",
+    "LICENSE.txt",
+    "dist"
+  ],
   "type": "module",
+  "bin": {
+    "mysa2mqtt": "dist/main.js"
+  },
+  "engines": {
+    "node": ">=22.4.0"
+  },
+  "browser": false,
   "scripts": {
-    "mysa2mqtt": "tsx src/main.ts",
+    "dev": "tsx src/main.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
-    "style-lint": "prettier -c ."
+    "style-lint": "prettier -c .",
+    "build": "tsup"
   },
   "dependencies": {
+    "commander": "14.0.0",
     "dotenv": "16.5.0",
     "mqtt2ha": "4.0.0",
-    "mysa-js-sdk": "1.1.0",
+    "mysa-js-sdk": "1.1.2",
     "pino": "9.7.0",
     "pino-pretty": "13.0.0"
   },
   "devDependencies": {
+    "@commander-js/extra-typings": "14.0.0",
     "@eslint/js": "9.27.0",
+    "@semantic-release/npm": "12.0.1",
     "@types/node": "22.15.21",
+    "conventional-changelog-conventionalcommits": "9.0.0",
     "eslint": "9.27.0",
     "eslint-plugin-jsdoc": "50.6.17",
     "eslint-plugin-tsdoc": "0.4.0",
     "prettier": "3.5.3",
     "prettier-plugin-jsdoc": "1.3.2",
     "prettier-plugin-organize-imports": "4.1.0",
+    "semantic-release": "24.2.5",
+    "tsup": "8.5.0",
     "tsx": "4.19.4",
     "typescript": "5.8.3",
     "typescript-eslint": "8.32.1"
