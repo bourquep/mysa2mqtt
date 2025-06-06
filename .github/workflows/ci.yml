@@ -119,7 +119,9 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: VERSION=0.0.8
-          tags: bourquep/mysa2mqtt:0.0.8,bourquep/mysa2mqtt:latest
+          build-args: VERSION=0.0.9
+          tags: bourquep/mysa2mqtt:0.0.9,bourquep/mysa2mqtt:latest
