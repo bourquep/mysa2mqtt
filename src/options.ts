@@ -1,11 +1,30 @@
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
-import packageJson from '../package.json' assert { type: 'json' };
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 configDotenv({
   path: ['.env', '.env.local'],
   override: true
 });
+
+/**
+ * Gets the package version at runtime.
+ *
+ * @returns The package version or 'unknown' if it cannot be read.
+ */
+function getPackageVersion(): string {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const packageJsonPath = join(__dirname, '..', 'package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+    return packageJson.version || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 /**
  * Parses a required integer value.
@@ -30,7 +49,7 @@ Source code and documentation available at: https://github.com/bourquep/mysa2mqt
 `;
 
 export const options = new Command('mysa2mqtt')
-  .version(packageJson.version || 'unknown')
+  .version(getPackageVersion())
   .description('Expose Mysa smart thermostats to home automation platforms via MQTT.')
   .addHelpText('afterAll', extraHelpText)
   .addOption(
