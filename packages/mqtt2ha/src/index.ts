@@ -32,5 +32,6 @@ export * from './components/switch';
 export * from './configuration/availability_configuration';
 export * from './configuration/component_configuration';
 export * from './configuration/device_configuration';
+export * from './configuration/origin_configuration';
 export * from './lib/logger';
 export * from './lib/utils';

@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { BinarySensor, Button, DeviceConfiguration, MqttSettings, Switch } from '@/.';
+import { BinarySensor, Button, DeviceConfiguration, MqttSettings, OriginConfiguration, Switch } from '@/.';
 import { Climate } from '@/components/climate';
 import { pino } from 'pino';
 
@@ -55,6 +55,12 @@ async function main() {
     identifiers: 'my_device_id'
   };
 
+  const origin: OriginConfiguration = {
+    name: 'mqtt2ha example',
+    sw_version: '1.0.0',
+    support_url: 'https://github.com/bourquep/mqtt2ha'
+  };
+
   const myBinarySensor = new BinarySensor({
     mqtt: mqttSettings,
     component: {
@@ -62,7 +68,8 @@ async function main() {
       name: 'MyBinarySensor',
       device_class: 'motion',
       unique_id: 'my_sensor_unique_id',
-      device
+      device,
+      origin
     },
     logger: rootLogger.child({ module: 'binary_sensor' })
   });
@@ -74,7 +81,8 @@ async function main() {
         component: 'button',
         name: 'MyButton',
         unique_id: 'my_button_unique_id',
-        device
+        device,
+        origin
       },
       logger: rootLogger.child({ module: 'button' })
     },
@@ -91,7 +99,8 @@ async function main() {
         component: 'switch',
         name: 'MySwitch',
         unique_id: 'my_switch_unique_id',
-        device
+        device,
+        origin
       },
       logger: rootLogger.child({ module: 'switch' })
     },
@@ -116,6 +125,7 @@ async function main() {
         name: 'MyClimate',
         unique_id: 'my_climate_unique_id',
         device: myThermostat,
+        origin,
         modes: ['off', 'heat'],
         temperature_unit: 'C',
         min_temp: 10,

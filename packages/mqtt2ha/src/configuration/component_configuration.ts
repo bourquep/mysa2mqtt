@@ -23,6 +23,7 @@ SOFTWARE.
 
 import { AvailabilityConfiguration } from './availability_configuration';
 import { DeviceConfiguration } from './device_configuration';
+import { OriginConfiguration } from './origin_configuration';
 
 /**
  * Common configuration interface for Home Assistant MQTT components Contains the base configuration properties shared
@@ -52,6 +53,9 @@ export interface BaseComponentConfiguration {
    * unique_id is set. At least one of identifiers or connections must be present to identify the device.
    */
   device?: DeviceConfiguration;
+
+  /** Information about the application that is the origin of the component. */
+  origin?: OriginConfiguration;
 
   /**
    * Sets the class of the device, changing the device state and icon that is displayed on the frontend. The
