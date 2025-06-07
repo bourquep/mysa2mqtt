@@ -144,8 +144,23 @@ export class MysaApiClient {
   /**
    * Logs in the user with the given email address and password.
    *
+   * This method authenticates the user with Mysa's Cognito user pool and establishes a session that can be used for
+   * subsequent API calls. Upon successful login, a 'sessionChanged' event is emitted.
+   *
+   * @example
+   *
+   * ```typescript
+   * try {
+   *   await client.login('user@example.com', 'password123');
+   *   console.log('Login successful!');
+   * } catch (error) {
+   *   console.error('Login failed:', error.message);
+   * }
+   * ```
+   *
    * @param emailAddress - The email address of the user.
    * @param password - The password of the user.
+   * @throws {@link Error} When authentication fails due to invalid credentials or network issues.
    */
   async login(emailAddress: string, password: string): Promise<void> {
     this._cognitoUser = undefined;
@@ -176,7 +191,21 @@ export class MysaApiClient {
   /**
    * Retrieves the list of devices associated with the user.
    *
+   * This method fetches all Mysa devices linked to the authenticated user's account, including device information such
+   * as models, locations, and configuration details.
+   *
+   * @example
+   *
+   * ```typescript
+   * const devices = await client.getDevices();
+   * for (const [deviceId, device] of Object.entries(devices.DevicesObj)) {
+   *   console.log(`Device: ${device.DisplayName} (${device.Model})`);
+   * }
+   * ```
+   *
    * @returns A promise that resolves to the list of devices.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
    */
   async getDevices(): Promise<Devices> {
     this._logger.debug(`Fetching devices...`);
@@ -199,8 +228,23 @@ export class MysaApiClient {
   /**
    * Retrieves the serial number for a specific device.
    *
+   * This method uses AWS IoT's DescribeThing API to fetch the serial number attribute for the specified device. This
+   * requires additional AWS IoT permissions and may not be available for all devices.
+   *
+   * @example
+   *
+   * ```typescript
+   * const serialNumber = await client.getDeviceSerialNumber('device123');
+   * if (serialNumber) {
+   *   console.log(`Device serial: ${serialNumber}`);
+   * } else {
+   *   console.log('Serial number not available');
+   * }
+   * ```
+   *
    * @param deviceId - The ID of the device to get the serial number for.
    * @returns A promise that resolves to the serial number, or undefined if not found.
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
    */
   async getDeviceSerialNumber(deviceId: string): Promise<string | undefined> {
     this._logger.debug(`Fetching serial number for device ${deviceId}...`);
@@ -238,6 +282,13 @@ export class MysaApiClient {
     }
   }
 
+  /**
+   * Retrieves firmware information for all devices.
+   *
+   * @returns A promise that resolves to the firmware information for all devices.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   */
   async getDeviceFirmwares(): Promise<Firmwares> {
     this._logger.debug(`Fetching device firmwares...`);
 
@@ -256,6 +307,13 @@ export class MysaApiClient {
     return response.json();
   }
 
+  /**
+   * Retrieves the current state information for all devices.
+   *
+   * @returns A promise that resolves to the current state of all devices.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   */
   async getDeviceStates(): Promise<DeviceStates> {
     this._logger.debug(`Fetching device states...`);
 
@@ -274,6 +332,31 @@ export class MysaApiClient {
     return response.json();
   }
 
+  /**
+   * Sets the state of a specific device by sending commands via MQTT.
+   *
+   * This method allows you to change the temperature set point and/or operating mode of a Mysa device. The command is
+   * sent through the MQTT connection for real-time device control.
+   *
+   * @example
+   *
+   * ```typescript
+   * // Set temperature to 22°C
+   * await client.setDeviceState('device123', 22);
+   *
+   * // Turn device off
+   * await client.setDeviceState('device123', undefined, 'off');
+   *
+   * // Set temperature and mode
+   * await client.setDeviceState('device123', 20, 'heat');
+   * ```
+   *
+   * @param deviceId - The ID of the device to control.
+   * @param setPoint - The target temperature set point (optional).
+   * @param mode - The operating mode to set ('off', 'heat', or undefined to leave unchanged).
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link Error} When MQTT connection or command sending fails.
+   */
   async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode) {
     this._logger.debug(`Setting device state for '${deviceId}'`);
 
@@ -328,7 +411,23 @@ export class MysaApiClient {
   /**
    * Starts receiving real-time updates for the specified device.
    *
+   * This method establishes an MQTT subscription to receive live status updates from the device, including temperature,
+   * humidity, set point changes, and other state information. The client will automatically send keep-alive messages to
+   * maintain the connection.
+   *
+   * @example
+   *
+   * ```typescript
+   * // Start receiving updates and listen for events
+   * await client.startRealtimeUpdates('device123');
+   *
+   * client.emitter.on('statusChanged', (status) => {
+   *   console.log(`Temperature: ${status.temperature}°C`);
+   * });
+   * ```
+   *
    * @param deviceId - The ID of the device to start receiving updates for.
+   * @throws {@link Error} When MQTT connection or subscription fails.
    */
   async startRealtimeUpdates(deviceId: string) {
     this._logger.info(`Starting real-time updates for device '${deviceId}'`);
@@ -372,7 +471,11 @@ export class MysaApiClient {
   /**
    * Stops receiving real-time updates for the specified device.
    *
+   * This method unsubscribes from the MQTT topic for the specified device and clears any associated timers to stop the
+   * keep-alive messages.
+   *
    * @param deviceId - The ID of the device to stop receiving real-time updates for.
+   * @throws {@link Error} When MQTT unsubscription fails.
    */
   async stopRealtimeUpdates(deviceId: string) {
     this._logger.info(`Stopping real-time updates for device '${deviceId}'`);
@@ -393,6 +496,15 @@ export class MysaApiClient {
     this._realtimeDeviceIds.delete(deviceId);
   }
 
+  /**
+   * Ensures a valid, non-expired session is available.
+   *
+   * This method checks if the current session is valid and not expired. If the session is expired, it automatically
+   * refreshes it using the refresh token.
+   *
+   * @returns A promise that resolves to a valid CognitoUserSession.
+   * @throws {@link UnauthenticatedError} When no session exists or refresh fails.
+   */
   private async getFreshSession(): Promise<CognitoUserSession> {
     if (!this._cognitoUser || !this._cognitoUserSession) {
       throw new UnauthenticatedError('An attempt was made to access a resource without a valid session.');
@@ -422,6 +534,15 @@ export class MysaApiClient {
     });
   }
 
+  /**
+   * Establishes and returns an MQTT connection for real-time communication.
+   *
+   * This method creates a new MQTT connection if one doesn't exist, using AWS IoT WebSocket connections with Cognito
+   * credentials. The connection is cached and reused for subsequent calls.
+   *
+   * @returns A promise that resolves to an active MQTT connection.
+   * @throws {@link Error} When connection establishment fails.
+   */
   private async getMqttConnection(): Promise<mqtt.MqttClientConnection> {
     if (this._mqttConnection) {
       return this._mqttConnection;
@@ -463,6 +584,15 @@ export class MysaApiClient {
     return this._mqttConnection;
   }
 
+  /**
+   * Processes incoming MQTT messages and emits appropriate events.
+   *
+   * This method parses MQTT payloads and converts them into typed events that can be listened to via the client's event
+   * emitter. It handles both v1 and v2 device message formats and emits events like 'statusChanged', 'setPointChanged',
+   * and 'stateChanged'.
+   *
+   * @param payload - The raw MQTT message payload to process.
+   */
   private processMqttMessage(payload: ArrayBuffer) {
     try {
       const parsedPayload = parseMqttPayload(payload);
