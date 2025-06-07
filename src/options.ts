@@ -64,6 +64,8 @@ function parseRequiredInt(value: string) {
   return parsedValue;
 }
 
+export const version = getPackageVersion();
+
 const extraHelpText = `
 Copyright (c) 2025 Pascal Bourque
 Licensed under the MIT License
@@ -72,7 +74,7 @@ Source code and documentation available at: https://github.com/bourquep/mysa2mqt
 `;
 
 export const options = new Command('mysa2mqtt')
-  .version(getPackageVersion())
+  .version(version)
   .description('Expose Mysa smart thermostats to home automation platforms via MQTT.')
   .addHelpText('afterAll', extraHelpText)
   .addOption(

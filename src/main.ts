@@ -64,7 +64,23 @@ async function main() {
     await client.login(options.mysaUsername, options.mysaPassword);
   }
 
+  rootLogger.debug('Fetching devices and firmwares...');
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
+
+  rootLogger.debug('Fetching serial numbers...');
+  const serialNumbers = new Map<string, string>();
+  for (const [deviceId] of Object.entries(devices.DevicesObj)) {
+    try {
+      const serial = await client.getDeviceSerialNumber(deviceId);
+      if (serial) {
+        serialNumbers.set(deviceId, serial);
+      }
+    } catch (error) {
+      rootLogger.error(`Failed to retrieve serial number for device ${deviceId}`, error);
+    }
+  }
+
+  rootLogger.debug('Initializing MQTT entities...');
 
   const mqttSettings: MqttSettings = {
     host: options.mqttHost,
@@ -82,7 +98,8 @@ async function main() {
         device,
         mqttSettings,
         new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
-        firmwares.Firmware[device.Id]
+        firmwares.Firmware[device.Id],
+        serialNumbers.get(device.Id)
       )
   );
 

@@ -48,8 +48,8 @@
   "dependencies": {
     "commander": "14.0.0",
     "dotenv": "16.5.0",
-    "mqtt2ha": "4.0.0",
-    "mysa-js-sdk": "1.1.2",
+    "mqtt2ha": "4.1.0",
+    "mysa-js-sdk": "1.2.0",
     "pino": "9.7.0",
     "pino-pretty": "13.0.0"
   },
