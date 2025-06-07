@@ -28,6 +28,8 @@ export class Thermostat {
   private isStarted = false;
   private readonly mqttDevice: DeviceConfiguration;
   private readonly mqttClimate: Climate;
+  private readonly mqttTemperature: Sensor;
+  private readonly mqttHumidity: Sensor;
   private readonly mqttPower: Sensor;
 
   private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
@@ -104,6 +106,38 @@ export class Thermostat {
       }
     );
 
+    this.mqttTemperature = new Sensor({
+      mqtt: this.mqttSettings,
+      logger: this.logger,
+      component: {
+        component: 'sensor',
+        device: this.mqttDevice,
+        unique_id: `mysa_${mysaDevice.Id}_temperature`,
+        name: 'Current temperature',
+        device_class: 'temperature',
+        state_class: 'measurement',
+        unit_of_measurement: '°C',
+        suggested_display_precision: 1,
+        force_update: true
+      }
+    });
+
+    this.mqttHumidity = new Sensor({
+      mqtt: this.mqttSettings,
+      logger: this.logger,
+      component: {
+        component: 'sensor',
+        device: this.mqttDevice,
+        unique_id: `mysa_${mysaDevice.Id}_humidity`,
+        name: 'Current humidity',
+        device_class: 'humidity',
+        state_class: 'measurement',
+        unit_of_measurement: '%',
+        suggested_display_precision: 0,
+        force_update: true
+      }
+    });
+
     this.mqttPower = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
@@ -111,6 +145,7 @@ export class Thermostat {
         component: 'sensor',
         device: this.mqttDevice,
         unique_id: `mysa_${mysaDevice.Id}_power`,
+        name: 'Current power',
         device_class: 'power',
         state_class: 'measurement',
         unit_of_measurement: 'W',
@@ -136,8 +171,13 @@ export class Thermostat {
       this.mqttClimate.currentMode = state.TstatMode.v === 1 ? 'off' : state.TstatMode.v === 3 ? 'heat' : undefined;
       this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint.v : undefined;
-
       await this.mqttClimate.writeConfig();
+
+      await this.mqttTemperature.setState('state_topic', state.CorrectedTemp.v.toFixed(2));
+      await this.mqttTemperature.writeConfig();
+
+      await this.mqttHumidity.setState('state_topic', state.Humidity.v.toFixed(2));
+      await this.mqttHumidity.writeConfig();
 
       // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
       await this.mqttPower.setState('state_topic', 'None');
@@ -166,6 +206,8 @@ export class Thermostat {
     this.mysaApiClient.emitter.off('stateChanged', this.mysaStateChangeHandler);
 
     await this.mqttPower.setState('state_topic', 'None');
+    await this.mqttTemperature.setState('state_topic', 'None');
+    await this.mqttHumidity.setState('state_topic', 'None');
   }
 
   private async handleMysaStatusUpdate(status: Status) {
@@ -184,6 +226,9 @@ export class Thermostat {
     } else {
       await this.mqttPower.setState('state_topic', 'None');
     }
+
+    await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
+    await this.mqttHumidity.setState('state_topic', status.humidity.toFixed(2));
   }
 
   private async handleMysaStateChange(state: StateChange) {
@@ -200,6 +245,7 @@ export class Thermostat {
 
       case 'heat':
         this.mqttClimate.currentMode = 'heat';
+        this.mqttClimate.targetTemperature = state.setPoint;
         break;
     }
   }
