@@ -50,6 +50,9 @@ export interface DeviceConfiguration {
   /** The hardware version or revision of the device. Example: "rev2" */
   hw_version?: string;
 
+  /** The serial number of the device. Example: "ABC123" */
+  serial_number?: string;
+
   /**
    * The suggested area/room where the device is installed. Home Assistant will automatically assign the device to this
    * area.
