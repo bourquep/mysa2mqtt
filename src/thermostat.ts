@@ -75,6 +75,7 @@ export class Thermostat {
         component: {
           component: 'climate',
           device: this.mqttDevice,
+          origin: this.mqttOrigin,
           unique_id: `mysa_${mysaDevice.Id}_climate`,
           name: 'Thermostat',
           min_temp: mysaDevice.MinSetpoint,
@@ -130,6 +131,7 @@ export class Thermostat {
       component: {
         component: 'sensor',
         device: this.mqttDevice,
+        origin: this.mqttOrigin,
         unique_id: `mysa_${mysaDevice.Id}_temperature`,
         name: 'Current temperature',
         device_class: 'temperature',
@@ -146,6 +148,7 @@ export class Thermostat {
       component: {
         component: 'sensor',
         device: this.mqttDevice,
+        origin: this.mqttOrigin,
         unique_id: `mysa_${mysaDevice.Id}_humidity`,
         name: 'Current humidity',
         device_class: 'humidity',
@@ -162,6 +165,7 @@ export class Thermostat {
       component: {
         component: 'sensor',
         device: this.mqttDevice,
+        origin: this.mqttOrigin,
         unique_id: `mysa_${mysaDevice.Id}_power`,
         name: 'Current power',
         device_class: 'power',
