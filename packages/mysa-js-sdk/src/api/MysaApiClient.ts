@@ -7,6 +7,7 @@ import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
 import { Devices, DeviceStates, Firmwares } from '@/types/rest';
+import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import {
   AuthenticationDetails,
@@ -193,6 +194,48 @@ export class MysaApiClient {
     }
 
     return response.json();
+  }
+
+  /**
+   * Retrieves the serial number for a specific device.
+   *
+   * @param deviceId - The ID of the device to get the serial number for.
+   * @returns A promise that resolves to the serial number, or undefined if not found.
+   */
+  async getDeviceSerialNumber(deviceId: string): Promise<string | undefined> {
+    this._logger.debug(`Fetching serial number for device ${deviceId}...`);
+
+    const session = await this.getFreshSession();
+
+    // Get AWS credentials for IoT client
+    const credentialsProvider = fromCognitoIdentityPool({
+      clientConfig: {
+        region: AwsRegion
+      },
+      identityPoolId: CognitoIdentityPoolId,
+      logins: {
+        [CognitoLoginKey]: session.getIdToken().getJwtToken()
+      }
+    });
+
+    const credentials = await credentialsProvider();
+    const iotClient = new IoTClient({
+      region: AwsRegion,
+      credentials: {
+        accessKeyId: credentials.accessKeyId,
+        secretAccessKey: credentials.secretAccessKey,
+        sessionToken: credentials.sessionToken
+      }
+    });
+
+    try {
+      const command = new DescribeThingCommand({ thingName: deviceId });
+      const response = await iotClient.send(command);
+      return response.attributes?.['Serial'];
+    } catch (error) {
+      this._logger.warn(`Could not get serial number for device ${deviceId}:`, error);
+      return undefined;
+    }
   }
 
   async getDeviceFirmwares(): Promise<Firmwares> {
