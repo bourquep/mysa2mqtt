@@ -64,20 +64,23 @@ async function main() {
     await client.login(options.mysaUsername, options.mysaPassword);
   }
 
+  rootLogger.debug('Fetching devices and firmwares...');
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
 
+  rootLogger.debug('Fetching serial numbers...');
   const serialNumbers = new Map<string, string>();
-
-  try {
-    for (const [deviceId] of Object.entries(devices.DevicesObj)) {
+  for (const [deviceId] of Object.entries(devices.DevicesObj)) {
+    try {
       const serial = await client.getDeviceSerialNumber(deviceId);
       if (serial) {
         serialNumbers.set(deviceId, serial);
       }
+    } catch (error) {
+      rootLogger.error(`Failed to retrieve serial number for device ${deviceId}`, error);
     }
-  } catch (error) {
-    rootLogger.error('Failed to retrieve some or all serial numbers', error);
   }
+
+  rootLogger.debug('Initializing MQTT entities...');
 
   const mqttSettings: MqttSettings = {
     host: options.mqttHost,
