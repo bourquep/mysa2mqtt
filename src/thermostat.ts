@@ -21,12 +21,22 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { Climate, ClimateAction, DeviceConfiguration, Logger, MqttSettings, Sensor } from 'mqtt2ha';
+import {
+  Climate,
+  ClimateAction,
+  DeviceConfiguration,
+  Logger,
+  MqttSettings,
+  OriginConfiguration,
+  Sensor
+} from 'mqtt2ha';
 import { DeviceBase, FirmwareDevice, MysaApiClient, MysaDeviceMode, StateChange, Status } from 'mysa-js-sdk';
+import { version } from './options';
 
 export class Thermostat {
   private isStarted = false;
   private readonly mqttDevice: DeviceConfiguration;
+  private readonly mqttOrigin: OriginConfiguration;
   private readonly mqttClimate: Climate;
   private readonly mqttTemperature: Sensor;
   private readonly mqttHumidity: Sensor;
@@ -40,14 +50,22 @@ export class Thermostat {
     public readonly mysaDevice: DeviceBase,
     private readonly mqttSettings: MqttSettings,
     private readonly logger: Logger,
-    public readonly mysaDeviceFirmware?: FirmwareDevice
+    public readonly mysaDeviceFirmware?: FirmwareDevice,
+    public readonly mysaDeviceSerialNumber?: string
   ) {
     this.mqttDevice = {
       identifiers: mysaDevice.Id,
       name: mysaDevice.Name,
       manufacturer: 'Mysa',
       model: mysaDevice.Model,
-      sw_version: mysaDeviceFirmware?.InstalledVersion
+      sw_version: mysaDeviceFirmware?.InstalledVersion,
+      serial_number: mysaDeviceSerialNumber
+    };
+
+    this.mqttOrigin = {
+      name: 'mysa2mqtt',
+      sw_version: version,
+      support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
     this.mqttClimate = new Climate(
