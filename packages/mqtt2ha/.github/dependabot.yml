@@ -11,8 +11,9 @@ updates:
       interval: 'daily'
     labels:
       - 'dependencies'
-    reviewers:
-      - 'bourquep'
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
     groups:
       dev-dependencies:
         patterns:
