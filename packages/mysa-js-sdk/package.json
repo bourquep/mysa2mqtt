@@ -46,6 +46,9 @@
     "build": "tsup",
     "build:docs": "typedoc"
   },
+  "overrides": {
+    "brace-expansion": "^2.0.2"
+  },
   "dependencies": {
     "@aws-sdk/client-iot": "3.830.0",
     "@aws-sdk/credential-providers": "3.830.0",
