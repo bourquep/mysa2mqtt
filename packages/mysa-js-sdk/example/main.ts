@@ -57,35 +57,41 @@ async function main() {
 
   const devices = await client.getDevices();
 
-  client.emitter.on('statusChanged', (status) => {
-    try {
-      const device = devices.DevicesObj[status.deviceId];
-      const watts = status.current !== undefined ? status.current * device.Voltage : undefined;
-      rootLogger.info(
-        `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
-      );
-    } catch (error) {
-      rootLogger.error(`Error processing status update for device '${status.deviceId}':`, error);
-    }
-  });
+  if (process.env.MYSA_OUTPUT_RAW_DATA === 'true') {
+    client.emitter.on('rawRealtimeMessageReceived', (data) => {
+      rootLogger.info(data, 'Raw message received');
+    });
+  } else {
+    client.emitter.on('statusChanged', (status) => {
+      try {
+        const device = devices.DevicesObj[status.deviceId];
+        const watts = status.current !== undefined ? status.current * device.Voltage : undefined;
+        rootLogger.info(
+          `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
+        );
+      } catch (error) {
+        rootLogger.error(`Error processing status update for device '${status.deviceId}':`, error);
+      }
+    });
 
-  client.emitter.on('setPointChanged', (change) => {
-    try {
-      const device = devices.DevicesObj[change.deviceId];
-      rootLogger.info(`'${device.Name}' setpoint changed from ${change.previousSetPoint} to ${change.newSetPoint}`);
-    } catch (error) {
-      rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
-    }
-  });
+    client.emitter.on('setPointChanged', (change) => {
+      try {
+        const device = devices.DevicesObj[change.deviceId];
+        rootLogger.info(`'${device.Name}' setpoint changed from ${change.previousSetPoint} to ${change.newSetPoint}`);
+      } catch (error) {
+        rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
+      }
+    });
 
-  client.emitter.on('stateChanged', (change) => {
-    try {
-      const device = devices.DevicesObj[change.deviceId];
-      rootLogger.info(change, `'${device.Name}' state changed.`);
-    } catch (error) {
-      rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
-    }
-  });
+    client.emitter.on('stateChanged', (change) => {
+      try {
+        const device = devices.DevicesObj[change.deviceId];
+        rootLogger.info(change, `'${device.Name}' state changed.`);
+      } catch (error) {
+        rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
+      }
+    });
+  }
 
   for (const device of Object.entries(devices.DevicesObj)) {
     const serial = await client.getDeviceSerialNumber(device[0]);

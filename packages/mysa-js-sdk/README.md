@@ -51,6 +51,12 @@ Then, run the example:
 npm run example
 ```
 
+If you prefer to see the raw data published by your Mysa smart thermostats, run:
+
+```bash
+npm run example:raw
+```
+
 ## Using
 
 The Mysa SDK provides a simple interface to interact with Mysa smart thermostats.
