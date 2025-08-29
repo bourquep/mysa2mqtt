@@ -48,7 +48,7 @@
     "build:docs": "typedoc"
   },
   "dependencies": {
-    "mqtt": "5.13.1"
+    "mqtt": "5.14.0"
   },
   "devDependencies": {
     "@eslint/js": "9.34.0",
