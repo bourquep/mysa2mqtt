@@ -32,7 +32,7 @@ export function parseMqttPayload(payload: ArrayBuffer): OutPayload {
  * @param payload - The typed payload object to serialize
  * @returns The serialized payload as ArrayBuffer ready for MQTT transmission
  */
-export function serializeMqttPayload<T extends InPayload>(payload: T): ArrayBuffer {
+export function serializeMqttPayload<T extends InPayload>(payload: T): Uint8Array<ArrayBuffer> {
   const jsonString = JSON.stringify(payload);
   const encoder = new TextEncoder();
   return encoder.encode(jsonString);
