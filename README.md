@@ -213,13 +213,11 @@ When using Home Assistant, devices will be automatically discovered and appear i
 ### Common Issues
 
 1. **Authentication Failures**
-
    - Verify your Mysa username and password
    - Check if session.json exists and is valid
    - Try deleting session.json to force re-authentication
 
 2. **MQTT Connection Issues**
-
    - Verify MQTT broker hostname and port
    - Check MQTT credentials if authentication is required
    - Ensure the MQTT broker is accessible from your network
@@ -364,7 +362,6 @@ copyright notice and license text in any copy of the software or substantial por
 ## Acknowledgments
 
 - [mysa-js-sdk](https://github.com/bourquep/mysa-js-sdk) - Mysa API client library
-
   - This library would not be possible without the amazing work by [@dlenski](https://github.com/dlenski) in his
     [mysotherm](https://github.com/dlenski/mysotherm) repository. He's the one who reversed-engineered the Mysa MQTT
     protocol which is being used by this library.
