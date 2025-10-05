@@ -8,6 +8,7 @@
     "noEmit": true,
     "resolveJsonModule": true,
     "module": "ESNext",
+    "lib": ["ES2022"],
     "paths": {
       "@/*": ["./src/*"]
     }

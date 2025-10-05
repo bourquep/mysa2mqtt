@@ -22,7 +22,7 @@ SOFTWARE.
 */
 
 import { Logger } from 'mqtt2ha';
-import { pino } from 'pino';
+import pino from 'pino';
 
 export class PinoLogger implements Logger {
   constructor(private readonly logger: pino.Logger) {}
@@ -32,7 +32,7 @@ export class PinoLogger implements Logger {
     if (obj) {
       this.logger.debug(obj, message, ...meta);
     } else {
-      this.logger.debug(message, ...meta);
+      this.logger.debug(null, message, ...meta);
     }
   }
 
@@ -41,7 +41,7 @@ export class PinoLogger implements Logger {
     if (obj) {
       this.logger.info(obj, message, ...meta);
     } else {
-      this.logger.info(message, ...meta);
+      this.logger.info(null, message, ...meta);
     }
   }
 
@@ -50,7 +50,7 @@ export class PinoLogger implements Logger {
     if (obj) {
       this.logger.warn(obj, message, ...meta);
     } else {
-      this.logger.warn(message, ...meta);
+      this.logger.warn(null, message, ...meta);
     }
   }
 
@@ -59,7 +59,7 @@ export class PinoLogger implements Logger {
     if (obj) {
       this.logger.error(obj, message, ...meta);
     } else {
-      this.logger.error(message, ...meta);
+      this.logger.error(null, message, ...meta);
     }
   }
 }
