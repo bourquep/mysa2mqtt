@@ -93,12 +93,14 @@ async function main() {
     });
   }
 
-  for (const device of Object.entries(devices.DevicesObj)) {
-    const serial = await client.getDeviceSerialNumber(device[0]);
-    rootLogger.info(`Serial number for device '${device[0]}' (${device[1].Name}): ${serial}`);
+  await Promise.all(
+    Object.entries(devices.DevicesObj).map(async ([deviceId, device]) => {
+      const serial = await client.getDeviceSerialNumber(deviceId);
+      rootLogger.info(`Serial number for device '${deviceId}' (${device.Name}): ${serial}`);
 
-    await client.startRealtimeUpdates(device[0]);
-  }
+      await client.startRealtimeUpdates(deviceId);
+    })
+  );
 }
 
 main().catch((error) => {
