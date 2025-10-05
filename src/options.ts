@@ -54,7 +54,6 @@ function getPackageVersion(): string {
  *
  * @param value - The value to parse.
  * @returns The parsed integer value.
- * @throws InvalidArgumentError if the value is not a valid integer.
  */
 function parseRequiredInt(value: string) {
   const parsedValue = parseInt(value, 10);
