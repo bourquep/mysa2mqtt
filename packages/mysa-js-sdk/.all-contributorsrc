@@ -1,7 +1,5 @@
 {
-  "files": [
-    "README.md"
-  ],
+  "files": ["README.md"],
   "imageSize": 100,
   "commit": false,
   "commitType": "docs",
@@ -12,9 +10,7 @@
       "name": "jagmandan",
       "avatar_url": "https://avatars.githubusercontent.com/u/227265405?v=4",
       "profile": "https://github.com/jagmandan",
-      "contributions": [
-        "code"
-      ]
+      "contributions": ["code"]
     }
   ],
   "contributorsPerLine": 7,
