@@ -70,7 +70,7 @@ async function main() {
           `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
         );
       } catch (error) {
-        rootLogger.error(`Error processing status update for device '${status.deviceId}':`, error);
+        rootLogger.error(error, `Error processing status update for device '${status.deviceId}'`);
       }
     });
 
@@ -79,7 +79,7 @@ async function main() {
         const device = devices.DevicesObj[change.deviceId];
         rootLogger.info(`'${device.Name}' setpoint changed from ${change.previousSetPoint} to ${change.newSetPoint}`);
       } catch (error) {
-        rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
+        rootLogger.error(error, `Error processing setpoint update for device '${change.deviceId}'`);
       }
     });
 
@@ -88,7 +88,7 @@ async function main() {
         const device = devices.DevicesObj[change.deviceId];
         rootLogger.info(change, `'${device.Name}' state changed.`);
       } catch (error) {
-        rootLogger.error(`Error processing setpoint update for device '${change.deviceId}':`, error);
+        rootLogger.error(error, `Error processing state update for device '${change.deviceId}'`);
       }
     });
   }
