@@ -143,7 +143,7 @@ mysa/
   mqtt_client.py   # Paho-MQTT over WebSockets (AWS IoT SigV4)
   rest.py          # Device discovery + energy/history
   models.py        # dataclasses for Device, State, Command, Ack
-  client.py        # High-level façade (discover, subscribe, setpoint, mode, etc.)
+  client.py        # High-level facade (discover, subscribe, setpoint, mode, etc.)
 ```
 
 ### Core models (dataclasses)
@@ -259,7 +259,7 @@ def compute_power(state: State, rated_watts: int | None) -> None:
         state.power_w = round(state.duty_cycle * rated_watts)
 ```
 
-### Client façade
+### Client facade
 
 ```python
 class MysaClient:
