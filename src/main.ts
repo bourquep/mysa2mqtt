@@ -76,7 +76,7 @@ async function main() {
         serialNumbers.set(deviceId, serial);
       }
     } catch (error) {
-      rootLogger.error(`Failed to retrieve serial number for device ${deviceId}`, error);
+      rootLogger.error(error, `Failed to retrieve serial number for device ${deviceId}`);
     }
   }
 
