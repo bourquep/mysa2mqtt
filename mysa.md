@@ -22,7 +22,7 @@
   * Publish: `/v1/dev/{deviceId}/in`
   * QoS: **1**
 
-## Connection & Auth Flow (practical)
+## Connection & Auth Flow
 
 Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS IoT** over **WebSockets** with **SigV4** query-signed URL parameters.
 
@@ -54,7 +54,7 @@ Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS
 * After you publish a command to `/in`, expect an **echo/ack** on `/out` with `body.success` and an updated `state`.
 
 
-## Message Schemas (observed)
+## Message Schemas
 
 ### 1) Realtime status (`/out`)
 
@@ -74,7 +74,7 @@ Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS
 }
 ```
 
-**Power compute:
+**Power** compute:
 
 ```
 power_watts = round(dtyCycle * rated_watts)
