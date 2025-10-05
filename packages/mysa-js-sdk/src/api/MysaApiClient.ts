@@ -374,7 +374,7 @@ export class MysaApiClient {
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
-      id: now.unix(),
+      id: now.valueOf(),
       time: now.unix(),
       ver: '1.0',
       src: {
