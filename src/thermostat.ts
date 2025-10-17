@@ -204,7 +204,7 @@ export class Thermostat {
       this.mqttClimate.currentTemperature = state.CorrectedTemp.v;
       this.mqttClimate.currentHumidity = state.Humidity.v;
       this.mqttClimate.currentMode = state.TstatMode.v === 1 ? 'off' : state.TstatMode.v === 3 ? 'heat' : undefined;
-      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v ?? 0);
+      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint.v : undefined;
       await this.mqttClimate.writeConfig();
 
