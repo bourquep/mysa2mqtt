@@ -143,5 +143,12 @@ export const options = new Command('mysa2mqtt')
       .default('mysa2mqtt')
       .helpGroup('MQTT')
   )
+  .addOption(
+    new Option('--temperature-unit <temperatureUnit>', 'temperature unit (C or F)')
+      .env('M2M_TEMPERATURE_UNIT')
+      .choices(['C', 'F'])
+      .default('C')
+      .helpGroup('Configuration')
+  )
   .parse()
   .opts();

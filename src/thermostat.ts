@@ -51,8 +51,11 @@ export class Thermostat {
     private readonly mqttSettings: MqttSettings,
     private readonly logger: Logger,
     public readonly mysaDeviceFirmware?: FirmwareDevice,
-    public readonly mysaDeviceSerialNumber?: string
+    public readonly mysaDeviceSerialNumber?: string,
+    public readonly temperatureUnit?: 'C' | 'F'
   ) {
+    const is_celsius = (temperatureUnit ?? 'C') === 'C';
+
     this.mqttDevice = {
       identifiers: mysaDevice.Id,
       name: mysaDevice.Name,
@@ -81,9 +84,9 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: ['off', 'heat'], // TODO: AC
-          precision: 0.1,
-          temp_step: 0.5,
-          temperature_unit: 'C', // TODO: Confirm that Mysa always works in C
+          precision: is_celsius ? 0.1 : 1.0,
+          temp_step: is_celsius ? 0.5 : 1.0,
+          temperature_unit: 'C',
           optimistic: true
         }
       },
@@ -118,7 +121,17 @@ export class Thermostat {
             if (message === '') {
               this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined);
             } else {
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, parseFloat(message), undefined);
+              let temperature = parseFloat(message);
+
+              if (!is_celsius) { 
+                const snapHalfC = (c: number) => Math.round(c * 2) / 2;
+                const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+                // Snap to 0.5 °C and clamp to device limits
+                let setC = snapHalfC(temperature);
+                temperature = clamp(setC, this.mysaDevice.MinSetpoint, this.mysaDevice.MaxSetpoint);
+              }
+
+              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, temperature, undefined);
             }
             break;
         }
@@ -137,7 +150,7 @@ export class Thermostat {
         device_class: 'temperature',
         state_class: 'measurement',
         unit_of_measurement: '°C',
-        suggested_display_precision: 1,
+        suggested_display_precision: is_celsius ? 0.1 : 0.0,
         force_update: true
       }
     });
