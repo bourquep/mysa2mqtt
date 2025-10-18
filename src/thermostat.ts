@@ -33,6 +33,29 @@ import {
 import { DeviceBase, FirmwareDevice, MysaApiClient, MysaDeviceMode, StateChange, Status } from 'mysa-js-sdk';
 import { version } from './options';
 
+type DeviceType = 'AC' | 'BB';
+
+export const HA_HEAT_ONLY_MODES: Partial<MysaDeviceMode>[]  = ['off', 'heat'] as const;
+export const HA_AC_MODES: Partial<MysaDeviceMode>[]         = ['off', 'heat', 'cool', 'dry', 'fan_only', 'auto'] as const;
+export const MYSA_NUMBER_TO_MYSA_MODE: Partial<Record<number, MysaDeviceMode>> = {
+  1: 'off',
+  2: 'auto',
+  3: 'heat',
+  4: 'cool',
+  5: 'fan_only',
+  6: 'dry',
+} as const;
+
+export const FAN_MODES = ['auto', 'low', 'medium', 'high', 'max'] as const;
+export type FanMode = typeof FAN_MODES[number];
+export const FAN_SPEED_TO_MODE: Partial<Record<number, FanMode>> = {
+  1: 'auto',
+  3: 'low',
+  5: 'medium',
+  7: 'high',
+  8: 'max',
+} as const;
+
 export class Thermostat {
   private isStarted = false;
   private readonly mqttDevice: DeviceConfiguration;
@@ -44,6 +67,8 @@ export class Thermostat {
 
   private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
   private readonly mysaStateChangeHandler = this.handleMysaStateChange.bind(this);
+
+  private readonly deviceType: DeviceType; 
 
   constructor(
     public readonly mysaApiClient: MysaApiClient,
@@ -71,6 +96,9 @@ export class Thermostat {
       support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
+    let isAC = (mysaDevice.Model ?? '').startsWith('AC');
+    this.deviceType = isAC ? 'AC' : 'BB';
+
     this.mqttClimate = new Climate(
       {
         mqtt: this.mqttSettings,
@@ -83,10 +111,11 @@ export class Thermostat {
           name: 'Thermostat',
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
-          modes: ['off', 'heat'], // TODO: AC
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
           temperature_unit: 'C',
+          modes: isAC ? HA_AC_MODES: HA_HEAT_ONLY_MODES,
+          fan_modes: isAC ? FAN_MODES : undefined,
           optimistic: true
         }
       },
@@ -95,26 +124,29 @@ export class Thermostat {
         'current_humidity_topic',
         'current_temperature_topic',
         'mode_state_topic',
-        'temperature_state_topic'
-      ],
+        'temperature_state_topic',
+        isAC ? 'fan_mode_state_topic' : undefined,
+        isAC ? 'fan_mode_command_topic' : undefined
+      ].filter(Boolean) as string[],
       async () => {},
-      ['mode_command_topic', 'power_command_topic', 'temperature_command_topic'],
+      ['mode_command_topic', 'power_command_topic', 'temperature_command_topic', isAC ? 'fan_mode_state_topic' : undefined, isAC ? 'fan_mode_command_topic' : undefined].filter(Boolean) as string[],
       async (topic, message) => {
         switch (topic) {
           case 'mode_command_topic':
+            let mode: MysaDeviceMode | undefined = isAC
+              ? (HA_AC_MODES.includes(message) ? (message as MysaDeviceMode) : undefined)
+              : (HA_HEAT_ONLY_MODES.includes(message) ? (message as MysaDeviceMode) : undefined);
             this.mysaApiClient.setDeviceState(
               this.mysaDevice.Id,
               undefined,
-              message === 'off' ? 'off' : message === 'heat' ? 'heat' : undefined
-            );
+              mode);
             break;
 
           case 'power_command_topic':
             this.mysaApiClient.setDeviceState(
               this.mysaDevice.Id,
               undefined,
-              message === 'OFF' ? 'off' : message === 'ON' ? 'heat' : undefined
-            );
+              message === 'OFF' ? 'off' : message === 'ON' && !isAC ? 'heat' : undefined);
             break;
 
           case 'temperature_command_topic':
@@ -132,6 +164,15 @@ export class Thermostat {
               }
 
               this.mysaApiClient.setDeviceState(this.mysaDevice.Id, temperature, undefined);
+            }
+            break;
+          
+          case 'fan_mode_command_topic':
+            if (message === '') {
+              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined);
+            } else {
+              const fanMode = message as FanMode;
+              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, fanMode);
             }
             break;
         }
@@ -203,9 +244,10 @@ export class Thermostat {
 
       this.mqttClimate.currentTemperature = state.CorrectedTemp.v;
       this.mqttClimate.currentHumidity = state.Humidity.v;
-      this.mqttClimate.currentMode = state.TstatMode.v === 1 ? 'off' : state.TstatMode.v === 3 ? 'heat' : undefined;
-      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v);
+      this.mqttClimate.currentMode = MYSA_NUMBER_TO_MYSA_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
+      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v ?? 0);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint.v : undefined;
+      this.mqttClimate.currentFanMode = FAN_SPEED_TO_MODE[state.FanSpeed?.v as number] ?? undefined;
       await this.mqttClimate.writeConfig();
 
       await this.mqttTemperature.setState('state_topic', state.CorrectedTemp.v.toFixed(2));
@@ -213,7 +255,7 @@ export class Thermostat {
 
       await this.mqttHumidity.setState('state_topic', state.Humidity.v.toFixed(2));
       await this.mqttHumidity.writeConfig();
-
+      
       // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
       await this.mqttPower.setState('state_topic', 'None');
       await this.mqttPower.writeConfig();
@@ -271,34 +313,46 @@ export class Thermostat {
       return;
     }
 
-    switch (state.mode) {
+    const mode = state.mode as MysaDeviceMode;
+    switch (mode) {
       case 'off':
-        this.mqttClimate.currentMode = 'off';
+        this.mqttClimate.currentMode = 'off';    
         this.mqttClimate.currentAction = 'off';
         this.mqttClimate.targetTemperature = undefined;
+        this.mqttClimate.currentFanMode = undefined;
         break;
 
       case 'heat':
-        this.mqttClimate.currentMode = 'heat';
+      case 'cool':
+      case 'auto':
+        this.mqttClimate.currentMode = mode;
+        this.mqttClimate.currentAction = this.computeCurrentAction(state.current, state.dutyCycle);
         this.mqttClimate.targetTemperature = state.setPoint;
-        break;
+        this.mqttClimate.currentFanMode = state.fanSpeed;
+      break;
+      case 'dry':
+      case 'fan_only':
+        this.mqttClimate.currentMode = mode;
+        this.mqttClimate.currentAction = this.computeCurrentAction(state.current, state.dutyCycle);
+        this.mqttClimate.currentFanMode = state.fanSpeed;
+      break;
     }
   }
 
   private computeCurrentAction(current?: number, dutyCycle?: number): ClimateAction {
-    const mode: MysaDeviceMode | undefined =
-      this.mqttClimate.currentMode === 'heat' ? 'heat' : this.mqttClimate.currentMode === 'off' ? 'off' : undefined;
-
+    const mode: MysaDeviceMode = this.mqttClimate.currentMode as MysaDeviceMode;
     switch (mode) {
       case 'off':
         return 'off';
-
       case 'heat':
-        if (current != null) {
-          return current > 0 ? 'heating' : 'idle';
-        }
-        return (dutyCycle ?? 0) > 0 ? 'heating' : 'idle';
-
+        const active = current != null ? current > 0 : (dutyCycle ?? 0) > 0;
+        return active || this.deviceType === 'AC' ? 'heating' : 'idle';
+      case 'cool':
+        return 'cooling';
+      case 'fan_only':
+        return 'fan';
+      case 'dry':
+        return 'drying';
       default:
         return 'idle';
     }
