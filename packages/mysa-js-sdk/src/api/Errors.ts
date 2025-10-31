@@ -32,3 +32,22 @@ export class MysaApiError extends Error {
     this.statusText = apiResponse.statusText;
   }
 }
+
+/** Error thrown when an MQTT publish ultimately fails after retry attempts. */
+export class MqttPublishError extends Error {
+  /**
+   * Creates a new MqttPublishError instance.
+   *
+   * @param message - A human-readable description of the publish failure.
+   * @param attempts - The number of attempts that were made before giving up.
+   * @param original - The original error object thrown by the underlying MQTT library (optional).
+   */
+  constructor(
+    message: string,
+    public attempts: number,
+    public original?: unknown
+  ) {
+    super(message);
+    this.name = 'MqttPublishError';
+  }
+}

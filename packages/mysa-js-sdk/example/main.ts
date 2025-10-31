@@ -67,7 +67,7 @@ async function main() {
         const device = devices.DevicesObj[status.deviceId];
         const watts = status.current !== undefined ? status.current * device.Voltage : undefined;
         rootLogger.info(
-          `'${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
+          `[${status.deviceId}] '${device.Name}' status changed: ${status.temperature}°C, ${status.humidity}%, ${watts ?? 'na'}W`
         );
       } catch (error) {
         rootLogger.error(error, `Error processing status update for device '${status.deviceId}'`);
