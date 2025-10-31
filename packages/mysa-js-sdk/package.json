@@ -63,7 +63,7 @@
     "@types/lodash": "4.17.20",
     "@types/node": "24.3.0",
     "conventional-changelog-conventionalcommits": "9.1.0",
-    "dotenv": "17.2.1",
+    "dotenv": "17.2.3",
     "eslint": "9.34.0",
     "eslint-plugin-jsdoc": "54.1.1",
     "eslint-plugin-tsdoc": "0.4.0",
