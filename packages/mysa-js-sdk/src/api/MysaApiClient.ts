@@ -25,7 +25,7 @@ import { MqttPublishError, MysaApiError, UnauthenticatedError } from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
-import { MysaDeviceMode } from './MysaDeviceMode';
+import { MysaDeviceMode, MysaFanSpeedMode } from './MysaDeviceMode';
 
 dayjs.extend(duration);
 
@@ -357,15 +357,20 @@ export class MysaApiClient {
    *
    * // Set temperature and mode
    * await client.setDeviceState('device123', 20, 'heat');
+   *
+   * // Set fan speed
+   * await client.setDeviceState('device123', undefined, undefined, 'auto');
    * ```
    *
    * @param deviceId - The ID of the device to control.
    * @param setPoint - The target temperature set point (optional).
-   * @param mode - The operating mode to set ('off', 'heat', or undefined to leave unchanged).
+   * @param mode - The operating mode to set (one of MysaDeviceMode values, or undefined to leave unchanged).
+   * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
+   *   unchanged).
    * @throws {@link UnauthenticatedError} When the user is not authenticated.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
-  async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode) {
+  async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
     this._logger.debug(`Setting device state for '${deviceId}'`);
 
     if (!this._cachedDevices) {
@@ -380,6 +385,9 @@ export class MysaApiClient {
     const now = dayjs();
 
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
+    const modeMap = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
+    const fanSpeedMap = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
+
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
       id: now.valueOf(),
@@ -398,16 +406,19 @@ export class MysaApiClient {
         ver: 1,
         type: device.Model.startsWith('BB-V1')
           ? 1
-          : device.Model.startsWith('BB-V2')
-            ? device.Model.endsWith('-L')
-              ? 5
-              : 4
-            : 0,
+          : device.Model.startsWith('AC-V1')
+            ? 2
+            : device.Model.startsWith('BB-V2')
+              ? device.Model.endsWith('-L')
+                ? 5
+                : 4
+              : 0,
         cmd: [
           {
             tm: -1,
             sp: setPoint,
-            md: mode === 'off' ? 1 : mode === 'heat' ? 3 : undefined
+            md: mode ? modeMap[mode] : undefined,
+            fn: fanSpeed ? fanSpeedMap[fanSpeed] : undefined
           }
         ]
       }
@@ -792,13 +803,31 @@ export class MysaApiClient {
             });
             break;
 
-          case OutMessageType.DEVICE_STATE_CHANGE:
+          case OutMessageType.DEVICE_STATE_CHANGE: {
+            const modeMap: Record<number, MysaDeviceMode> = {
+              1: 'off',
+              2: 'auto',
+              3: 'heat',
+              4: 'cool',
+              5: 'fan_only',
+              6: 'dry'
+            };
+            const fanSpeedMap: Record<number, MysaFanSpeedMode> = {
+              1: 'auto',
+              3: 'low',
+              5: 'medium',
+              7: 'high',
+              8: 'max'
+            };
+
             this.emitter.emit('stateChanged', {
               deviceId: parsedPayload.src.ref,
-              mode: parsedPayload.body.state.md === 1 ? 'off' : parsedPayload.body.state.md === 3 ? 'heat' : undefined,
-              setPoint: parsedPayload.body.state.sp
+              mode: parsedPayload.body.state.md ? modeMap[parsedPayload.body.state.md] : undefined,
+              setPoint: parsedPayload.body.state.sp,
+              fanSpeed: parsedPayload.body.state.fn !== undefined ? fanSpeedMap[parsedPayload.body.state.fn] : undefined
             });
             break;
+          }
         }
       }
     } catch (error) {

@@ -36,6 +36,8 @@ export interface ChangeDeviceState extends MsgPayload<InMessageType.CHANGE_DEVIC
         md?: number;
         /** Unknown, should always be -1 */
         tm: number;
+        /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
+        fn?: number;
       }
     ];
     /**

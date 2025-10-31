@@ -1,4 +1,4 @@
-import { MysaDeviceMode } from '@/api/MysaDeviceMode';
+import { MysaDeviceMode, MysaFanSpeedMode } from '@/api/MysaDeviceMode';
 
 /**
  * Interface representing a device state change event for a Mysa device.
@@ -14,4 +14,6 @@ export interface StateChange {
   mode?: MysaDeviceMode;
   /** Current temperature setpoint after the state change */
   setPoint: number;
+  /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
+  fanSpeed?: MysaFanSpeedMode;
 }

@@ -25,10 +25,12 @@ export interface DeviceStateChange extends MsgPayload<OutMessageType.DEVICE_STAT
       ho: number;
       /** Unknown */
       lk: number;
-      /** Device mode (1 = OFF, 3 = HEAT) */
+      /** Device mode (1 = OFF, 2 = AUTO, 3 = HEAT, 4 = COOL, 5 = FAN_ONLY, 6 = DRY) */
       md: number;
       /** Temperature setpoint */
       sp: number;
+      /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
+      fn?: number;
     };
     /** Success indicator for the state change operation (1 = success, 0 = failure) */
     success: number;

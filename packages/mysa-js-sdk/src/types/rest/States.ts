@@ -50,6 +50,8 @@ export interface DeviceState {
   Humidity: TimestampedValue<number>;
   /** Lock status */
   Lock: TimestampedValue<number>;
+  /** Fan speed */
+  FanSpeed?: TimestampedValue<number>;
 }
 
 /**
