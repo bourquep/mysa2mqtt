@@ -16,7 +16,8 @@ export default [
     rules: {
       'jsdoc/tag-lines': 'off',
       'jsdoc/check-tag-names': 'off',
-      'jsdoc/valid-types': 'off'
+      'jsdoc/valid-types': 'off',
+      'jsdoc/require-throws-type': 'off'
     }
   },
   { plugins: { tsdoc }, rules: { 'tsdoc/syntax': 'warn' } }
