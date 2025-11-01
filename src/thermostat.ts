@@ -195,10 +195,13 @@ export class Thermostat {
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
       await this.mqttClimate.writeConfig();
 
-      await this.mqttTemperature.setState('state_topic', (state.CorrectedTemp?.v ?? 0).toFixed(2));
+      await this.mqttTemperature.setState(
+        'state_topic',
+        state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
+      );
       await this.mqttTemperature.writeConfig();
 
-      await this.mqttHumidity.setState('state_topic', (state.Humidity?.v ?? 0).toFixed(2));
+      await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
       await this.mqttHumidity.writeConfig();
 
       // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
