@@ -13,43 +13,43 @@ export interface DeviceState {
   /** Overall timestamp for the device state */
   Timestamp: number;
   /** Time the device has been on */
-  OnTime: TimestampedValue<number>;
+  OnTime?: TimestampedValue<number>;
   /** Temperature set point */
-  SetPoint: TimestampedValue<number>;
+  SetPoint?: TimestampedValue<number>;
   /** Display brightness level */
-  Brightness: TimestampedValue<number>;
+  Brightness?: TimestampedValue<number>;
   /** Schedule mode setting */
-  ScheduleMode: TimestampedValue<number>;
+  ScheduleMode?: TimestampedValue<number>;
   /** Hold time setting */
-  HoldTime: TimestampedValue<number>;
+  HoldTime?: TimestampedValue<number>;
   /** Wi-Fi signal strength */
-  Rssi: TimestampedValue<number>;
+  Rssi?: TimestampedValue<number>;
   /** Thermostat mode */
-  TstatMode: TimestampedValue<number>;
+  TstatMode?: TimestampedValue<number>;
   /** Available heap memory */
-  FreeHeap: TimestampedValue<number>;
+  FreeHeap?: TimestampedValue<number>;
   /** Sensor temperature reading */
-  SensorTemp: TimestampedValue<number>;
+  SensorTemp?: TimestampedValue<number>;
   /** Current mode */
-  Mode: TimestampedValue<number>;
+  Mode?: TimestampedValue<number>;
   /** Voltage measurement */
-  Voltage: TimestampedValue<number>;
+  Voltage?: TimestampedValue<number>;
   /** Temperature corrected for calibration */
-  CorrectedTemp: TimestampedValue<number>;
+  CorrectedTemp?: TimestampedValue<number>;
   /** Duty cycle percentage */
-  Duty: TimestampedValue<number>;
+  Duty?: TimestampedValue<number>;
   /** Heat sink temperature */
-  HeatSink: TimestampedValue<number>;
+  HeatSink?: TimestampedValue<number>;
   /** Time the device has been off */
-  OffTime: TimestampedValue<number>;
+  OffTime?: TimestampedValue<number>;
   /** Connection status */
-  Connected: TimestampedValue<boolean>;
+  Connected?: TimestampedValue<boolean>;
   /** Current consumption */
-  Current: TimestampedValue<number>;
+  Current?: TimestampedValue<number>;
   /** Humidity reading */
-  Humidity: TimestampedValue<number>;
+  Humidity?: TimestampedValue<number>;
   /** Lock status */
-  Lock: TimestampedValue<number>;
+  Lock?: TimestampedValue<number>;
   /** Fan speed */
   FanSpeed?: TimestampedValue<number>;
 }

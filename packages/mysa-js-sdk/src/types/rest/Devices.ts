@@ -10,9 +10,9 @@ export interface BrandInfo {
   /** Unique identifier for the brand */
   Id: number;
   /** Remote control model number for the AC device */
-  remoteModelNumber: string;
+  remoteModelNumber?: string;
   /** Original Equipment Manufacturer brand name */
-  OEMBrand: string;
+  OEMBrand?: string;
 }
 
 /**
@@ -56,55 +56,55 @@ export interface ModeObj {
  */
 export interface DeviceBase {
   /** Button digital input configuration value */
-  ButtonDI: number;
+  ButtonDI?: number;
   /** Maximum current rating as a string value */
-  MaxCurrent: string;
+  MaxCurrent?: string;
   /** Device model identifier string */
   Model: string;
   /** Button average value configuration */
-  ButtonAVE: number;
+  ButtonAVE?: number;
   /** Operating voltage of the device */
-  Voltage: number;
+  Voltage?: number;
   /** Button polling interval configuration */
-  ButtonPolling: number;
+  ButtonPolling?: number;
   /** Minimum brightness level (0-100) */
-  MinBrightness: number;
+  MinBrightness?: number;
   /** User-assigned device name */
-  Name: string;
+  Name?: string;
   /** Button low power mode configuration */
-  ButtonLowPower: number;
+  ButtonLowPower?: number;
   /** Type of heater controlled by the device */
-  HeaterType: string;
+  HeaterType?: string;
   /** Button repeat delay configuration in milliseconds */
-  ButtonRepeatDelay: number;
+  ButtonRepeatDelay?: number;
   /** Button repeat start delay configuration in milliseconds */
-  ButtonRepeatStart: number;
+  ButtonRepeatStart?: number;
   /** Display animation style setting */
-  Animation: string;
+  Animation?: string;
   /** Maximum brightness level (0-100) */
-  MaxBrightness: number;
+  MaxBrightness?: number;
   /** Array of user IDs allowed to control this device */
-  AllowedUsers: string[];
+  AllowedUsers?: string[];
   /** Current button state indicator */
-  ButtonState: string;
+  ButtonState?: string;
   /** Home identifier that this device belongs to */
-  Home: string;
+  Home?: string;
   /** Button sensitivity threshold configuration */
-  ButtonThreshold: number;
+  ButtonThreshold?: number;
   /** Data format version used by the device */
-  Format: string;
+  Format?: string;
   /** Time zone setting for the device */
-  TimeZone: string;
+  TimeZone?: string;
   /** Unix timestamp of when device was last paired */
-  LastPaired: number;
+  LastPaired?: number;
   /** Minimum temperature setpoint allowed */
-  MinSetpoint: number;
+  MinSetpoint?: number;
   /** Current operating mode of the device */
-  Mode: ModeObj;
+  Mode?: ModeObj;
   /** User ID of the device owner */
-  Owner: string;
+  Owner?: string;
   /** Maximum temperature setpoint allowed */
-  MaxSetpoint: number;
+  MaxSetpoint?: number;
   /** Unique device identifier */
   Id: string;
   /** Optional zone assignment for the device */
