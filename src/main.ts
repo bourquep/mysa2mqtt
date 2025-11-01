@@ -99,7 +99,8 @@ async function main() {
         mqttSettings,
         new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
         firmwares.Firmware[device.Id],
-        serialNumbers.get(device.Id)
+        serialNumbers.get(device.Id),
+        options.temperatureUnit
       )
   );
 
