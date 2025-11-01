@@ -188,17 +188,17 @@ export class Thermostat {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
       const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
 
-      this.mqttClimate.currentTemperature = state.CorrectedTemp.v;
-      this.mqttClimate.currentHumidity = state.Humidity.v;
-      this.mqttClimate.currentMode = state.TstatMode.v === 1 ? 'off' : state.TstatMode.v === 3 ? 'heat' : undefined;
-      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty.v);
-      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint.v : undefined;
+      this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
+      this.mqttClimate.currentHumidity = state.Humidity?.v;
+      this.mqttClimate.currentMode = state.TstatMode?.v === 1 ? 'off' : state.TstatMode?.v === 3 ? 'heat' : undefined;
+      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
+      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
       await this.mqttClimate.writeConfig();
 
-      await this.mqttTemperature.setState('state_topic', state.CorrectedTemp.v.toFixed(2));
+      await this.mqttTemperature.setState('state_topic', (state.CorrectedTemp?.v ?? 0).toFixed(2));
       await this.mqttTemperature.writeConfig();
 
-      await this.mqttHumidity.setState('state_topic', state.Humidity.v.toFixed(2));
+      await this.mqttHumidity.setState('state_topic', (state.Humidity?.v ?? 0).toFixed(2));
       await this.mqttHumidity.writeConfig();
 
       // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
@@ -242,7 +242,7 @@ export class Thermostat {
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
-    if (status.current != null) {
+    if (this.mysaDevice.Voltage != null && status.current != null) {
       const watts = this.mysaDevice.Voltage * status.current;
       await this.mqttPower.setState('state_topic', watts.toFixed(2));
     } else {
