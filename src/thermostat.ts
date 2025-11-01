@@ -187,10 +187,11 @@ export class Thermostat {
     try {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
       const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
+      const tstatMode = state.TstatMode?.v;
 
       this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
       this.mqttClimate.currentHumidity = state.Humidity?.v;
-      this.mqttClimate.currentMode = state.TstatMode?.v === 1 ? 'off' : state.TstatMode?.v === 3 ? 'heat' : undefined;
+      this.mqttClimate.currentMode = tstatMode === 1 ? 'off' : tstatMode === 3 ? 'heat' : undefined;
       this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
       await this.mqttClimate.writeConfig();
