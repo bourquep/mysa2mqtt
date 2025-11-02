@@ -1,5 +1,11 @@
 # mysa2mqtt
 
+<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
+
+[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
+
+<!-- ALL-CONTRIBUTORS-BADGE:END -->
+
 [![NPM Version](https://img.shields.io/npm/v/mysa2mqtt)](https://www.npmjs.com/package/mysa2mqtt)
 [![Docker Hub](https://img.shields.io/docker/pulls/bourquep/mysa2mqtt)](https://hub.docker.com/r/bourquep/mysa2mqtt)
 [![CodeQL](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql)
@@ -118,6 +124,11 @@ For development or custom modifications:
 The application can be configured using either command-line arguments or environment variables. Environment variables
 take precedence over command-line defaults.
 
+> [!IMPORTANT]
+> The `M2M_TEMPERATURE_UNIT` option must match Home Assistant's unit system (Settings → General → Unit System)
+> so setpoints and readings are interpreted correctly. If mismatched, climate entities will show incorrect values (e.g.
+> 21°C treated as 21°F) and commands may result in unexpected temperatures.
+
 ### Required Configuration
 
 | CLI Option            | Environment Variable | Description                      |
@@ -145,7 +156,7 @@ take precedence over command-line defaults.
 | `-l, --log-level`         | `M2M_LOG_LEVEL`         | `info`         | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
 | `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
 | `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
-| `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius [default], `F` = Fahrenheit)            |
+| `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
 
 ## Usage Examples
 
@@ -370,3 +381,26 @@ copyright notice and license text in any copy of the software or substantial por
 - [mqtt2ha](https://github.com/bourquep/mqtt2ha) - MQTT to Home Assistant bridge library
 - [Commander.js](https://github.com/tj/commander.js) - Command-line argument parsing
 - [Pino](https://github.com/pinojs/pino) - Fast JSON logger
+
+## Contributors ✨
+
+Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/remiolivier"><img src="https://avatars.githubusercontent.com/u/1379047?v=4?s=100" width="100px;" alt="remiolivier"/><br /><sub><b>remiolivier</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=remiolivier" title="Code">💻</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END -->
+
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
+Contributions of any kind welcome!
