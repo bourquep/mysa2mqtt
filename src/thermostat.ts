@@ -367,15 +367,14 @@ export class Thermostat {
         return 'off';
       case 'heat':
         switch (this.deviceType) {
-          case 'AC':
-            return 'heating';
           case 'BB':
             if (current != null) {
               return current > 0 ? 'heating' : 'idle';
             }
             return (dutyCycle ?? 0) > 0 ? 'heating' : 'idle';
+          default:
+            return 'heating';
         }
-        break;
       case 'cool':
         return 'cooling';
       case 'fan_only':
