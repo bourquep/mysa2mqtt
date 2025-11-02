@@ -187,13 +187,12 @@ export class Thermostat {
             }
             break;
 
-          case 'fan_mode_command_topic':
-            if (message === '') {
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined);
-            } else {
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, message as MysaFanSpeedMode);
-            }
+          case 'fan_mode_command_topic': {
+            const messageAsMode = message as MysaFanSpeedMode;
+            const mode = FAN_SPEED_MODES.includes(messageAsMode) ? messageAsMode : undefined;
+            this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, mode);
             break;
+          }
         }
       }
     );
