@@ -30,31 +30,38 @@ import {
   OriginConfiguration,
   Sensor
 } from 'mqtt2ha';
-import { DeviceBase, FirmwareDevice, MysaApiClient, MysaDeviceMode, StateChange, Status } from 'mysa-js-sdk';
+import {
+  DeviceBase,
+  FirmwareDevice,
+  MysaApiClient,
+  MysaDeviceMode,
+  MysaFanSpeedMode,
+  StateChange,
+  Status
+} from 'mysa-js-sdk';
 import { version } from './options';
 
 type DeviceType = 'AC' | 'BB';
 
-export const HA_HEAT_ONLY_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat'] as const;
-export const HA_AC_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat', 'cool', 'dry', 'fan_only', 'auto'] as const;
-export const MYSA_NUMBER_TO_MYSA_MODE: Partial<Record<number, MysaDeviceMode>> = {
+const HA_HEAT_ONLY_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat'];
+const HA_AC_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat', 'cool', 'dry', 'fan_only', 'auto'];
+const MYSA_NUMBER_TO_MYSA_MODE: Partial<Record<number, MysaDeviceMode>> = {
   1: 'off',
   2: 'auto',
   3: 'heat',
   4: 'cool',
   5: 'fan_only',
   6: 'dry'
-} as const;
+};
 
-export const FAN_MODES = ['auto', 'low', 'medium', 'high', 'max'] as const;
-export type FanMode = (typeof FAN_MODES)[number];
-export const FAN_SPEED_TO_MODE: Partial<Record<number, FanMode>> = {
+const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
+const FAN_SPEED_TO_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
   3: 'low',
   5: 'medium',
   7: 'high',
   8: 'max'
-} as const;
+};
 
 export class Thermostat {
   private isStarted = false;
@@ -96,7 +103,7 @@ export class Thermostat {
       support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
-    let isAC = (mysaDevice.Model ?? '').startsWith('AC');
+    const isAC = mysaDevice.Model.startsWith('AC');
     this.deviceType = isAC ? 'AC' : 'BB';
 
     this.mqttClimate = new Climate(
@@ -112,42 +119,47 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: isAC ? HA_AC_MODES : HA_HEAT_ONLY_MODES,
-          fan_modes: isAC ? FAN_MODES : undefined,
+          fan_modes: isAC ? FAN_SPEED_MODES : undefined,
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
           temperature_unit: 'C',
           optimistic: true
         }
       },
-      [
-        'action_topic',
-        'current_humidity_topic',
-        'current_temperature_topic',
-        'mode_state_topic',
-        'temperature_state_topic',
-        isAC ? 'fan_mode_state_topic' : undefined,
-        isAC ? 'fan_mode_command_topic' : undefined
-      ].filter(Boolean) as string[],
+      isAC
+        ? [
+            'action_topic',
+            'current_humidity_topic',
+            'current_temperature_topic',
+            'mode_state_topic',
+            'temperature_state_topic',
+            'fan_mode_state_topic'
+          ]
+        : [
+            'action_topic',
+            'current_humidity_topic',
+            'current_temperature_topic',
+            'mode_state_topic',
+            'temperature_state_topic'
+          ],
       async () => {},
-      [
-        'mode_command_topic',
-        'power_command_topic',
-        'temperature_command_topic',
-        isAC ? 'fan_mode_state_topic' : undefined,
-        isAC ? 'fan_mode_command_topic' : undefined
-      ].filter(Boolean) as string[],
+      isAC
+        ? ['mode_command_topic', 'power_command_topic', 'temperature_command_topic', 'fan_mode_command_topic']
+        : ['mode_command_topic', 'power_command_topic', 'temperature_command_topic'],
       async (topic, message) => {
         switch (topic) {
-          case 'mode_command_topic':
-            let mode: MysaDeviceMode | undefined = isAC
-              ? HA_AC_MODES.includes(message)
-                ? (message as MysaDeviceMode)
+          case 'mode_command_topic': {
+            const messageAsMode = message as MysaDeviceMode;
+            const mode: MysaDeviceMode | undefined = isAC
+              ? HA_AC_MODES.includes(messageAsMode)
+                ? messageAsMode
                 : undefined
-              : HA_HEAT_ONLY_MODES.includes(message)
-                ? (message as MysaDeviceMode)
+              : HA_HEAT_ONLY_MODES.includes(messageAsMode)
+                ? messageAsMode
                 : undefined;
             this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, mode);
             break;
+          }
 
           case 'power_command_topic':
             this.mysaApiClient.setDeviceState(
@@ -179,8 +191,7 @@ export class Thermostat {
             if (message === '') {
               this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined);
             } else {
-              const fanMode = message as FanMode;
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, fanMode);
+              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, message as MysaFanSpeedMode);
             }
             break;
         }
@@ -339,14 +350,12 @@ export class Thermostat {
       case 'cool':
       case 'auto':
         this.mqttClimate.currentMode = mode;
-        this.mqttClimate.currentAction = this.computeCurrentAction(state.current, state.dutyCycle);
         this.mqttClimate.targetTemperature = state.setPoint;
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
       case 'dry':
       case 'fan_only':
         this.mqttClimate.currentMode = mode;
-        this.mqttClimate.currentAction = this.computeCurrentAction(state.current, state.dutyCycle);
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
     }
@@ -358,8 +367,16 @@ export class Thermostat {
       case 'off':
         return 'off';
       case 'heat':
-        const active = current != null ? current > 0 : (dutyCycle ?? 0) > 0;
-        return active || this.deviceType === 'AC' ? 'heating' : 'idle';
+        switch (this.deviceType) {
+          case 'AC':
+            return 'heating';
+          case 'BB':
+            if (current != null) {
+              return current > 0 ? 'heating' : 'idle';
+            }
+            return (dutyCycle ?? 0) > 0 ? 'heating' : 'idle';
+        }
+        break;
       case 'cool':
         return 'cooling';
       case 'fan_only':
