@@ -361,7 +361,9 @@ export class Thermostat {
   }
 
   private computeCurrentAction(current?: number, dutyCycle?: number): ClimateAction {
-    const mode: MysaDeviceMode = this.mqttClimate.currentMode as MysaDeviceMode;
+    const currentModeAsMode = this.mqttClimate.currentMode as MysaDeviceMode;
+    const mode = HA_AC_MODES.includes(currentModeAsMode) ? currentModeAsMode : undefined;
+
     switch (mode) {
       case 'off':
         return 'off';
