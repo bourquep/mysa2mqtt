@@ -124,6 +124,11 @@ For development or custom modifications:
 The application can be configured using either command-line arguments or environment variables. Environment variables
 take precedence over command-line defaults.
 
+> [!IMPORTANT]
+> The `M2M_TEMPERATURE_UNIT` option must match Home Assistant's unit system (Settings → General → Unit System)
+> so setpoints and readings are interpreted correctly. If mismatched, climate entities will show incorrect values (e.g.
+> 21°C treated as 21°F) and commands may result in unexpected temperatures.
+
 ### Required Configuration
 
 | CLI Option            | Environment Variable | Description                      |
