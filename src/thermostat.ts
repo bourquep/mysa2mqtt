@@ -336,8 +336,7 @@ export class Thermostat {
       return;
     }
 
-    const mode = state.mode as MysaDeviceMode;
-    switch (mode) {
+    switch (state.mode) {
       case 'off':
         this.mqttClimate.currentMode = 'off';
         this.mqttClimate.currentAction = 'off';
@@ -348,13 +347,14 @@ export class Thermostat {
       case 'heat':
       case 'cool':
       case 'auto':
-        this.mqttClimate.currentMode = mode;
+        this.mqttClimate.currentMode = state.mode;
         this.mqttClimate.targetTemperature = state.setPoint;
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
+
       case 'dry':
       case 'fan_only':
-        this.mqttClimate.currentMode = mode;
+        this.mqttClimate.currentMode = state.mode;
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
     }
