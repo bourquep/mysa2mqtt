@@ -123,12 +123,12 @@ export class Thermostat {
             } else {
               let temperature = parseFloat(message);
 
-              if (!is_celsius) { 
+              if (!is_celsius) {
                 const snapHalfC = (c: number) => Math.round(c * 2) / 2;
                 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
                 // Snap to 0.5 °C and clamp to device limits
-                let setC = snapHalfC(temperature);
-                temperature = clamp(setC, this.mysaDevice.MinSetpoint, this.mysaDevice.MaxSetpoint);
+                const setC = snapHalfC(temperature);
+                temperature = clamp(setC, this.mysaDevice.MinSetpoint ?? 0, this.mysaDevice.MaxSetpoint ?? 100);
               }
 
               this.mysaApiClient.setDeviceState(this.mysaDevice.Id, temperature, undefined);
