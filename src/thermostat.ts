@@ -264,7 +264,8 @@ export class Thermostat {
       this.mqttClimate.currentHumidity = state.Humidity?.v;
       this.mqttClimate.currentMode =
         MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
-      this.mqttClimate.currentFanMode = MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? undefined;
+      this.mqttClimate.currentFanMode =
+        MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
       this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
 
