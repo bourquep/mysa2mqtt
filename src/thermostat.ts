@@ -45,7 +45,7 @@ type DeviceType = 'AC' | 'BB';
 
 const HA_HEAT_ONLY_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat'];
 const HA_AC_MODES: Partial<MysaDeviceMode>[] = ['off', 'heat', 'cool', 'dry', 'fan_only', 'auto'];
-const MYSA_NUMBER_TO_MYSA_MODE: Partial<Record<number, MysaDeviceMode>> = {
+const MYSA_RAW_MODE_TO_DEVICE_MODE: Partial<Record<number, MysaDeviceMode>> = {
   1: 'off',
   2: 'auto',
   3: 'heat',
@@ -55,7 +55,7 @@ const MYSA_NUMBER_TO_MYSA_MODE: Partial<Record<number, MysaDeviceMode>> = {
 };
 
 const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
-const FAN_SPEED_TO_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
+const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
   3: 'low',
   5: 'medium',
@@ -263,8 +263,8 @@ export class Thermostat {
       this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
       this.mqttClimate.currentHumidity = state.Humidity?.v;
       this.mqttClimate.currentMode =
-        MYSA_NUMBER_TO_MYSA_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
-      this.mqttClimate.currentFanMode = FAN_SPEED_TO_MODE[state.FanSpeed?.v as number] ?? undefined;
+        MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
+      this.mqttClimate.currentFanMode = MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? undefined;
       this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
       this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
 
