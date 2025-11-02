@@ -349,6 +349,9 @@ export class Thermostat {
       case 'cool':
       case 'auto':
         this.mqttClimate.currentMode = state.mode;
+        if (this.deviceType === 'AC') {
+          this.mqttClimate.currentAction = this.computeCurrentAction();
+        }
         this.mqttClimate.targetTemperature = state.setPoint;
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
@@ -356,6 +359,7 @@ export class Thermostat {
       case 'dry':
       case 'fan_only':
         this.mqttClimate.currentMode = state.mode;
+        this.mqttClimate.currentAction = this.computeCurrentAction();
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
     }
