@@ -124,6 +124,11 @@ For development or custom modifications:
 The application can be configured using either command-line arguments or environment variables. Environment variables
 take precedence over command-line defaults.
 
+> [!IMPORTANT]
+> The `M2M_TEMPERATURE_UNIT` option must match Home Assistant's unit system (Settings → General → Unit System)
+> so setpoints and readings are interpreted correctly. If mismatched, climate entities will show incorrect values (e.g.
+> 21°C treated as 21°F) and commands may result in unexpected temperatures.
+
 ### Required Configuration
 
 | CLI Option            | Environment Variable | Description                      |
@@ -151,6 +156,7 @@ take precedence over command-line defaults.
 | `-l, --log-level`         | `M2M_LOG_LEVEL`         | `info`         | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
 | `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
 | `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
+| `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
 
 ## Usage Examples
 
