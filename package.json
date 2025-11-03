@@ -46,7 +46,7 @@
     "build": "tsup"
   },
   "dependencies": {
-    "commander": "14.0.1",
+    "commander": "14.0.2",
     "dotenv": "17.2.3",
     "mqtt2ha": "4.1.2",
     "mysa-js-sdk": "2.0.0",
