@@ -76,7 +76,7 @@
     "tsup": "8.5.0",
     "tsx": "4.20.6",
     "typedoc": "0.28.13",
-    "typedoc-material-theme": "1.4.0",
+    "typedoc-material-theme": "1.4.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.2"
   }
