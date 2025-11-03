@@ -24,13 +24,13 @@ home automation platforms.
 
 ## Supported hardware
 
-| Model Number | Description                                               | Supported                                                            |
-| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------- |
-| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                |
-| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                    |
-| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not report power consumption |
-| `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                        |
-| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | 🚫 Not supported (yet)                                               |
+| Model Number | Description                                               | Supported                                                               |
+| ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                   |
+| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                       |
+| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not report power consumption    |
+| `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                           |
+| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions |
 
 ## Disclaimer
 
