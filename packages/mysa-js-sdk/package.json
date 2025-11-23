@@ -54,7 +54,7 @@
     "@aws-sdk/credential-providers": "3.922.0",
     "amazon-cognito-identity-js": "6.3.15",
     "aws-iot-device-sdk-v2": "1.22.0",
-    "dayjs": "1.11.18",
+    "dayjs": "1.11.19",
     "lodash": "4.17.21",
     "nanoid": "5.1.6"
   },
