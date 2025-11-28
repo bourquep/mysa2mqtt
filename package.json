@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "@commander-js/extra-typings": "14.0.0",
-    "@eslint/js": "9.39.0",
+    "@eslint/js": "9.39.1",
     "@semantic-release/npm": "13.1.2",
     "@types/node": "24.10.1",
     "conventional-changelog-conventionalcommits": "9.1.0",
