@@ -1,0 +1,38 @@
+name: "Mysa2MQTT"
+slug: "mysa2mqtt"
+version: "0.1.0"
+description: "Expose Mysa smart thermostats to MQTT for Home Assistant."
+url: "https://github.com/bourquep/mysa2mqtt"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+panel_icon: "mdi:radiator"
+panel_title: "Mysa2MQTT"
+init: false
+map:
+  - data:rw
+options:
+  mqtt_host: "core-mosquitto"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_topic_prefix: "mysa2mqtt"
+  mqtt_client_name: "mysa2mqtt"
+  mysa_username: ""
+  mysa_password: ""
+  log_level: "info"
+  log_format: "pretty"
+  temperature_unit: "C"
+schema:
+  mqtt_host: str
+  mqtt_port: int
+  mqtt_username: str?
+  mqtt_password: password?
+  mqtt_topic_prefix: str
+  mqtt_client_name: str
+  mysa_username: str
+  mysa_password: password
+  log_level: list(silent|fatal|error|warn|info|debug|trace)
+  log_format: list(pretty|json)
+  temperature_unit: list(C|F)

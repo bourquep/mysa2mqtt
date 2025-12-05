@@ -258,6 +258,34 @@ M2M_LOG_LEVEL=debug
 - **Pretty format** (default): Human-readable colored output
 - **JSON format**: Structured logging suitable for log aggregation
 
+## Home Assistant Add-on
+
+Install the add-on repository in Home Assistant, then install and configure the `Mysa2MQTT` add-on:
+
+1. **Add the repository**: Settings → Add-ons → Add-on Store → ⋮ → Repositories → add `https://github.com/bourquep/mysa2mqtt`.
+2. **Install**: Select **Mysa2MQTT**, click **Install**, then open the **Configuration** tab.
+3. **Configure** (defaults shown):
+
+   ```yaml
+   mqtt_host: core-mosquitto     # or your broker host/IP
+   mqtt_port: 1883
+   mqtt_username: ""             # optional
+   mqtt_password: ""             # optional
+   mqtt_topic_prefix: mysa2mqtt
+   mqtt_client_name: mysa2mqtt
+   mysa_username: ""             # required
+   mysa_password: ""             # required
+   log_level: info               # silent|fatal|error|warn|info|debug|trace
+   log_format: pretty            # pretty|json
+   temperature_unit: C           # C|F; must match Home Assistant
+   ```
+
+4. **Save & Start**: Save the configuration and start the add-on. The add-on stores the Mysa session at `/data/session.json`
+   so it persists across restarts.
+
+MQTT topics and discovery payloads match the CLI/docker usage; the only required settings are `mysa_username`,
+`mysa_password`, and `mqtt_host`.
+
 ## Docker Usage
 
 ### Option 1: Pre-built Image (Recommended)
