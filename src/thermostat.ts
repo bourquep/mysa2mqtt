@@ -312,22 +312,34 @@ export class Thermostat {
   }
 
   private async handleMysaStatusUpdate(status: Status) {
-    if (!this.isStarted || status.deviceId !== this.mysaDevice.Id) {
+    if (!this.isStarted || status.deviceId !== this.mysaDevice. Id) {
       return;
     }
-
-    this.mqttClimate.currentAction = this.computeCurrentAction(status.current, status.dutyCycle);
+  
+    this.mqttClimate.currentAction = this.computeCurrentAction(status. current, status.dutyCycle);
     this.mqttClimate.currentTemperature = status.temperature;
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
-
-    if (this.mysaDevice.Voltage != null && status.current != null) {
+  
+    // Power calculation:  V1 devices report current, V2 devices report duty cycle
+    if (this.mysaDevice.Voltage != null && status. current != null) {
+      // V1 devices: use actual current measurement
       const watts = this.mysaDevice.Voltage * status.current;
       await this.mqttPower.setState('state_topic', watts.toFixed(2));
+    } else if (this.mysaDevice.Voltage != null && status.dutyCycle != null) {
+      // V2 devices: estimate power from duty cycle and MaxCurrent rating
+      const maxCurrent = this.mysaDevice.MaxCurrent ? parseFloat(this.mysaDevice.MaxCurrent) : null;
+      if (maxCurrent != null && !isNaN(maxCurrent)) {
+        const estimatedWatts = this.mysaDevice.Voltage * maxCurrent * status.dutyCycle;
+        await this.mqttPower.setState('state_topic', estimatedWatts.toFixed(2));
+      } else {
+        // No MaxCurrent available - cannot estimate power
+        await this.mqttPower.setState('state_topic', 'None');
+      }
     } else {
       await this.mqttPower.setState('state_topic', 'None');
     }
-
+  
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
     await this.mqttHumidity.setState('state_topic', status.humidity.toFixed(2));
   }
