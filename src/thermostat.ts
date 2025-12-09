@@ -312,7 +312,7 @@ export class Thermostat {
   }
 
   private async handleMysaStatusUpdate(status: Status) {
-    if (! this.isStarted || status.deviceId !== this.mysaDevice. Id) {
+    if (!this.isStarted || status.deviceId !== this.mysaDevice. Id) {
       return;
     }
   
