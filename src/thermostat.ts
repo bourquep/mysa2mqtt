@@ -318,7 +318,7 @@ export class Thermostat {
   
     this.mqttClimate.currentAction = this.computeCurrentAction(status. current, status.dutyCycle);
     this.mqttClimate.currentTemperature = status.temperature;
-    this.mqttClimate. currentHumidity = status.humidity;
+    this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
   
     // Power calculation:  V1 devices report current, V2 devices report duty cycle
