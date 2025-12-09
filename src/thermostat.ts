@@ -337,7 +337,7 @@ export class Thermostat {
         await this.mqttPower.setState('state_topic', 'None');
       }
     } else {
-      await this.mqttPower. setState('state_topic', 'None');
+      await this.mqttPower.setState('state_topic', 'None');
     }
   
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
