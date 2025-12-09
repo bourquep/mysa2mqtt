@@ -325,7 +325,7 @@ export class Thermostat {
     if (this.mysaDevice.Voltage != null && status. current != null) {
       // V1 devices: use actual current measurement
       const watts = this.mysaDevice.Voltage * status.current;
-      await this. mqttPower.setState('state_topic', watts.toFixed(2));
+      await this.mqttPower.setState('state_topic', watts.toFixed(2));
     } else if (this.mysaDevice.Voltage != null && status.dutyCycle != null) {
       // V2 devices: estimate power from duty cycle and MaxCurrent rating
       const maxCurrent = this.mysaDevice.MaxCurrent ? parseFloat(this.mysaDevice.MaxCurrent) : null;
