@@ -330,7 +330,7 @@ export class Thermostat {
       // V2 devices: estimate power from duty cycle and MaxCurrent rating
       const maxCurrent = this.mysaDevice.MaxCurrent ? parseFloat(this.mysaDevice.MaxCurrent) : null;
       if (maxCurrent != null && !isNaN(maxCurrent)) {
-        const estimatedWatts = this. mysaDevice.Voltage * maxCurrent * status.dutyCycle;
+        const estimatedWatts = this.mysaDevice.Voltage * maxCurrent * status.dutyCycle;
         await this.mqttPower.setState('state_topic', estimatedWatts.toFixed(2));
       } else {
         // No MaxCurrent available - cannot estimate power
