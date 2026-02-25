@@ -235,7 +235,11 @@ export class Thermostat {
             const messageAsMode = message as MysaFanSpeedMode;
             const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
             const mode = supportedModes.includes(messageAsMode) ? messageAsMode : undefined;
-            await this.setDeviceState(undefined, undefined, mode);
+            await this.setDeviceState(
+              this.mqttClimate.targetTemperature,
+              this.mqttClimate.currentMode as MysaDeviceMode,
+              mode
+            );
             break;
           }
         }
