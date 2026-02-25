@@ -37,7 +37,8 @@ import {
   MysaDeviceMode,
   MysaFanSpeedMode,
   StateChange,
-  Status
+  Status,
+  SupportedCaps
 } from 'mysa-js-sdk';
 import { version } from './options';
 
@@ -66,6 +67,35 @@ const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedM
 const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
 const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
+
+/**
+ * Build the fan_modes list from the device's SupportedCaps.
+ * Takes the union of fanSpeeds across all modes, preserving canonical order.
+ * Falls back to FAN_SPEED_MODES if SupportedCaps is absent or has no fan speeds.
+ */
+function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
+  if (!supportedCaps?.modes) {
+    return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
+  }
+
+  const allSpeeds = new Set<number>();
+  for (const modeCaps of Object.values(supportedCaps.modes)) {
+    // fanSpeeds exists at runtime but is not declared in the SDK TypeScript type
+    const fanSpeeds = (modeCaps as unknown as { fanSpeeds?: number[] }).fanSpeeds ?? [];
+    for (const speed of fanSpeeds) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  if (allSpeeds.size === 0) {
+    return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
+  }
+
+  // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE
+  return Object.entries(MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE)
+    .filter(([rawSpeed]) => allSpeeds.has(Number(rawSpeed)))
+    .map(([, name]) => name as MysaFanSpeedMode);
+}
 
 export class Thermostat {
   private isStarted = false;
@@ -134,7 +164,7 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: isAC ? HA_AC_MODES : HA_HEAT_ONLY_MODES,
-          fan_modes: isAC ? FAN_SPEED_MODES : undefined,
+          fan_modes: isAC ? buildFanModes(mysaDevice.SupportedCaps) : undefined,
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
           temperature_unit: 'C',
@@ -203,7 +233,8 @@ export class Thermostat {
 
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
-            const mode = FAN_SPEED_MODES.includes(messageAsMode) ? messageAsMode : undefined;
+            const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
+            const mode = supportedModes.includes(messageAsMode) ? messageAsMode : undefined;
             await this.setDeviceState(undefined, undefined, mode);
             break;
           }
