@@ -58,6 +58,7 @@ const MYSA_RAW_MODE_TO_DEVICE_MODE: Partial<Record<number, MysaDeviceMode>> = {
 const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
 const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
+  2: 'low', // AC-V1-X devices echo fn=2 for any non-auto fan speed (device-side mapping)
   3: 'low',
   5: 'medium',
   7: 'high',
@@ -71,12 +72,7 @@ const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY
 /**
  * Build the fan_modes list from the device's SupportedCaps.
  * Takes the union of fanSpeeds across all modes, preserving canonical order.
- *
- * - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
- * - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto'
- *   (device's AC brand not configured or IR code set doesn't support multi-speed;
- *    e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual speed)
- * - SupportedCaps present with fanSpeeds → expose exactly those speeds
+ * Falls back to FAN_SPEED_MODES if SupportedCaps is absent or has no fan speeds.
  */
 function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
   if (!supportedCaps?.modes) {
@@ -93,9 +89,7 @@ function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMo
   }
 
   if (allSpeeds.size === 0) {
-    // SupportedCaps exists but has no fan speeds → device doesn't support multi-speed control
-    // (typically Brand=None / generic IR code set). Only expose 'auto'.
-    return ['auto'];
+    return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
   }
 
   // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE
