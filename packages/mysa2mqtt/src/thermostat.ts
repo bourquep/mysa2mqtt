@@ -438,14 +438,22 @@ export class Thermostat {
           this.mqttClimate.currentAction = this.computeCurrentAction();
         }
         this.mqttClimate.targetTemperature = state.setPoint;
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
 
       case 'dry':
       case 'fan_only':
         this.mqttClimate.currentMode = state.mode;
         this.mqttClimate.currentAction = this.computeCurrentAction();
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
     }
   }
