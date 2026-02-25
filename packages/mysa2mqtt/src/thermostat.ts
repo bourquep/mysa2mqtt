@@ -72,14 +72,17 @@ const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
 
 /**
- * Build the fan_modes list from the device's SupportedCaps.
- * Takes the union of fanSpeeds across all modes, preserving canonical order.
+ * Build the fan_modes list from the device's SupportedCaps. Takes the union of fanSpeeds across all modes, preserving
+ * canonical order.
  *
- * - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
- * - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto'
- *   (device's AC brand not configured or IR code set doesn't support multi-speed;
- *    e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual speed)
- * - SupportedCaps present with fanSpeeds → expose exactly those speeds
+ * @param supportedCaps - The device's supported capabilities, if reported.
+ * @returns The supported fan speed modes, falling back to {@link FAN_SPEED_MODES} when none are reported.
+ *
+ *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
+ *   - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto' (device's AC brand not configured or IR code
+ *       set doesn't support multi-speed; e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual
+ *       speed)
+ *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
  */
 function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
   if (!supportedCaps?.modes) {
@@ -87,8 +90,18 @@ function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMo
   }
 
   const allSpeeds = new Set<number>();
+
+  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices;
+  // not declared in the SDK TypeScript type but present at runtime)
+  const topLevelSpeeds = (supportedCaps as unknown as { fanSpeeds?: number[] }).fanSpeeds;
+  if (topLevelSpeeds) {
+    for (const speed of topLevelSpeeds) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  // Also check per-mode fanSpeeds (future-proofing)
   for (const modeCaps of Object.values(supportedCaps.modes)) {
-    // fanSpeeds exists at runtime but is not declared in the SDK TypeScript type
     const fanSpeeds = (modeCaps as unknown as { fanSpeeds?: number[] }).fanSpeeds ?? [];
     for (const speed of fanSpeeds) {
       allSpeeds.add(speed);
