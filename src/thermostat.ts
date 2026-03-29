@@ -65,6 +65,7 @@ const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedM
 
 export class Thermostat {
   private isStarted = false;
+  private _pollTimer?: ReturnType<typeof setInterval>;
   private readonly mqttDevice: DeviceConfiguration;
   private readonly mqttOrigin: OriginConfiguration;
   private readonly mqttClimate: Climate;
@@ -288,6 +289,14 @@ export class Thermostat {
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
 
       await this.mysaApiClient.startRealtimeUpdates(this.mysaDevice.Id);
+
+      // Poll device state every 60 seconds to supplement real-time AWS IoT MQTT events.
+      // For AC (mini-split) devices the real-time heartbeat fires only every ~7 minutes,
+      // meaning mode/temperature changes can take up to 7 minutes to appear in Home
+      // Assistant.  REST polling keeps state fresh without exceeding Mysa API rate limits.
+      this._pollTimer = setInterval(async () => {
+        await this.pollDeviceState();
+      }, 60_000);
     } catch (error) {
       this.isStarted = false;
       throw error;
@@ -301,6 +310,9 @@ export class Thermostat {
 
     this.isStarted = false;
 
+    clearInterval(this._pollTimer);
+    this._pollTimer = undefined;
+
     await this.mysaApiClient.stopRealtimeUpdates(this.mysaDevice.Id);
 
     this.mysaApiClient.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
@@ -309,6 +321,40 @@ export class Thermostat {
     await this.mqttPower.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
+  }
+
+  /**
+   * Polls the Mysa REST API for the current device state and updates MQTT accordingly.
+   * Called on a 60-second interval started in {@link start} to keep Home Assistant state
+   * fresh for AC (mini-split) devices whose real-time AWS IoT MQTT heartbeat fires only
+   * every ~7 minutes.
+   */
+  private async pollDeviceState() {
+    if (!this.isStarted) {
+      return;
+    }
+
+    try {
+      const deviceStates = await this.mysaApiClient.getDeviceStates();
+      const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
+
+      this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
+      this.mqttClimate.currentHumidity = state.Humidity?.v;
+      this.mqttClimate.currentMode =
+        MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
+      this.mqttClimate.currentFanMode =
+        MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
+      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
+      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
+
+      await this.mqttTemperature.setState(
+        'state_topic',
+        state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
+      );
+      await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
+    } catch (error) {
+      this.logger.warn(`Poll failed: ${error}`);
+    }
   }
 
   private async handleMysaStatusUpdate(status: Status) {
@@ -379,8 +425,18 @@ export class Thermostat {
               return current > 0 ? 'heating' : 'idle';
             }
             return (dutyCycle ?? 0) > 0 ? 'heating' : 'idle';
-          default:
+          default: {
+            // AC (mini-split) devices do not report current draw, so we cannot use the
+            // BB device's current/dutyCycle approach.  Instead, compare room temperature
+            // to the heating setpoint with a 0.5 °C deadband: if the room is already
+            // within 0.5 °C of the target the unit has reached temperature and is idle.
+            const currentTemp = this.mqttClimate.currentTemperature;
+            const targetTemp = this.mqttClimate.targetTemperature;
+            if (currentTemp != null && targetTemp != null && currentTemp >= targetTemp - 0.5) {
+              return 'idle';
+            }
             return 'heating';
+          }
         }
       case 'cool':
         return 'cooling';
