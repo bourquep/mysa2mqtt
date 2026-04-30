@@ -176,7 +176,49 @@ async function retryThermostatStart(thermostat: Thermostat, retryAttempt: number
   }
 }
 
-main().catch((error) => {
-  rootLogger.fatal(error, 'Unexpected error');
-  process.exit(1);
-});
+/**
+ * Determine whether an error thrown during bootstrap is a transient network/DNS issue worth retrying, vs. a
+ * configuration or programming error that should surface immediately.
+ *
+ * Mysa's auth path goes through AWS Cognito, which occasionally returns generic "Network error" failures from
+ * amazon-cognito-identity-js when DNS resolution, TCP connect, or TLS handshake hiccups. Without retry, the process
+ * fatally exits and the container/orchestrator restarts the whole thing — noisy and easily mistaken for a real outage.
+ *
+ * @param error - The thrown value caught from `main()`
+ * @returns `true` if the error is one of the network/DNS error shapes we should retry
+ */
+function isTransientNetworkError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  const message = String((error as { message?: string })?.message ?? error ?? '');
+  const transientCodes = new Set(['NetworkError', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN']);
+  if (code && transientCodes.has(code)) return true;
+  return /Network error|getaddrinfo|socket hang up|timeout/i.test(message);
+}
+
+/** Bootstrap wrapper that retries `main()` on transient network errors with exponential backoff. */
+async function mainWithRetry(): Promise<void> {
+  const MAX_ATTEMPTS = 10;
+  const MAX_DELAY_MS = 60_000;
+  let delayMs = 5_000;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await main();
+      return;
+    } catch (error) {
+      const transient = isTransientNetworkError(error);
+      if (!transient || attempt === MAX_ATTEMPTS) {
+        rootLogger.fatal(error, 'Unexpected error');
+        process.exit(1);
+      }
+      rootLogger.warn(
+        { err: error, attempt, maxAttempts: MAX_ATTEMPTS, retryInMs: delayMs },
+        `Transient error during startup (attempt ${attempt}/${MAX_ATTEMPTS}); retrying in ${delayMs}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, MAX_DELAY_MS);
+    }
+  }
+}
+
+mainWithRetry();
