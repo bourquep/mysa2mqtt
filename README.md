@@ -209,6 +209,17 @@ units and estimated from the heating duty cycle on V2 units; energy is integrate
 if the bridge restarts. AC controllers and "Lite" units don't measure power, so they get no power/energy sensors unless
 you provide `--mysa-estimated-current` (which enables an estimate for duty-cycle devices such as the Lite).
 
+#### Cost
+
+| CLI Option        | Environment Variable | Default | Description                                                                            |
+| ----------------- | -------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `--cost-per-kwh`  | `M2M_COST_PER_KWH`   | -       | Electricity rate per kWh. When set, energy adapters also publish a **Cost** sensor.    |
+| `--currency`      | `M2M_CURRENCY`       | `$`     | Currency symbol used by cost sensors (only applies when `--cost-per-kwh` is set).      |
+
+When `--cost-per-kwh` is **not** set, **no cost entity is created** — the bridge does not invent a rate it doesn't know,
+leaving cost to be applied downstream (e.g. by the Home Assistant Energy dashboard). When it _is_ set, each energy
+adapter publishes a `monetary` cost sensor of `energy × rate`.
+
 ## Usage Examples
 
 ### Using Environment Variables (.env file)

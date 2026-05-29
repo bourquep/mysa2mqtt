@@ -24,6 +24,7 @@ SOFTWARE.
 import { DeviceConfiguration, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import pino from 'pino';
 import { SourceAdapter } from '../../bridge/types';
+import { PowerEnergyPublisher } from '../../energy/power-energy-publisher';
 import { PinoLogger } from '../../logger';
 import { version } from '../../version';
 import { ShellyEmClient } from './client';
@@ -37,6 +38,10 @@ export interface ShellyEmConfig {
   host: string;
   /** The EM/EM1 component id to read (Gen2 only; default 0). */
   channelId?: number;
+  /** Optional electricity rate per kWh; when set, a cost sensor is published. */
+  costPerKwh?: number;
+  /** Currency symbol for the cost sensor (only used when `costPerKwh` is set). */
+  currency?: string;
 }
 
 /**
@@ -53,10 +58,9 @@ export class ShellyEmAdapter implements SourceAdapter {
 
   private readonly client: ShellyEmClient;
 
-  private power?: Sensor;
+  private powerEnergy?: PowerEnergyPublisher;
   private current?: Sensor;
   private voltage?: Sensor;
-  private energy?: Sensor;
   private returnedEnergy?: Sensor;
   private readonly channelSensors: Sensor[] = [];
 
@@ -102,12 +106,18 @@ export class ShellyEmAdapter implements SourceAdapter {
       support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
-    this.power = this.makeSensor('power', 'Power', {
-      device_class: 'power',
-      state_class: 'measurement',
-      unit_of_measurement: 'W',
-      suggested_display_precision: 1
+    // Power, energy, and (only if a rate is supplied) cost are published via the shared helper. The Shelly reports a
+    // measured cumulative energy total, so this uses the "measured" energy path rather than integrating power.
+    this.powerEnergy = new PowerEnergyPublisher({
+      mqtt: this.mqttSettings,
+      logger: new PinoLogger(this.logger.child({ module: 'shelly-em', entity: 'power-energy' })),
+      device: this.device,
+      origin: this.origin,
+      uniqueIdPrefix: this.identifier,
+      costPerKwh: this.config.costPerKwh,
+      currency: this.config.currency
     });
+
     this.current = this.makeSensor('current', 'Current', {
       device_class: 'current',
       state_class: 'measurement',
@@ -120,12 +130,6 @@ export class ShellyEmAdapter implements SourceAdapter {
       unit_of_measurement: 'V',
       suggested_display_precision: 0
     });
-    this.energy = this.makeSensor('energy', 'Energy', {
-      device_class: 'energy',
-      state_class: 'total_increasing',
-      unit_of_measurement: 'kWh',
-      suggested_display_precision: 3
-    });
     this.returnedEnergy = this.makeSensor('energy_returned', 'Energy returned', {
       device_class: 'energy',
       state_class: 'total_increasing',
@@ -134,6 +138,7 @@ export class ShellyEmAdapter implements SourceAdapter {
       enabled_by_default: false
     });
 
+    await this.powerEnergy.writeConfig();
     for (const sensor of this.sensors) {
       await sensor.writeConfig();
     }
@@ -203,10 +208,9 @@ export class ShellyEmAdapter implements SourceAdapter {
   private async poll(): Promise<void> {
     const reading = await this.client.getReading();
 
-    await this.setNumeric(this.power, reading.totalPowerWatts, 1);
+    await this.powerEnergy?.updatePowerAndEnergy(reading.totalPowerWatts, reading.totalEnergyKwh);
     await this.setNumeric(this.current, reading.totalCurrentAmps, 2);
     await this.setNumeric(this.voltage, reading.voltage, 0);
-    await this.setNumeric(this.energy, reading.totalEnergyKwh, 3);
     await this.setNumeric(this.returnedEnergy, reading.totalReturnedEnergyKwh, 3);
 
     for (let index = 0; index < reading.channelPowerWatts.length; index++) {
@@ -240,6 +244,9 @@ export class ShellyEmAdapter implements SourceAdapter {
       this.timer = undefined;
     }
 
-    await Promise.all(this.sensors.map((sensor) => sensor.setAvailability(false)));
+    await Promise.all([
+      this.powerEnergy?.setUnavailable() ?? Promise.resolve(),
+      ...this.sensors.map((sensor) => sensor.setAvailability(false))
+    ]);
   }
 }

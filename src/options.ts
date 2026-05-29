@@ -144,6 +144,21 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Configuration')
   )
   .addOption(
+    new Option(
+      '--cost-per-kwh <rate>',
+      'electricity rate per kWh; when set, energy adapters also publish a cost sensor (otherwise none is created)'
+    )
+      .env('M2M_COST_PER_KWH')
+      .argParser(parsePositiveFloat)
+      .helpGroup('Energy')
+  )
+  .addOption(
+    new Option('--currency <symbol>', 'currency symbol used by cost sensors (only with --cost-per-kwh)')
+      .env('M2M_CURRENCY')
+      .default('$')
+      .helpGroup('Energy')
+  )
+  .addOption(
     new Option('--system-sensors <enabled>', 'expose host system metrics as Home Assistant sensors')
       .env('M2M_SYSTEM_SENSORS')
       .choices(['true', 'false'])

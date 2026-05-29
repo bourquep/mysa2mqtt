@@ -23,6 +23,7 @@ SOFTWARE.
 
 import { Climate, DeviceConfiguration, Logger, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import { DeviceBase, FirmwareDevice, MysaApiClient, StateChange, Status } from 'mysa-js-sdk';
+import { EnergyAccumulator } from '../../energy/accumulator';
 import { version } from '../../version';
 import { getDeviceCapabilities } from './capabilities';
 import {
@@ -39,7 +40,6 @@ import {
   resolveCommandedMode,
   resolvePowerCommandMode
 } from './conversions';
-import { EnergyAccumulator } from './energy';
 
 export class Thermostat {
   private isStarted = false;

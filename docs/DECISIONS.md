@@ -199,6 +199,24 @@ cheap, ubiquitous, **local** whole-circuit/whole-home monitors, so they sit at t
 Verified end-to-end (stub Shelly Pro 3EM HTTP server + in-process `aedes` MQTT broker): auto-detected Gen2, published 8
 discovery configs and correct values (power 3300.5 W, energy 25.000 kWh from 25000 Wh, phase-A power 1000 W).
 
+## 13. Shared energy helper + cost (rate only when supplied)
+
+The power + `total_increasing` kWh sensor pattern had been copy-pasted across the Mysa thermostat, Tesla, and Shelly
+adapters. Factored it into `src/energy/`:
+
+- `EnergyAccumulator` was moved here from `src/adapters/mysa/` (it was never Mysa-specific).
+- `PowerEnergyPublisher` creates the standard **power (W)** + **energy (kWh, `total_increasing`)** entities and exposes
+  two update paths: **derived** (`updatePower`, integrates power over time for sources that only report instantaneous
+  power) and **measured** (`updatePowerAndEnergy`, for devices that report a cumulative kWh total like the Shelly EM).
+- The Shelly EM adapter was retrofitted onto it; Mysa and Tesla are queued to follow (backlog).
+
+**Cost is downstream-determined unless a rate is supplied.** Per the project direction, the publisher creates a cost
+sensor **only when `--cost-per-kwh` is set**; with no rate, no cost entity exists and the rate is left to downstream
+(e.g. the Home Assistant Energy dashboard). When a rate is given, cost is simply `energy × rate` (a `monetary`,
+`total_increasing` sensor), with the symbol from `--currency` (default `$`). This avoids the bridge inventing a rate it
+can't know, while still offering turnkey cost when the user does supply one. Verified end-to-end: with a rate, a Shelly
+meter published energy `10.000 kWh` and cost `$1.5000`; the no-rate path (no cost entity) is unit-tested.
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.

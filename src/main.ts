@@ -136,7 +136,11 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
 
   if (options.shellyEmHost) {
     adapters.push(
-      new ShellyEmAdapter({ host: options.shellyEmHost }, mqttSettings, rootLogger.child({ module: 'shelly-em' }))
+      new ShellyEmAdapter(
+        { host: options.shellyEmHost, costPerKwh: options.costPerKwh, currency: options.currency },
+        mqttSettings,
+        rootLogger.child({ module: 'shelly-em' })
+      )
     );
   }
 
