@@ -152,6 +152,14 @@ export const options = new Command('mysa2mqtt')
   )
   .addOption(
     new Option(
+      '--tesla-wall-connector-host <host>',
+      'hostname/IP of a Tesla Wall Connector (Gen 3) to bridge (monitor-only)'
+    )
+      .env('M2M_TESLA_WALL_CONNECTOR_HOST')
+      .helpGroup('Adapters')
+  )
+  .addOption(
+    new Option(
       '--mysa-estimated-current <amps>',
       'estimated current (A) used to compute power for devices that do not report it (e.g. Lite models)'
     )

@@ -177,11 +177,20 @@ take precedence over command-line defaults.
 [`docs/GENERAL_BRIDGE.md`](docs/GENERAL_BRIDGE.md)). The Mysa adapter is always enabled; additional adapters can be
 turned on as needed.
 
-| CLI Option                  | Environment Variable          | Default | Description                                                                                                |
-| --------------------------- | ----------------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `--system-sensors`          | `M2M_SYSTEM_SENSORS`          | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`)              |
-| `--mysa-estimated-current`  | `M2M_MYSA_ESTIMATED_CURRENT`  | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)    |
-| `--mysa-energy-api`         | `M2M_MYSA_ENERGY_API`         | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
+| CLI Option                    | Environment Variable             | Default | Description                                                                                                      |
+| ----------------------------- | -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
+| `--system-sensors`            | `M2M_SYSTEM_SENSORS`             | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`)                    |
+| `--tesla-wall-connector-host` | `M2M_TESLA_WALL_CONNECTOR_HOST`  | -       | Hostname/IP of a Tesla Wall Connector (Gen 3) to bridge (monitor-only — see below)                              |
+| `--mysa-estimated-current`    | `M2M_MYSA_ESTIMATED_CURRENT`     | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)          |
+| `--mysa-energy-api`           | `M2M_MYSA_ENERGY_API`            | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
+
+#### Tesla Wall Connector (EV charger)
+
+Set `--tesla-wall-connector-host` to the LAN hostname/IP of a Gen 3 Wi-Fi Wall Connector to expose it in Home Assistant.
+It reads the charger's local, unauthenticated JSON API (`/api/1/vitals`, `/api/1/lifetime`) and publishes **power,
+current, grid voltage, session duration, handle temperature, lifetime energy**, plus **vehicle-connected** and
+**charging** binary sensors. This is **monitor-only**: the Wall Connector's local API exposes no control (start/stop or
+charge-rate), so no command entities are created.
 
 ### Power and energy
 
