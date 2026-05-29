@@ -290,8 +290,6 @@ export class MysaAdapter implements SourceAdapter {
           `Wrote Mysa diagnostics to ${filePath} (${report.endpoints.length} endpoints, ${report.realtimeMessages.length} realtime messages). Review and redact before sharing.`
         )
       )
-      .catch((error) =>
-        this.logger.warn(`Mysa diagnostics failed: ${error instanceof Error ? error.message : error}`)
-      );
+      .catch((error) => this.logger.warn(`Mysa diagnostics failed: ${error instanceof Error ? error.message : error}`));
   }
 }
