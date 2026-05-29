@@ -91,6 +91,29 @@ Decisions worth flagging for review:
   logic is unit-tested, it type-checks, and it uses the exact same `mqtt2ha` API as the proven Mysa `Thermostat`. The
   `BridgeManager` lifecycle is unit-tested with a fake adapter.
 
+## 7. Cleaned up per-model hardware support
+
+Capability decisions for the non-`BB-V1` models were scattered (a `Model.startsWith('AC')` check) and every device —
+even ones that can't measure power — got a power sensor that sat permanently at `None`. This was consolidated into a
+tested `src/adapters/mysa/capabilities.ts`:
+
+- `parseModel()` parses a model string (`BB-V2-1-L` → family `BB`, generation `2`, `isLite: true`).
+- `getDeviceCapabilities()` returns `deviceType`, `supportsCooling`, `supportsFan`, and `reportsPower`.
+- `Thermostat` now **only creates the power sensor when `reportsPower` is true**. That excludes AC controllers (IR
+  blasters that measure nothing) and `BB-*-L` "Lite" units (which the docs note don't report power). Behavior for
+  `BB-V1`/`BB-V2`/in-floor is unchanged.
+
+Notable, deliberate constraints:
+
+- **AC swing / vane position cannot be added here.** The `mysa-js-sdk` control surface is
+  `setDeviceState(setPoint, mode, fanSpeed)` only — there is no swing/position parameter — so this is an upstream SDK
+  limitation, not something this bridge can implement. Documented rather than faked.
+- **AC mode advertising was left as the full set.** `SupportedCaps.modes` could narrow the advertised HA modes to what a
+  specific AC supports, but the `modeId` → mode mapping is unverified without a real device, so this was not changed.
+- **Removing the power entity for AC/Lite is a (minor) discovery change.** Existing installations may keep an orphaned
+  `..._power` entity in Home Assistant until it is manually removed. This was judged the correct cleanup since the
+  sensor never carried a real value for those models.
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.
@@ -103,6 +126,7 @@ They are surfaced here rather than silently "fixed".
 - **`auto` mode climate action.** `computeClimateAction` returns `idle` for `auto` (it is not a case in the original
   switch), so an AC running in `auto` reports `idle` even while actively heating/cooling. Preserved as-is; a future
   enhancement could map `auto` to the actual active action when the device reports it.
-- **AC swing / vane position.** Still unimplemented (the README already lists this as a known gap); out of scope here.
+- **AC swing / vane position.** Still unimplemented — and not implementable through the current SDK, whose only control
+  call is `setDeviceState(setPoint, mode, fanSpeed)` (see section 7). Would require upstream `mysa-js-sdk` support.
 - **Inherited loose typings** (`Partial<MysaDeviceMode>[]`, `state.X?.v as number` casts) were preserved to keep this
   change behavior-preserving.
