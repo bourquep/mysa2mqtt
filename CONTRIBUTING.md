@@ -25,8 +25,10 @@ npm install
 mysa2mqtt/
 ├── src/                          # Source code
 │   ├── commander.d.ts            # Commander type definitions
+│   ├── conversions.ts            # Pure Mysa <-> Home Assistant value conversions
+│   ├── conversions.test.ts       # Unit tests for the conversion logic
 │   ├── logger.ts                 # Logging utilities
-│   ├── main.ts                   # Main application entry point
+│   ├── main.ts                   # Main application entry point (incl. graceful shutdown)
 │   ├── options.ts                # Command line options handling
 │   ├── session.ts                # Session management
 │   └── thermostat.ts             # Thermostat control logic
@@ -39,7 +41,9 @@ mysa2mqtt/
 ├── dist/                         # Built JavaScript files (generated)
 ├── node_modules/                 # Dependencies (generated)
 ├── .env.local                    # Local environment variables (not source-controlled)
+├── mysa.md                       # Reverse-engineered Mysa API reference
 ├── session.json                  # Session data file (not source-controlled)
+├── vitest.config.ts              # Unit test runner configuration
 └── package.json                  # Project configuration and dependencies
 ```
 
@@ -48,10 +52,12 @@ mysa2mqtt/
 1. Create a new branch for your feature or bug fix
 2. Make your changes
 3. Run linting checks: `npm run lint` and `npm run style-lint`
-4. Build the project: `npm run build`
-5. Commit your changes using conventional commit format
-6. Push your changes to your fork
-7. Create a pull request
+4. Run the type-checker: `npm run typecheck`
+5. Run the unit tests: `npm test` (or `npm run test:watch` while developing)
+6. Build the project: `npm run build`
+7. Commit your changes using conventional commit format
+8. Push your changes to your fork
+9. Create a pull request
 
 ### Building
 
@@ -62,6 +68,27 @@ npm run build
 ```
 
 This will generate JavaScript files in the `dist/` directory.
+
+### Testing
+
+Unit tests are written with [Vitest](https://vitest.dev/) and live alongside the code they exercise (e.g.
+`src/conversions.test.ts`).
+
+Run the test suite once:
+
+```bash
+npm test
+```
+
+Or keep it running in watch mode while developing:
+
+```bash
+npm run test:watch
+```
+
+The pure conversion and calculation helpers (mode/fan mapping, power estimation, setpoint normalization and climate
+action computation) live in `src/conversions.ts` precisely so they can be unit tested in isolation from the MQTT and
+Mysa clients. When changing that logic, please add or update the corresponding tests.
 
 ## Submitting Pull Requests
 

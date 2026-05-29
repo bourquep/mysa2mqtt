@@ -15,23 +15,23 @@
 |                                                                           +---------------+
 ```
 
-* **REST** is used for device discovery and energy/history (e.g., `GET /devices/state`, `GET /energy/v3/...`).
-* **Realtime** and **control** use **MQTT over secure WebSockets** to an **AWS IoT** endpoint:
-
-  * Subscribe: `/v1/dev/{deviceId}/out`
-  * Publish: `/v1/dev/{deviceId}/in`
-  * QoS: **1**
+- **REST** is used for device discovery and energy/history (e.g., `GET /devices/state`, `GET /energy/v3/...`).
+- **Realtime** and **control** use **MQTT over secure WebSockets** to an **AWS IoT** endpoint:
+  - Subscribe: `/v1/dev/{deviceId}/out`
+  - Publish: `/v1/dev/{deviceId}/in`
+  - QoS: **1**
 
 ## Connection & Auth Flow
 
-Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS IoT** over **WebSockets** with **SigV4** query-signed URL parameters.
+Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS IoT** over **WebSockets** with **SigV4**
+query-signed URL parameters.
 
 1. **Authenticate** (Cognito User Pool) → obtain ID/Access token.
 2. **Exchange** via Cognito **Identity Pool** → get temporary AWS creds (Access Key, Secret Key, Session Token).
 3. **Presign** an AWS IoT **WebSocket** URL for service `iotdevicegateway`:
-   * Host: `<account>-ats.iot.<region>.amazonaws.com`
-   * Path: `/mqtt`
-   * Query includes `X-Amz-Algorithm`, `X-Amz-Credential`, `X-Amz-Date`, `X-Amz-Security-Token`, `X-Amz-Signature`, etc.
+   - Host: `<account>-ats.iot.<region>.amazonaws.com`
+   - Path: `/mqtt`
+   - Query includes `X-Amz-Algorithm`, `X-Amz-Credential`, `X-Amz-Date`, `X-Amz-Security-Token`, `X-Amz-Signature`, etc.
 4. **MQTT client** connects via **WSS** on **443**, `Sec-WebSocket-Protocol: mqtt`, TLS v1.2+.
 5. **Subscribe** to `/v1/dev/{id}/out` and **publish** to `/v1/dev/{id}/in` with **QoS 1**.
 
@@ -39,20 +39,19 @@ Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS
 
 ### Topics
 
-* **Status (device → cloud → client):**
+- **Status (device → cloud → client):**
+  - ` /v1/dev/{deviceId}/out`
 
-  * ` /v1/dev/{deviceId}/out`
-* **Commands (client → device):**
+- **Commands (client → device):**
+  - ` /v1/dev/{deviceId}/in`
 
-  * ` /v1/dev/{deviceId}/in`
-
-> `{deviceId}` is a device identifier the REST API exposes via `/devices/state`. Cache a mapping `{id → friendly_name, model, rated_watts}`.
+> `{deviceId}` is a device identifier the REST API exposes via `/devices/state`. Cache a mapping
+> `{id → friendly_name, model, rated_watts}`.
 
 ### QoS & Acks
 
-* Use **QoS 1** for publish/subscribe.
-* After you publish a command to `/in`, expect an **echo/ack** on `/out` with `body.success` and an updated `state`.
-
+- Use **QoS 1** for publish/subscribe.
+- After you publish a command to `/in`, expect an **echo/ack** on `/out` with `body.success` and an updated `state`.
 
 ## Message Schemas
 
@@ -61,15 +60,15 @@ Mysa’s app authenticates a user via **AWS Cognito** and then connects to **AWS
 ```jsonc
 {
   "ver": "1.0",
-  "src":  {"type": 1, "ref": "<deviceId>"},
-  "time": 1712345678,                 // epoch seconds
-  "msg":  40,                         // status message type (observed)
-  "id":   8724654694500694114,        // message id
+  "src": { "type": 1, "ref": "<deviceId>" },
+  "time": 1712345678, // epoch seconds
+  "msg": 40, // status message type (observed)
+  "id": 8724654694500694114, // message id
   "body": {
-    "ambTemp": 19.1,                  // °C
-    "hum": 41.5,                      // % (may be absent on some models)
-    "stpt": 20.0,                     // target setpoint, °C
-    "dtyCycle": 0.42                  // 0.0–1.0 (heater duty cycle)
+    "ambTemp": 19.1, // °C
+    "hum": 41.5, // % (may be absent on some models)
+    "stpt": 20.0, // target setpoint, °C
+    "dtyCycle": 0.42 // 0.0–1.0 (heater duty cycle)
   }
 }
 ```
@@ -89,25 +88,24 @@ Envelope and body are consistent across setpoint and mode changes:
 ```jsonc
 {
   "ver": "1.0",
-  "src":  {"type": 100, "ref": "<appRef>"},
-  "dest": {"type": 1,   "ref": "<deviceId>"},
+  "src": { "type": 100, "ref": "<appRef>" },
+  "dest": { "type": 1, "ref": "<deviceId>" },
   "time": 1712345688,
-  "msg":  44,
-  "id":   1712345688123,
+  "msg": 44,
+  "id": 1712345688123,
   "resp": 2,
   "body": {
     "ver": 1,
     "type": 4,
-    "cmd": [ { "tm": -1, "sp": 20 } ]     // setpoint °C
+    "cmd": [{ "tm": -1, "sp": 20 }] // setpoint °C
   }
 }
 ```
 
-* **Setpoint command:** `cmd: [{ "tm": -1, "sp": <tempC> }]`
-* **Mode command:**     `cmd: [{ "tm": -1, "md": <mode>  }]`
+- **Setpoint command:** `cmd: [{ "tm": -1, "sp": <tempC> }]`
+- **Mode command:** `cmd: [{ "tm": -1, "md": <mode>  }]`
 
-> `tm = -1` means “apply immediately” (observed).
-> Modes observed: **`md=1` → heat**, **`md=3` → off**.
+> `tm = -1` means “apply immediately” (observed). Modes observed: **`md=1` → heat**, **`md=3` → off**.
 
 ### 3) Command ack / echo (`/out`)
 
@@ -124,13 +122,11 @@ Envelope and body are consistent across setpoint and mode changes:
 
 ## REST Endpoints
 
-* `GET /devices/state`
+- `GET /devices/state`
+  - Discover devices and capabilities; map `{deviceId → friendlyName, model, firmware, ...}`.
 
-  * Discover devices and capabilities; map `{deviceId → friendlyName, model, firmware, ...}`.
-* `GET /energy/v3/home/{id}`, `GET /energy/v3/device/{id}`
-
-  * Historical energy/usage. (Realtime “power” still comes from `dtyCycle` heuristic in MQTT.)
-
+- `GET /energy/v3/home/{id}`, `GET /energy/v3/device/{id}`
+  - Historical energy/usage. (Realtime “power” still comes from `dtyCycle` heuristic in MQTT.)
 
 ## Python Library Design
 
@@ -282,34 +278,35 @@ class MysaClient:
 
 ## Error Handling & Reconnect
 
-* **Token expiry**: Cognito tokens & IoT presigned URLs expire; renew them and reconnect the MQTT client gracefully (backoff + resubscribe).
-* **QoS 1**: Handle PUBACK timeouts by retrying publishes.
-* **Ordering**: Don’t assume every echo arrives; keep a last-write-wins device state with timestamps.
-* **Rate limiting**: Throttle commands (e.g., not more than 1 write per ~2–3 seconds per device).
+- **Token expiry**: Cognito tokens & IoT presigned URLs expire; renew them and reconnect the MQTT client gracefully
+  (backoff + resubscribe).
+- **QoS 1**: Handle PUBACK timeouts by retrying publishes.
+- **Ordering**: Don’t assume every echo arrives; keep a last-write-wins device state with timestamps.
+- **Rate limiting**: Throttle commands (e.g., not more than 1 write per ~2–3 seconds per device).
 
 ## Power & Entities
 
-* `sensor.temperature`    ← `ambTemp`
-* `sensor.humidity`       ← `hum` (if present)
-* `climate.setpoint`      ↔ `stpt` (via `sp` command)
-* `sensor.power`          ← `round(dtyCycle * rated_watts)`
-* `climate.mode`          ↔ `md` (`heat`/`off` mapping)
+- `sensor.temperature` ← `ambTemp`
+- `sensor.humidity` ← `hum` (if present)
+- `climate.setpoint` ↔ `stpt` (via `sp` command)
+- `sensor.power` ← `round(dtyCycle * rated_watts)`
+- `climate.mode` ↔ `md` (`heat`/`off` mapping)
 
 Persist `rated_watts` per device; optionally expose it as a configurable attribute.
 
 ## Currently Undefined
 
-* Additional **`md`** values (beyond `1=heat`, `3=off`).
-* Other message types (`msg` codes besides 40/44) and body variants.
-* Device-specific fields across firmware versions.
+- Additional **`md`** values (beyond `1=heat`, `3=off`).
+- Other message types (`msg` codes besides 40/44) and body variants.
+- Device-specific fields across firmware versions.
 
 ## Implementation
 
-* Obtain/refresh Cognito tokens (or test with captured presigned URL initially).
-* Get temporary AWS creds & **presign** WSS `/mqtt`.
-* Connect **paho-mqtt** (`transport="websockets"`, TLS).
-* Subscribe `/v1/dev/+/out` (QoS 1).
-* Publish setpoint/mode to `/v1/dev/{id}/in` (QoS 1).
-* Parse `/out` status + command acks; update state.
-* Compute `power` from `dtyCycle × rated_watts`.
-* Expose a clean, typed API surface for apps/integrations.
+- Obtain/refresh Cognito tokens (or test with captured presigned URL initially).
+- Get temporary AWS creds & **presign** WSS `/mqtt`.
+- Connect **paho-mqtt** (`transport="websockets"`, TLS).
+- Subscribe `/v1/dev/+/out` (QoS 1).
+- Publish setpoint/mode to `/v1/dev/{id}/in` (QoS 1).
+- Parse `/out` status + command acks; update state.
+- Compute `power` from `dtyCycle × rated_watts`.
+- Expose a clean, typed API surface for apps/integrations.

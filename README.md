@@ -21,6 +21,7 @@ home automation platforms.
 - **Full Control**: Set temperature, change modes (heat/off), and monitor thermostat status
 - **Session Management**: Persistent authentication sessions to minimize API calls
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
+- **Graceful Shutdown**: Cleanly stops and marks entities offline on `SIGINT`/`SIGTERM` (Docker- and systemd-friendly)
 
 ## Supported hardware
 
@@ -84,6 +85,14 @@ For development or custom modifications:
 
    ```bash
    npm run dev
+   ```
+
+4. Run the checks (type-check, lint and unit tests):
+
+   ```bash
+   npm run typecheck
+   npm run lint
+   npm test
    ```
 
 ## Quick Start
