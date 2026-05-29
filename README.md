@@ -21,6 +21,7 @@ home automation platforms.
 - **Full Control**: Set temperature, change modes (heat/off), and monitor thermostat status
 - **Session Management**: Persistent authentication sessions to minimize API calls
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
+- **Graceful Shutdown**: Cleanly stops and marks entities offline on `SIGINT`/`SIGTERM` (Docker- and systemd-friendly)
 
 ## Supported hardware
 
@@ -84,6 +85,14 @@ For development or custom modifications:
 
    ```bash
    npm run dev
+   ```
+
+4. Run the checks (type-check, lint and unit tests):
+
+   ```bash
+   npm run typecheck
+   npm run lint
+   npm test
    ```
 
 ## Quick Start
@@ -157,6 +166,16 @@ take precedence over command-line defaults.
 | `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
 | `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
 | `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
+
+#### Adapters
+
+`mysa2mqtt` is built around a small source-adapter architecture (see
+[`docs/GENERAL_BRIDGE.md`](docs/GENERAL_BRIDGE.md)). The Mysa adapter is always enabled; additional adapters can be
+turned on as needed.
+
+| CLI Option         | Environment Variable | Default | Description                                                                            |
+| ------------------ | -------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `--system-sensors` | `M2M_SYSTEM_SENSORS` | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`) |
 
 ## Usage Examples
 
