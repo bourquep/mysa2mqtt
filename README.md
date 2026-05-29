@@ -25,13 +25,17 @@ home automation platforms.
 
 ## Supported hardware
 
-| Model Number | Description                                               | Supported                                                               |
-| ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                   |
-| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                       |
-| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not report power consumption    |
-| `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                           |
-| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions |
+Every model exposes a climate entity plus current-temperature and humidity sensors. A power sensor is created only for
+models that actually measure power, and fan-speed control is exposed only for AC models. Capabilities are derived per
+model (see `src/adapters/mysa/capabilities.ts`).
+
+| Model Number | Description                                | Status                | Power sensor              | Notes                                                              |
+| ------------ | ------------------------------------------ | --------------------- | ------------------------- | ----------------------------------------------------------------- |
+| `BB-V1-x`    | Baseboard heater, V1                       | ✅ Tested and working | ✅ From measured current  |                                                                   |
+| `BB-V2-x`    | Baseboard heater, V2                       | ⚠️ In progress        | ✅ Estimated, duty cycle  | Power = voltage × rated current × duty cycle                       |
+| `BB-V2-x-L` | Baseboard heater LITE, V2                  | ⚠️ In progress        | ❌ Not created            | Device does not report power                                       |
+| _(other)_    | In-floor heating                           | ⚠️ Should work, untested | ✅ When reported       | Unrecognized models are treated as heat-only baseboards           |
+| `AC-V1-x`    | Mini-split heat pump / AC (IR controller)  | ⚠️ In progress        | ❌ Not created            | Heat/cool/dry/fan/auto + fan speed; swing/vane not controllable via the API |
 
 ## Disclaimer
 

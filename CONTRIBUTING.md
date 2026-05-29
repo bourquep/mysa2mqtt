@@ -27,6 +27,8 @@ mysa2mqtt/
 │   ├── adapters/                 # Source adapters (one per bridged system)
 │   │   ├── mysa/                 # Mysa thermostats adapter
 │   │   │   ├── adapter.ts        # MysaAdapter (SourceAdapter implementation)
+│   │   │   ├── capabilities.ts   # Per-model capability detection
+│   │   │   ├── capabilities.test.ts
 │   │   │   ├── conversions.ts    # Pure Mysa <-> Home Assistant value conversions
 │   │   │   ├── conversions.test.ts
 │   │   │   ├── session.ts        # Mysa session persistence
