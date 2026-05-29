@@ -48,6 +48,54 @@ const rootLogger = pino({
       : undefined
 });
 
+/** All thermostats currently bridged by this process, tracked so they can be stopped on shutdown. */
+const thermostats: Thermostat[] = [];
+
+/** Guards against running the shutdown sequence more than once. */
+let isShuttingDown = false;
+
+/** How long to wait for a graceful shutdown before forcing the process to exit. */
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
+/**
+ * Gracefully shuts down the bridge in response to a termination signal.
+ *
+ * Stops every thermostat (which marks its Home Assistant entities unavailable) and then exits. A safety timer forces
+ * the process to exit if a thermostat fails to stop in time, so a hung broker connection can never wedge the
+ * container.
+ *
+ * @param signal - The signal that triggered the shutdown.
+ */
+async function shutdown(signal: NodeJS.Signals): Promise<void> {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+
+  rootLogger.info(`Received ${signal}, shutting down...`);
+
+  const forceExit = setTimeout(() => {
+    rootLogger.warn('Graceful shutdown timed out; forcing exit.');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT_MS);
+  // Don't let the safety timer keep the event loop alive on its own.
+  forceExit.unref();
+
+  const results = await Promise.allSettled(thermostats.map((thermostat) => thermostat.stop()));
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      rootLogger.error(result.reason, 'Error while stopping thermostat during shutdown');
+    }
+  }
+
+  clearTimeout(forceExit);
+  rootLogger.info('Shutdown complete.');
+  process.exit(0);
+}
+
+process.once('SIGINT', shutdown);
+process.once('SIGTERM', shutdown);
+
 /** Mysa2mqtt entry-point. */
 async function main() {
   rootLogger.info('Starting mysa2mqtt...');
@@ -91,8 +139,8 @@ async function main() {
     state_prefix: options.mqttTopicPrefix
   };
 
-  const thermostats = Object.entries(devices.DevicesObj).map(
-    ([, device]) =>
+  for (const [, device] of Object.entries(devices.DevicesObj)) {
+    thermostats.push(
       new Thermostat(
         client,
         device,
@@ -102,11 +150,14 @@ async function main() {
         serialNumbers.get(device.Id),
         options.temperatureUnit
       )
-  );
+    );
+  }
 
   for (const thermostat of thermostats) {
     await thermostat.start();
   }
+
+  rootLogger.info(`Bridging ${thermostats.length} thermostat(s). Press Ctrl+C to stop.`);
 }
 
 main().catch((error) => {
