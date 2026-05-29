@@ -60,6 +60,37 @@ option (Enode) and a **standard protocol** (OCPP) worth noting.
 outage-proof, fully-testable first adapter. **Easee** is the best cloud charger if a cloud one is wanted. **OCPP** is
 the strategic long game (vendor-agnostic) but is its own sizable project.
 
+### Canadian market — popularity vs. effort
+
+The brands above skew European. In **Canada**, the popular home Level 2 chargers are different: **Tesla** and
+**ChargePoint** dominate installs (~half of recent-EV owners), and two **Canadian-made** brands — **Grizzl-E** (United
+Chargers, Kitchener ON) and **FLO** (Quebec) — are very common, alongside **Wallbox**. Effort to incorporate each:
+
+| Charger (popularity in Canada)                | Integration path                                                                          | Auth / locality       | Effort                | Notes                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tesla Wall Connector** (very high)          | **Local** HTTP `GET http://<ip>/api/1/vitals` (+ `/lifetime`)                             | **None** (LAN)        | 🟢 **Low**            | Gen 3 Wi-Fi units serve unauthenticated JSON (`vehicle_connected`, `session_s`, currents/voltages, `grid_v`). **Read/monitor only** — no start/stop/charge-rate. Reference: [`tesla-wall-connector`](https://pypi.org/project/tesla-wall-connector/). Note a known timeout-after-prolonged-polling quirk to handle.                                                                     |
+| **Grizzl-E** (very high, 🇨🇦)                  | **Local** unauthenticated JSON web interface (Connect/Ultimate Wi-Fi lines); or **OCPP**  | None (LAN) / OCPP     | 🟢🟡 **Low–Med**      | The local JSON route is easy (cf. [`mclare/grizzl_e-for-HA`](https://github.com/mclare/grizzl_e-for-HA)). The OCPP route unlocks control but Grizzl-E's firmware has **OCPP-compliance defects** (invalid JSON to some messages) needing workarounds (cf. [`stefanthoss/ocpp-grizzl-e`](https://github.com/stefanthoss/ocpp-grizzl-e)). Not all models (no "Grizzl-E Club"/commercial). |
+| **ChargePoint Home Flex** (very high)         | **Cloud** polling with ChargePoint account                                                | Account creds (cloud) | 🟡 **Med**            | No official public API; community libs reverse-engineer the app login (cf. [`mbillow/ha-chargepoint`](https://github.com/mbillow/ha-chargepoint)). Monitor + some control. Fragile to vendor changes.                                                                                                                                                                                   |
+| **FLO Home X5 / G5** (high, 🇨🇦)               | **Cloud only** — FLO account/app; no documented consumer API (only OpenADR for utilities) | Cloud, undocumented   | 🔴 **High / blocked** | No public or community consumer API found; everything goes through FLO's cloud. Would require reverse-engineering the app with no reference implementation. Avoid for now.                                                                                                                                                                                                              |
+| **Wallbox Pulsar (Plus/Max)** (medium)        | **Cloud** REST (official) + unofficial local                                              | OAuth2 (cloud)        | 🟡 **Med**            | Scheduling/monitor work; **no charge-rate control** via official API. Same effort as the EU table above.                                                                                                                                                                                                                                                                                |
+| **Any OCPP charger** (incl. Grizzl-E, others) | Act as an **OCPP 1.6** central system over WebSocket                                      | per-charger config    | 🔴 **High**           | Vendor-agnostic and powerful (covers many Canadian units in one shot), but implementing/​testing an OCPP server is a project in itself. Strategic, not a first step.                                                                                                                                                                                                                    |
+
+**Canadian-market recommendation (by effort):**
+
+1. 🟢 **Tesla Wall Connector** — lowest effort _and_ highest install base; pure local JSON, fully mock-testable. Ships
+   as a **monitoring** adapter (power/energy/session/vehicle-connected) — honest about no control.
+2. 🟢 **Grizzl-E (local JSON)** — popular Canadian brand, easy local read path; add OCPP control later as a separate
+   effort.
+3. 🟡 **ChargePoint Home Flex** — high install base but cloud-only via reverse-engineered login; medium effort and
+   maintenance risk.
+4. 🔴 **FLO** — popular but effectively **blocked** (cloud-only, no API); revisit only if FLO publishes one or someone
+   reverse-engineers it.
+
+> A pragmatic plan: ship a small **`Sensor`-only Tesla Wall Connector adapter** first (local, easy, high coverage), then
+> a **Grizzl-E** local adapter, and treat **OCPP** as the eventual control-capable, multi-brand layer that also serves
+> Grizzl-E and others. Control (start/stop, charge-rate) realistically arrives via OCPP, not the per-vendor local
+> read-only endpoints.
+
 ## Cross-cutting recommendation
 
 Ranked first picks across the three categories, by incorporability for _this_ codebase:
