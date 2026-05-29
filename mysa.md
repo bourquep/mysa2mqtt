@@ -122,26 +122,41 @@ Envelope and body are consistent across setpoint and mode changes:
 
 ## REST Endpoints
 
-Base URL: `https://app-prod.mysa.cloud`. Requests are authorized with `Authorization: <Cognito ID token JWT>` (no
-`Bearer` prefix).
+There are **two** Mysa REST hosts, both Cognito-authenticated with `Authorization: <ID token JWT>` (no `Bearer` prefix).
+Sourced from `mysa-js-sdk`, [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm), and
+[`kgelinas/Mysa_HA`](https://github.com/kgelinas/Mysa_HA).
 
-**Confirmed** (used by `mysa-js-sdk` and/or documented in [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm)):
+### Legacy host: `https://app-prod.mysa.cloud`
 
-- `GET /devices` — device list.
+Used by `mysa-js-sdk` and this bridge.
+
+- `GET /devices` — device list (`DevicesObj`, keyed by lowercase MAC; each has a UUID `Id`).
 - `GET /devices/firmware` — firmware versions.
-- `GET /devices/state` — current state; map `{deviceId → friendlyName, model, firmware, ...}` and read
-  `Current`/`Duty`/`Voltage`.
+- `GET /devices/state` — real-time state per device (`Current`, `Duty` [0–100], `Voltage`, `CorrectedTemp`, `Humidity`,
+  AC `SwingState`/`SwingStateHorizontal`/`ACState`, …).
+- `POST /devices/{deviceId}` — update settings (e.g. `{"SetPoint":21.5}`).
 - `GET /users` — account info.
-- `GET /users/readingsForUser` — **legacy/dead** (returns HTTP 500 on 2024–2025 app versions).
+- `GET /users/readingsForUser` — **legacy/dead** (HTTP 500 on 2024–2025 apps).
+- `POST /energy/device/{deviceId}` — **per-device energy usage + temp/humidity readings.** Body:
+  `{"PhoneTimezone":"America/Vancouver","Scope":"Day","Timestamp":<unix>}` (per mysotherm). Response schema not yet
+  captured. This bridge probes it behind the opt-in `--mysa-energy-api` flag and logs the raw response.
+- `POST /energy/setpoints/device/{deviceId}` — setpoint history (same body shape).
 
-**Unverified / app-level (hypothesis):**
+### Newer backend: `https://mysa-backend.mysa.cloud`
 
-- `GET /energy/v3/home/{id}`, `GET /energy/v3/device/{id}`
-  - Believed to back the app's historical energy/usage charts (account-level, not the thermostat). **Not implemented by
-    `mysa-js-sdk` and not corroborated by mysotherm**; the exact path, query parameters, and response schema are
-    unconfirmed. `mysa2mqtt` can probe these behind the opt-in `--mysa-energy-api` flag (which logs the raw response for
-    confirmation). Note that in-app energy is otherwise software-computed from `dtyCycle × rated_watts`, and realtime
-    "power" still comes from the `Current`/`dtyCycle` MQTT heuristic.
+Used by the Android app (v4.11.0+); a **different Cognito app client**, so the `mysa-js-sdk` session token may not be
+accepted here.
+
+- `GET /users` — profile incl. `ERate` (electricity rate, $/kWh), `PrimaryHome`, `AllowedDevices`.
+- `POST /state/batch`, `GET /state/{id}`, `POST /state/{id}/update` — state/control for ST-V1 (central HVAC) devices.
+- `GET /telemetry/usage/{deviceId}?startDate&endDate&granularity` — historical energy:
+  `{ "deviceId": "...", "data": [ { "timestamp": "...", "runtime": 3600, "energyUsed": 1.5 } ] }`.
+
+### Energy in practice
+
+The mature integrations do **not** rely on these energy endpoints for live data — `kgelinas/Mysa_HA` derives its kWh
+sensor by **integrating power over time** (Riemann sum), exactly as this bridge's `EnergyAccumulator` does. The cloud
+energy endpoints return historical aggregates and are best treated as a supplementary/experimental source.
 
 ## Python Library Design
 

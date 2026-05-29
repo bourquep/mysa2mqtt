@@ -24,36 +24,76 @@ SOFTWARE.
 /**
  * Experimental client for Mysa's account-level energy API.
  *
- * The official Mysa app appears to read historical energy from REST endpoints under `/energy/v3/...` on the same host
- * as the device API. The `mysa-js-sdk` does not implement these, but it authorizes requests with `Authorization:
- * <idToken>` (a raw Cognito ID-token JWT, no `Bearer` prefix), which we can reuse via `MysaApiClient.session`.
+ * Reverse-engineering (notably [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm) and
+ * [`kgelinas/Mysa_HA`](https://github.com/kgelinas/Mysa_HA)) shows the app reads per-device energy usage via `POST
+ * /energy/device/{deviceId}` on the same `app-prod.mysa.cloud` host as the device API, with a JSON body `{
+ * PhoneTimezone, Scope, Timestamp }`. It is authorized with `Authorization: <idToken>` (a raw Cognito ID-token JWT, no
+ * `Bearer` prefix), which we reuse via `MysaApiClient.session`.
  *
- * The exact response schema is **not publicly documented and has not been verified** against a live account, so this
- * module fetches defensively and {@link extractEnergyKwh} only returns a value when it can find an unambiguous
- * energy-like field. Callers should log the raw response to confirm the schema before relying on it.
+ * The response **schema is not documented** (mysotherm only documents the request), so this module fetches defensively
+ * and {@link extractEnergyKwh} only returns a value when it finds an unambiguous energy-like field. Callers should log
+ * the raw response to confirm the schema before relying on it.
+ *
+ * Note: the newer `mysa-backend.mysa.cloud` host additionally exposes `GET /telemetry/usage/{deviceId}` returning `{
+ * data: [{ timestamp, runtime, energyUsed }] }`, but it uses a different Cognito app client, so the session token from
+ * `mysa-js-sdk` may not be accepted there. We target the legacy host that shares our auth.
  */
 
 /** The base URL of the Mysa cloud API, as used by `mysa-js-sdk`. */
 export const MYSA_API_BASE_URL = 'https://app-prod.mysa.cloud';
+
+/** Options for an energy query. */
+export interface MysaEnergyQuery {
+  /** The aggregation scope requested by the API (e.g. `Day`). */
+  scope?: 'Day' | 'Week' | 'Month' | 'Year';
+  /** IANA timezone sent as `PhoneTimezone`. Defaults to the host timezone. */
+  timezone?: string;
+  /** Reference time for the request `Timestamp`. Defaults to now. */
+  now?: Date;
+  /** The fetch implementation to use (injectable for testing). */
+  fetcher?: typeof fetch;
+  /** The API base URL. */
+  baseUrl?: string;
+}
+
+/**
+ * Returns the host IANA timezone, falling back to `UTC`.
+ *
+ * @returns The resolved timezone name.
+ */
+function defaultTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 /**
  * Fetches the (experimental, unverified) energy payload for a single device.
  *
  * @param deviceId - The Mysa device identifier.
  * @param idToken - The Cognito ID-token JWT (from `MysaApiClient.session.idToken`).
- * @param fetcher - The fetch implementation to use (injectable for testing).
- * @param baseUrl - The API base URL.
+ * @param query - Optional query parameters and injectable dependencies.
  * @returns The parsed JSON response (shape unverified).
  */
 export async function fetchMysaDeviceEnergy(
   deviceId: string,
   idToken: string,
-  fetcher: typeof fetch = fetch,
-  baseUrl: string = MYSA_API_BASE_URL
+  query: MysaEnergyQuery = {}
 ): Promise<unknown> {
-  const response = await fetcher(`${baseUrl}/energy/v3/device/${encodeURIComponent(deviceId)}`, {
-    method: 'GET',
-    headers: { Authorization: idToken }
+  const {
+    scope = 'Day',
+    timezone = defaultTimezone(),
+    now = new Date(),
+    fetcher = fetch,
+    baseUrl = MYSA_API_BASE_URL
+  } = query;
+
+  const response = await fetcher(`${baseUrl}/energy/device/${encodeURIComponent(deviceId)}`, {
+    method: 'POST',
+    headers: { Authorization: idToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ PhoneTimezone: timezone, Scope: scope, Timestamp: Math.floor(now.getTime() / 1000) })
   });
 
   if (!response.ok) {

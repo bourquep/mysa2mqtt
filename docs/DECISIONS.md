@@ -126,13 +126,17 @@ made:
 - **Opt-in estimated current.** `--mysa-estimated-current <amps>` supplies a fallback current rating so duty-cycle
   devices that don't report one (the "Lite" models) can still get estimated power/energy. This mirrors the approach used
   by the `kgelinas/Mysa_HA` integration.
-- **Experimental cloud energy API (`--mysa-energy-api`).** Research could not confirm a working dedicated energy REST
-  endpoint, but the maintainer believes the app uses account-level `/energy/v3/...` endpoints. Since the SDK authorizes
-  with `Authorization: <idToken>` and exposes `client.session`, we can reach them. This feature is therefore **opt-in,
-  off by default, and fail-soft**: it polls `/energy/v3/device/{id}`, logs the raw response (for schema confirmation
-  against a real account), and only publishes a (clearly-labeled, experimental) sensor when `extractEnergyKwh` finds an
-  unambiguous total. The HTTP/auth construction and the extractor are unit-tested with a mock fetcher; **the live
-  response schema and units remain unverified** and must be confirmed before relying on this sensor.
+- **Experimental cloud energy API (`--mysa-energy-api`).** Mining `dlenski/mysotherm` and `kgelinas/Mysa_HA` identified
+  the real endpoint: **`POST /energy/device/{deviceId}`** on `app-prod.mysa.cloud` (the legacy host that shares our
+  SDK's auth), with body `{ PhoneTimezone, Scope, Timestamp }` — _not_ the `/energy/v3/...` GET originally hypothesized
+  (which does not exist). The newer `mysa-backend.mysa.cloud` host exposes `GET /telemetry/usage/{id}` →
+  `{ data: [{ timestamp, runtime, energyUsed }] }`, but uses a different Cognito client so our token may not work there.
+  The feature is therefore **opt-in, off by default, and fail-soft**: it POSTs the legacy endpoint, logs the raw
+  response (the response schema still isn't publicly documented), and only publishes a clearly-labeled sensor when
+  `extractEnergyKwh` finds an unambiguous total. The HTTP/auth/body construction and the extractor are unit-tested with
+  a mock fetcher; **the live response schema remains unverified** and must be confirmed before relying on the sensor.
+  Note that `kgelinas/Mysa_HA` does not use this endpoint for its energy sensor at all — it integrates power over time,
+  exactly like our `EnergyAccumulator` — which is good corroboration that the local-integration approach is sound.
 
 ## 9. Reverse-engineering sources used for the Mysa API
 

@@ -25,34 +25,46 @@ import { describe, expect, it, vi } from 'vitest';
 import { extractEnergyKwh, fetchMysaDeviceEnergy, MYSA_API_BASE_URL } from './energy-api';
 
 describe('fetchMysaDeviceEnergy', () => {
-  it('GETs the device energy endpoint with the ID token as the Authorization header', async () => {
-    const json = { kWh: 1 };
+  it('POSTs the device energy endpoint with the ID token and the documented body', async () => {
+    const json = { energyUsed: 1 };
     const fetcher = vi.fn<typeof fetch>(
       async () => ({ ok: true, status: 200, json: async () => json }) as unknown as Response
     );
 
-    const result = await fetchMysaDeviceEnergy('dev-123', 'jwt-token', fetcher);
+    const result = await fetchMysaDeviceEnergy('dev-123', 'jwt-token', {
+      fetcher,
+      timezone: 'America/Vancouver',
+      now: new Date('2026-02-01T00:00:00Z')
+    });
 
     expect(result).toBe(json);
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, init] = fetcher.mock.calls[0];
-    expect(url).toBe(`${MYSA_API_BASE_URL}/energy/v3/device/dev-123`);
-    expect(init).toMatchObject({ method: 'GET', headers: { Authorization: 'jwt-token' } });
+    expect(url).toBe(`${MYSA_API_BASE_URL}/energy/device/dev-123`);
+    expect(init).toMatchObject({
+      method: 'POST',
+      headers: { Authorization: 'jwt-token', 'Content-Type': 'application/json' }
+    });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      PhoneTimezone: 'America/Vancouver',
+      Scope: 'Day',
+      Timestamp: 1769904000
+    });
   });
 
   it('URL-encodes the device id', async () => {
     const fetcher = vi.fn<typeof fetch>(
       async () => ({ ok: true, status: 200, json: async () => ({}) }) as unknown as Response
     );
-    await fetchMysaDeviceEnergy('a/b c', 'jwt', fetcher);
-    expect(fetcher.mock.calls[0][0]).toBe(`${MYSA_API_BASE_URL}/energy/v3/device/a%2Fb%20c`);
+    await fetchMysaDeviceEnergy('a/b c', 'jwt', { fetcher });
+    expect(fetcher.mock.calls[0][0]).toBe(`${MYSA_API_BASE_URL}/energy/device/a%2Fb%20c`);
   });
 
   it('throws on a non-OK response', async () => {
     const fetcher = vi.fn<typeof fetch>(
       async () => ({ ok: false, status: 401, json: async () => ({}) }) as unknown as Response
     );
-    await expect(fetchMysaDeviceEnergy('dev-123', 'jwt', fetcher)).rejects.toThrow('HTTP 401');
+    await expect(fetchMysaDeviceEnergy('dev-123', 'jwt', { fetcher })).rejects.toThrow('HTTP 401');
   });
 });
 
