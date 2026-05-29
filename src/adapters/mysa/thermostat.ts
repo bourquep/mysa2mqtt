@@ -24,11 +24,11 @@ SOFTWARE.
 import { Climate, DeviceConfiguration, Logger, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import { DeviceBase, FirmwareDevice, MysaApiClient, StateChange, Status } from 'mysa-js-sdk';
 import { version } from '../../version';
+import { getDeviceCapabilities } from './capabilities';
 import {
   computeClimateAction,
   computePowerWatts,
   DeviceType,
-  deviceTypeFromModel,
   FAN_SPEED_MODES,
   HA_AC_MODES,
   HA_HEAT_ONLY_MODES,
@@ -47,7 +47,8 @@ export class Thermostat {
   private readonly mqttClimate: Climate;
   private readonly mqttTemperature: Sensor;
   private readonly mqttHumidity: Sensor;
-  private readonly mqttPower: Sensor;
+  /** Power sensor — only created for devices that can report power consumption (not AC controllers or "Lite" units). */
+  private readonly mqttPower?: Sensor;
 
   private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
   private readonly mysaStateChangeHandler = this.handleMysaStateChange.bind(this);
@@ -80,7 +81,8 @@ export class Thermostat {
       support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
-    this.deviceType = deviceTypeFromModel(mysaDevice.Model);
+    const capabilities = getDeviceCapabilities(mysaDevice.Model);
+    this.deviceType = capabilities.deviceType;
     const isAC = this.deviceType === 'AC';
 
     this.mqttClimate = new Climate(
@@ -193,22 +195,24 @@ export class Thermostat {
       }
     });
 
-    this.mqttPower = new Sensor({
-      mqtt: this.mqttSettings,
-      logger: this.logger,
-      component: {
-        component: 'sensor',
-        device: this.mqttDevice,
-        origin: this.mqttOrigin,
-        unique_id: `mysa_${mysaDevice.Id}_power`,
-        name: 'Current power',
-        device_class: 'power',
-        state_class: 'measurement',
-        unit_of_measurement: 'W',
-        suggested_display_precision: 0,
-        force_update: true
-      }
-    });
+    if (capabilities.reportsPower) {
+      this.mqttPower = new Sensor({
+        mqtt: this.mqttSettings,
+        logger: this.logger,
+        component: {
+          component: 'sensor',
+          device: this.mqttDevice,
+          origin: this.mqttOrigin,
+          unique_id: `mysa_${mysaDevice.Id}_power`,
+          name: 'Current power',
+          device_class: 'power',
+          state_class: 'measurement',
+          unit_of_measurement: 'W',
+          suggested_display_precision: 0,
+          force_update: true
+        }
+      });
+    }
   }
 
   async start() {
@@ -247,9 +251,11 @@ export class Thermostat {
       await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
       await this.mqttHumidity.writeConfig();
 
-      // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
-      await this.mqttPower.setState('state_topic', 'None');
-      await this.mqttPower.writeConfig();
+      if (this.mqttPower) {
+        // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
+        await this.mqttPower.setState('state_topic', 'None');
+        await this.mqttPower.writeConfig();
+      }
 
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
@@ -279,18 +285,23 @@ export class Thermostat {
     this.mysaApiClient.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
     this.mysaApiClient.emitter.off('stateChanged', this.mysaStateChangeHandler);
 
-    await this.mqttPower.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
+    if (this.mqttPower) {
+      await this.mqttPower.setState('state_topic', 'None');
+    }
 
     // Mark the Home Assistant entities unavailable so they show as offline (rather than stale) while the bridge is
     // stopped. On restart, `writeConfig()` will mark them available again.
-    await Promise.all([
+    const availability = [
       this.mqttClimate.setAvailability(false),
       this.mqttTemperature.setAvailability(false),
-      this.mqttHumidity.setAvailability(false),
-      this.mqttPower.setAvailability(false)
-    ]);
+      this.mqttHumidity.setAvailability(false)
+    ];
+    if (this.mqttPower) {
+      availability.push(this.mqttPower.setAvailability(false));
+    }
+    await Promise.all(availability);
   }
 
   private async handleMysaStatusUpdate(status: Status) {
@@ -308,14 +319,17 @@ export class Thermostat {
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
-    // Power calculation: V1 devices report current, V2 devices report duty cycle (see `computePowerWatts`).
-    const watts = computePowerWatts(
-      this.mysaDevice.Voltage,
-      this.mysaDevice.MaxCurrent,
-      status.current,
-      status.dutyCycle
-    );
-    await this.mqttPower.setState('state_topic', watts != null ? watts.toFixed(2) : 'None');
+    // Power calculation: V1 devices report current, V2 devices report duty cycle (see `computePowerWatts`). Devices that
+    // can't report power (AC controllers, "Lite" units) have no power sensor.
+    if (this.mqttPower) {
+      const watts = computePowerWatts(
+        this.mysaDevice.Voltage,
+        this.mysaDevice.MaxCurrent,
+        status.current,
+        status.dutyCycle
+      );
+      await this.mqttPower.setState('state_topic', watts != null ? watts.toFixed(2) : 'None');
+    }
 
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
     await this.mqttHumidity.setState('state_topic', status.humidity.toFixed(2));
