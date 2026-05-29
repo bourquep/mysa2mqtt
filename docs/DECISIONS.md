@@ -63,6 +63,34 @@ and test regressions could land on `main`. The `lint` job now also runs `npm run
 `npm test`, and `build` now depends on both `lint` and `test`. The `release`/`docker` jobs are unchanged and remain
 gated behind `workflow_dispatch`.
 
+## 6. Generalized into a pluggable bridge (adapter architecture)
+
+To take the project toward a general "any source → MQTT/Home Assistant" bridge, the runtime was refactored around a
+small `SourceAdapter` contract driven by a `BridgeManager` (see `docs/GENERAL_BRIDGE.md`).
+
+- `src/bridge/types.ts` defines `SourceAdapter` (`id`, `displayName`, `start()`, `stop()`).
+- `src/bridge/manager.ts` starts/stops a set of adapters, tolerating per-adapter failures (but requiring at least one to
+  start). It is unit-tested with a fake adapter.
+- The Mysa logic that used to live in `main.ts` moved, **behavior-preserved**, into `MysaAdapter`
+  (`src/adapters/mysa/`). The Mysa code (thermostat, conversions, session) was relocated under `src/adapters/mysa/`.
+- A second, fully working reference adapter — `SystemAdapter` (`src/adapters/system/`) — publishes host metrics (uptime,
+  load, memory) as Home Assistant sensors using only Node's `os` module. It is **opt-in** via `--system-sensors true` /
+  `M2M_SYSTEM_SENSORS=true`, so default behavior is unchanged.
+- `version` was extracted from `options.ts` into a side-effect-free `src/version.ts`, so importing adapters in tests no
+  longer triggers CLI parsing (`options.ts` calls `process.exit` on missing required flags at import time).
+
+Decisions worth flagging for review:
+
+- **No non-functional protocol stubs were shipped.** Zigbee/Z-Wave/Matter/Thread/BLE/HealthKit cannot be implemented or
+  tested here without real hardware (or, for HealthKit, an iOS device — it has no server-side API). Instead there's a
+  real extensibility seam plus an honest per-protocol roadmap in `docs/GENERAL_BRIDGE.md`. For Zigbee/Z-Wave especially,
+  the roadmap recommends reusing the mature Zigbee2MQTT / Z-Wave JS projects rather than duplicating them.
+- **The package/binary/Docker name stays `mysa2mqtt`.** Renaming a published artifact is outward-facing and hard to
+  reverse, so it was left for a deliberate maintainer decision (this is a fork of `bourquep/mysa2mqtt`).
+- **`SystemAdapter` MQTT publishing was not exercised end-to-end here** (no broker in this environment). Its pure metric
+  logic is unit-tested, it type-checks, and it uses the exact same `mqtt2ha` API as the proven Mysa `Thermostat`. The
+  `BridgeManager` lifecycle is unit-tested with a fake adapter.
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.

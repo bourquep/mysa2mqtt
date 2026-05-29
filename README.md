@@ -167,6 +167,16 @@ take precedence over command-line defaults.
 | `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
 | `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
 
+#### Adapters
+
+`mysa2mqtt` is built around a small source-adapter architecture (see
+[`docs/GENERAL_BRIDGE.md`](docs/GENERAL_BRIDGE.md)). The Mysa adapter is always enabled; additional adapters can be
+turned on as needed.
+
+| CLI Option         | Environment Variable | Default | Description                                                                            |
+| ------------------ | -------------------- | ------- | -------------------------------------------------------------------------------------- |
+| `--system-sensors` | `M2M_SYSTEM_SENSORS` | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`) |
+
 ## Usage Examples
 
 ### Using Environment Variables (.env file)

@@ -24,14 +24,29 @@ npm install
 ```
 mysa2mqtt/
 ├── src/                          # Source code
+│   ├── adapters/                 # Source adapters (one per bridged system)
+│   │   ├── mysa/                 # Mysa thermostats adapter
+│   │   │   ├── adapter.ts        # MysaAdapter (SourceAdapter implementation)
+│   │   │   ├── conversions.ts    # Pure Mysa <-> Home Assistant value conversions
+│   │   │   ├── conversions.test.ts
+│   │   │   ├── session.ts        # Mysa session persistence
+│   │   │   └── thermostat.ts     # Thermostat control logic
+│   │   └── system/               # Host system-metrics reference adapter
+│   │       ├── adapter.ts        # SystemAdapter (SourceAdapter implementation)
+│   │       ├── metrics.ts        # Pure host metric collection
+│   │       └── metrics.test.ts
+│   ├── bridge/                   # Source-agnostic bridge core
+│   │   ├── manager.ts            # BridgeManager (starts/stops adapters)
+│   │   ├── manager.test.ts
+│   │   └── types.ts              # SourceAdapter contract
 │   ├── commander.d.ts            # Commander type definitions
-│   ├── conversions.ts            # Pure Mysa <-> Home Assistant value conversions
-│   ├── conversions.test.ts       # Unit tests for the conversion logic
 │   ├── logger.ts                 # Logging utilities
-│   ├── main.ts                   # Main application entry point (incl. graceful shutdown)
+│   ├── main.ts                   # Entry point (builds adapters, graceful shutdown)
 │   ├── options.ts                # Command line options handling
-│   ├── session.ts                # Session management
-│   └── thermostat.ts             # Thermostat control logic
+│   └── version.ts                # Package version (side-effect-free)
+├── docs/                         # Project documentation
+│   ├── DECISIONS.md              # Engineering decision log
+│   └── GENERAL_BRIDGE.md         # Adapter architecture and protocol roadmap
 ├── .github/                      # GitHub configuration
 │   ├── workflows/                # GitHub Actions workflows
 │   │   └── ci.yml                # Continuous integration workflow
