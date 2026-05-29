@@ -159,6 +159,11 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Adapters')
   )
   .addOption(
+    new Option('--shelly-em-host <host>', 'hostname/IP of a Shelly energy meter (Pro 3EM / EM / Gen1) to bridge')
+      .env('M2M_SHELLY_EM_HOST')
+      .helpGroup('Adapters')
+  )
+  .addOption(
     new Option(
       '--mysa-estimated-current <amps>',
       'estimated current (A) used to compute power for devices that do not report it (e.g. Lite models)'

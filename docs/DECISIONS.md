@@ -3,6 +3,11 @@
 This document records the decisions made while merging the outstanding branches and advancing the project, so they can
 be reviewed asynchronously. It is intentionally candid about trade-offs and open questions.
 
+> **Positioning:** the project is being targeted as an **"electricity usage → MQTT"** bridge. This is
+> **positioning/prioritization, not a scope cut** — we still collect _all_ device data (temperature, humidity, mode,
+> status, …) and still provide _control_ (thermostat setpoint/mode/fan today; charger control via OCPP later). Energy is
+> the headline use case that orders the backlog (`docs/BACKLOG.md`), not a boundary.
+
 ## 1. Merged the `patch-2` branch
 
 `patch-2` only added `mysa.md`, a reverse-engineered reference of the Mysa REST + AWS IoT MQTT API (auth flow, topics,
@@ -175,6 +180,24 @@ Deliberate decisions:
   `package.json` is unchanged.
 - **Graceful degradation:** if `/api/1/lifetime` is missing on a given firmware, the adapter logs once and stops
   querying it rather than erroring each poll.
+
+## 12. Shelly energy meter adapter (whole-circuit electricity usage)
+
+Aligned with the energy-usage positioning, added a `ShellyEmAdapter` (`src/adapters/shelly-em/`) — Shelly EM devices are
+cheap, ubiquitous, **local** whole-circuit/whole-home monitors, so they sit at the center of the energy mission.
+
+- `readings.ts` — pure normalization of all three Shelly report shapes into one `EnergyMeterReading`: Gen2 three-phase
+  (`EM` + `EMData`), Gen2 single-phase (`EM1` + `EM1Data`), and Gen1 (`/status` `emeters`). Field names taken from the
+  official Shelly Gen2 docs; energy converted Wh→kWh. Fully unit-tested.
+- `client.ts` — auto-detects the variant by probing `EM` → `EM1` → `/status` (cached), with injectable `fetch` and a
+  per-request abort/timeout.
+- `adapter.ts` — polls every 15 s; publishes total power/current/voltage, cumulative energy (kWh, `total_increasing`),
+  returned energy (disabled by default), and **lazily-created per-phase power** sensors. Mirrors the established adapter
+  lifecycle.
+- Enabled via `--shelly-em-host` / `M2M_SHELLY_EM_HOST`.
+
+Verified end-to-end (stub Shelly Pro 3EM HTTP server + in-process `aedes` MQTT broker): auto-detected Gen2, published 8
+discovery configs and correct values (power 3300.5 W, energy 25.000 kWh from 25000 Wh, phase-A power 1000 W).
 
 ## Open questions / things deliberately NOT changed
 

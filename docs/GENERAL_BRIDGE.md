@@ -90,6 +90,7 @@ unit tests (as `src/adapters/mysa/conversions.ts` does), and add an enable optio
 | `mysa`                 | Mysa cloud API               | ✅ Full (climate + sensors + energy)      | Always on (Mysa credentials required) |
 | `system`               | Host `os`                    | ✅ Reference (uptime, load, memory)       | `--system-sensors true`               |
 | `tesla_wall_connector` | Tesla Wall Connector (local) | ✅ Monitor-only (power/session/+2 binary) | `--tesla-wall-connector-host <host>`  |
+| `shelly_em`            | Shelly energy meter (local)  | ✅ Whole-circuit power/current/energy     | `--shelly-em-host <host>`             |
 
 ## Protocol roadmap (not yet implemented)
 

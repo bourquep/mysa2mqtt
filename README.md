@@ -181,6 +181,7 @@ turned on as needed.
 | ----------------------------- | -------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------- |
 | `--system-sensors`            | `M2M_SYSTEM_SENSORS`             | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`)                    |
 | `--tesla-wall-connector-host` | `M2M_TESLA_WALL_CONNECTOR_HOST`  | -       | Hostname/IP of a Tesla Wall Connector (Gen 3) to bridge (monitor-only — see below)                              |
+| `--shelly-em-host`            | `M2M_SHELLY_EM_HOST`             | -       | Hostname/IP of a Shelly energy meter (Pro 3EM / EM / Gen1) to bridge — see below                                |
 | `--mysa-estimated-current`    | `M2M_MYSA_ESTIMATED_CURRENT`     | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)          |
 | `--mysa-energy-api`           | `M2M_MYSA_ENERGY_API`            | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
 
@@ -191,6 +192,14 @@ It reads the charger's local, unauthenticated JSON API (`/api/1/vitals`, `/api/1
 current, grid voltage, session duration, handle temperature, lifetime energy**, plus **vehicle-connected** and
 **charging** binary sensors. This is **monitor-only**: the Wall Connector's local API exposes no control (start/stop or
 charge-rate), so no command entities are created.
+
+#### Shelly energy meter
+
+Set `--shelly-em-host` to the LAN hostname/IP of a Shelly energy meter (Gen2 `Pro 3EM`/`EM1` or a Gen1 `EM`/`3EM`) to
+expose whole-circuit electricity usage in Home Assistant. The adapter auto-detects the device generation and publishes
+**total power, current, voltage**, cumulative **energy** (kWh, `total_increasing`), returned/exported energy, and
+**per-phase power** sensors. This is the recommended way to bring true whole-home/whole-circuit consumption onto the
+bus.
 
 ### Power and energy
 
