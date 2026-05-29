@@ -39,6 +39,7 @@ import {
   resolveCommandedMode,
   resolvePowerCommandMode
 } from './conversions';
+import { EnergyAccumulator } from './energy';
 
 export class Thermostat {
   private isStarted = false;
@@ -49,6 +50,12 @@ export class Thermostat {
   private readonly mqttHumidity: Sensor;
   /** Power sensor — only created for devices that can report power consumption (not AC controllers or "Lite" units). */
   private readonly mqttPower?: Sensor;
+  /** Cumulative energy sensor — created alongside the power sensor; derived by integrating power over time. */
+  private readonly mqttEnergy?: Sensor;
+
+  private readonly energy = new EnergyAccumulator();
+  /** Effective current rating used for power estimation (device's own, or the configured estimate as a fallback). */
+  private readonly effectiveMaxCurrent?: string;
 
   private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
   private readonly mysaStateChangeHandler = this.handleMysaStateChange.bind(this);
@@ -62,7 +69,8 @@ export class Thermostat {
     private readonly logger: Logger,
     public readonly mysaDeviceFirmware?: FirmwareDevice,
     public readonly mysaDeviceSerialNumber?: string,
-    public readonly temperatureUnit?: 'C' | 'F'
+    public readonly temperatureUnit?: 'C' | 'F',
+    estimatedCurrent?: number
   ) {
     const is_celsius = (temperatureUnit ?? 'C') === 'C';
 
@@ -84,6 +92,12 @@ export class Thermostat {
     const capabilities = getDeviceCapabilities(mysaDevice.Model);
     this.deviceType = capabilities.deviceType;
     const isAC = this.deviceType === 'AC';
+
+    // Use the device's own current rating, falling back to the configured estimate (e.g. for Lite units that don't
+    // report one). With a current rating, duty-cycle-reporting heaters can have their power estimated.
+    this.effectiveMaxCurrent =
+      mysaDevice.MaxCurrent ?? (estimatedCurrent != null ? String(estimatedCurrent) : undefined);
+    const canReportPower = capabilities.reportsPower || (!isAC && this.effectiveMaxCurrent != null);
 
     this.mqttClimate = new Climate(
       {
@@ -195,7 +209,7 @@ export class Thermostat {
       }
     });
 
-    if (capabilities.reportsPower) {
+    if (canReportPower) {
       this.mqttPower = new Sensor({
         mqtt: this.mqttSettings,
         logger: this.logger,
@@ -210,6 +224,22 @@ export class Thermostat {
           unit_of_measurement: 'W',
           suggested_display_precision: 0,
           force_update: true
+        }
+      });
+
+      this.mqttEnergy = new Sensor({
+        mqtt: this.mqttSettings,
+        logger: this.logger,
+        component: {
+          component: 'sensor',
+          device: this.mqttDevice,
+          origin: this.mqttOrigin,
+          unique_id: `mysa_${mysaDevice.Id}_energy`,
+          name: 'Energy',
+          device_class: 'energy',
+          state_class: 'total_increasing',
+          unit_of_measurement: 'kWh',
+          suggested_display_precision: 3
         }
       });
     }
@@ -257,6 +287,11 @@ export class Thermostat {
         await this.mqttPower.writeConfig();
       }
 
+      if (this.mqttEnergy) {
+        await this.mqttEnergy.setState('state_topic', this.energy.kwh.toFixed(3));
+        await this.mqttEnergy.writeConfig();
+      }
+
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
 
@@ -292,7 +327,8 @@ export class Thermostat {
     }
 
     // Mark the Home Assistant entities unavailable so they show as offline (rather than stale) while the bridge is
-    // stopped. On restart, `writeConfig()` will mark them available again.
+    // stopped. On restart, `writeConfig()` will mark them available again. The energy total is left as-is (not reset to
+    // "None") since it is a cumulative `total_increasing` value.
     const availability = [
       this.mqttClimate.setAvailability(false),
       this.mqttTemperature.setAvailability(false),
@@ -300,6 +336,9 @@ export class Thermostat {
     ];
     if (this.mqttPower) {
       availability.push(this.mqttPower.setAvailability(false));
+    }
+    if (this.mqttEnergy) {
+      availability.push(this.mqttEnergy.setAvailability(false));
     }
     await Promise.all(availability);
   }
@@ -320,15 +359,21 @@ export class Thermostat {
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
     // Power calculation: V1 devices report current, V2 devices report duty cycle (see `computePowerWatts`). Devices that
-    // can't report power (AC controllers, "Lite" units) have no power sensor.
+    // can't report power (AC controllers, "Lite" units without an estimated current) have no power sensor.
     if (this.mqttPower) {
       const watts = computePowerWatts(
         this.mysaDevice.Voltage,
-        this.mysaDevice.MaxCurrent,
+        this.effectiveMaxCurrent,
         status.current,
         status.dutyCycle
       );
       await this.mqttPower.setState('state_topic', watts != null ? watts.toFixed(2) : 'None');
+
+      // Integrate power into a cumulative energy total (kWh) for the Home Assistant Energy dashboard.
+      if (watts != null && this.mqttEnergy) {
+        const kwh = this.energy.addSample(watts, Date.now());
+        await this.mqttEnergy.setState('state_topic', kwh.toFixed(3));
+      }
     }
 
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));

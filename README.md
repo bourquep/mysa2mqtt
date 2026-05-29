@@ -177,9 +177,19 @@ take precedence over command-line defaults.
 [`docs/GENERAL_BRIDGE.md`](docs/GENERAL_BRIDGE.md)). The Mysa adapter is always enabled; additional adapters can be
 turned on as needed.
 
-| CLI Option         | Environment Variable | Default | Description                                                                            |
-| ------------------ | -------------------- | ------- | -------------------------------------------------------------------------------------- |
-| `--system-sensors` | `M2M_SYSTEM_SENSORS` | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`) |
+| CLI Option                  | Environment Variable          | Default | Description                                                                                                |
+| --------------------------- | ----------------------------- | ------- | -------------------------------------------------------------------------------------------------------- |
+| `--system-sensors`          | `M2M_SYSTEM_SENSORS`          | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`)              |
+| `--mysa-estimated-current`  | `M2M_MYSA_ESTIMATED_CURRENT`  | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)    |
+| `--mysa-energy-api`         | `M2M_MYSA_ENERGY_API`         | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
+
+### Power and energy
+
+Power-capable thermostats expose a **Current power** (W) sensor and a cumulative **Energy** (kWh,
+`total_increasing`) sensor suitable for the Home Assistant Energy dashboard. Power is measured directly on baseboard V1
+units and estimated from the heating duty cycle on V2 units; energy is integrated from power over time and resets to zero
+if the bridge restarts. AC controllers and "Lite" units don't measure power, so they get no power/energy sensors unless
+you provide `--mysa-estimated-current` (which enables an estimate for duty-cycle devices such as the Lite).
 
 ## Usage Examples
 

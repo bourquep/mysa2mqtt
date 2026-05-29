@@ -44,6 +44,20 @@ function parseRequiredInt(value: string) {
   return parsedValue;
 }
 
+/**
+ * Parses a positive floating-point value.
+ *
+ * @param value - The value to parse.
+ * @returns The parsed positive number.
+ */
+function parsePositiveFloat(value: string) {
+  const parsedValue = parseFloat(value);
+  if (isNaN(parsedValue) || parsedValue <= 0) {
+    throw new InvalidArgumentError('Must be a positive number.');
+  }
+  return parsedValue;
+}
+
 const extraHelpText = `
 Copyright (c) 2025 Pascal Bourque
 Licensed under the MIT License
@@ -135,6 +149,38 @@ export const options = new Command('mysa2mqtt')
       .choices(['true', 'false'])
       .default('false')
       .helpGroup('Adapters')
+  )
+  .addOption(
+    new Option(
+      '--mysa-estimated-current <amps>',
+      'estimated current (A) used to compute power for devices that do not report it (e.g. Lite models)'
+    )
+      .env('M2M_MYSA_ESTIMATED_CURRENT')
+      .argParser(parsePositiveFloat)
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option('--mysa-energy-api <enabled>', "experimental: read energy from Mysa's cloud energy API")
+      .env('M2M_MYSA_ENERGY_API')
+      .choices(['true', 'false'])
+      .default('false')
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option(
+      '--mysa-diagnostics <enabled>',
+      'write a redacted local diagnostics report (probes Mysa endpoints and captures sample realtime messages)'
+    )
+      .env('M2M_MYSA_DIAGNOSTICS')
+      .choices(['true', 'false'])
+      .default('false')
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option('--mysa-diagnostics-file <path>', 'path for the diagnostics report')
+      .env('M2M_MYSA_DIAGNOSTICS_FILE')
+      .default('mysa-diagnostics.json')
+      .helpGroup('Mysa')
   )
   .parse()
   .opts();

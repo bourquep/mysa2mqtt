@@ -156,6 +156,44 @@ outward-facing, hard-to-reverse decision for the maintainer, so it was intention
 now has a general bridge core. If the project formally pivots to a general bridge, a rename (e.g. `hub2mqtt`) with an
 alias/deprecation path would be a deliberate, separate change.
 
+## Vendor cloud / hub APIs — the natural next adapters
+
+The protocol roadmap above (Zigbee/Z-Wave/Matter/…) is mostly "reuse the mature tool." This project's actual sweet spot
+is different and underserved: **vendor cloud or LAN APIs** that, like Mysa, authenticate over HTTP, discover devices,
+and stream/poll state — exactly the shape `MysaAdapter` already demonstrates. These need **no special radio**, so they
+build and unit-test in CI with a mocked `fetch` (see `energy-api.test.ts` / `diagnostics.test.ts` for the pattern), and
+each becomes a self-contained adapter behind the existing `SourceAdapter` contract.
+
+Ranked by fit for this codebase:
+
+| Candidate                                      | Transport / library                                                                     | Auth                                | Fit               | Notes                                                                                                                                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **IKEA DIRIGERA**                              | **Local** REST over HTTPS :8443 — [`dirigera`](https://github.com/lpgera/dirigera) (TS) | One-time button-press token pairing | ⭐ High           | Local-only (no cloud), maintained typed Node lib, long-lived token. Lights/plugs/blinds/sensors map cleanly to `mqtt2ha` `Light`/`Switch`/`Sensor`/`Cover`. Cleanest first addition. |
+| **SmartThings**                                | Cloud REST (`api.smartthings.com`) + webhooks/SSE                                       | OAuth2 (PATs now 24 h, Dec 2024)    | ⭐ High (breadth) | One adapter exposes _many_ vendors. Must implement OAuth2 refresh — PATs are test-only now. Huge device-type surface → start read-only (sensors) then add control.                   |
+| **Govee**                                      | Platform OpenAPI (cloud) + optional LAN                                                 | API key                             | Med               | Already well-served by [`wez/govee2mqtt`](https://github.com/wez/govee2mqtt); build only if unifying into one device tree. Lights/RGB + some temp/humidity.                          |
+| **Tuya / Smart Life**                          | Tuya Cloud API (region DCs)                                                             | Cloud project id/secret             | Med               | Enormous device catalog but heavy onboarding (Tuya IoT project, region, app-account link). LocalTuya needs per-device keys. High value, high setup cost.                             |
+| **Sensibo / Ecobee / other cloud thermostats** | Vendor cloud REST                                                                       | API key / OAuth2                    | Med               | Closest to the existing climate domain; small, well-documented APIs; reuse the `Climate` entity already wired for Mysa.                                                              |
+
+**Recommended order:**
+
+1. **IKEA DIRIGERA** — best risk/reward: local, typed lib, no OAuth, broad device coverage, fully CI-testable with a
+   mocked client. A strong template for "hub on the LAN → MQTT".
+2. **SmartThings** — highest reach per unit of work (one integration → many brands), and proves the OAuth2 + webhook
+   pattern the cloud adapters will share. Scope it read-only first.
+3. **A second cloud thermostat** (Sensibo or Ecobee) — directly reuses the `Climate` work and keeps the project's
+   thermostat identity while it generalizes.
+
+Govee and Tuya are valuable but either already well-covered (Govee) or heavy to onboard (Tuya), so they rank lower as
+_first_ additions.
+
+### Shared groundwork these will want
+
+- An **OAuth2 token store** (authorize once, persist + refresh) — generalize `src/adapters/mysa/session.ts` into a
+  reusable helper. SmartThings/Ecobee/Sensibo all need it.
+- A small **HA entity-mapping helper** (capability → `Light`/`Switch`/`Sensor`/`Cover`/`Climate`) so each adapter only
+  maps its own vocabulary, mirroring `src/adapters/mysa/capabilities.ts`.
+- Per-adapter **enable flags + config** in `src/options.ts`, exactly like `--system-sensors` / `--mysa-*`.
+
 ## Why not ship non-functional protocol stubs?
 
 Shipping empty `ZigbeeAdapter`/`MatterAdapter`/… classes that throw "not implemented" would add unverifiable, misleading

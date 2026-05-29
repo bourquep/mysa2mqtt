@@ -114,15 +114,52 @@ Notable, deliberate constraints:
   `..._power` entity in Home Assistant until it is manually removed. This was judged the correct cleanup since the
   sensor never carried a real value for those models.
 
+## 8. Power/energy: derived energy sensor, opt-in estimate, and an experimental cloud energy probe
+
+Following research into whether richer power/energy data is available (see the sources in section 9), three changes were
+made:
+
+- **Cumulative energy sensor.** `EnergyAccumulator` (`energy.ts`, unit-tested) integrates the instantaneous power over
+  time into a kWh total, published as a `total_increasing` `energy` sensor — directly usable in the Home Assistant
+  Energy dashboard. It resets to zero on restart (not persisted); HA tolerates `total_increasing` resets. Created
+  alongside the power sensor.
+- **Opt-in estimated current.** `--mysa-estimated-current <amps>` supplies a fallback current rating so duty-cycle
+  devices that don't report one (the "Lite" models) can still get estimated power/energy. This mirrors the approach used
+  by the `kgelinas/Mysa_HA` integration.
+- **Experimental cloud energy API (`--mysa-energy-api`).** Mining `dlenski/mysotherm` and `kgelinas/Mysa_HA` identified
+  the real endpoint: **`POST /energy/device/{deviceId}`** on `app-prod.mysa.cloud` (the legacy host that shares our
+  SDK's auth), with body `{ PhoneTimezone, Scope, Timestamp }` — _not_ the `/energy/v3/...` GET originally hypothesized
+  (which does not exist). The newer `mysa-backend.mysa.cloud` host exposes `GET /telemetry/usage/{id}` →
+  `{ data: [{ timestamp, runtime, energyUsed }] }`, but uses a different Cognito client so our token may not work there.
+  The feature is therefore **opt-in, off by default, and fail-soft**: it POSTs the legacy endpoint, logs the raw
+  response (the response schema still isn't publicly documented), and only publishes a clearly-labeled sensor when
+  `extractEnergyKwh` finds an unambiguous total. The HTTP/auth/body construction and the extractor are unit-tested with
+  a mock fetcher; **the live response schema remains unverified** and must be confirmed before relying on the sensor.
+  Note that `kgelinas/Mysa_HA` does not use this endpoint for its energy sensor at all — it integrates power over time,
+  exactly like our `EnergyAccumulator` — which is good corroboration that the local-integration approach is sound.
+
+## 9. Reverse-engineering sources used for the Mysa API
+
+To ground the above, the Mysa REST surface was extracted from two places:
+
+- The installed `mysa-js-sdk` (authoritative for this project): base URL `https://app-prod.mysa.cloud`; `GET /devices`,
+  `/devices/firmware`, `/devices/state`; MQTT `/v1/dev/{id}/{in,out}`; Cognito us-east-1 (`Authorization: <idToken>`).
+  Notably it has **no** energy endpoint.
+- Public reverse-engineering, primarily [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm) and
+  [`kgelinas/Mysa_HA`](https://github.com/kgelinas/Mysa_HA): the legacy `/users/readingsForUser` endpoint is dead;
+  current device data is `GET /devices/state` + `GET /users`; in-app energy is software-computed from duty cycle ×
+  wattage; mysotherm's captures show `dtyCycle` as a **0–1 fraction** (relay on = `1.0`).
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.
 They are surfaced here rather than silently "fixed".
 
-- **Duty-cycle units for V2 power estimation.** `mysa-js-sdk`'s `Status.dutyCycle` is documented as "a percentage
-  (0–100)", but `mysa.md` and the existing power math (`voltage × maxCurrent × dutyCycle`) only produce sensible
-  wattages if it is a fraction (0–1). The current code treats it as 0–1 and that behavior was preserved. Worth
-  confirming against a real V2 (`BB-V2`) device; if the SDK really emits 0–100, the estimate is 100× too high.
+- **Duty-cycle units for V2 power estimation (now corroborated).** `mysa-js-sdk`'s `Status.dutyCycle` is documented as
+  "a percentage (0–100)", but the existing power math (`voltage × maxCurrent × dutyCycle`) only yields sensible wattages
+  if it is a fraction (0–1). Public captures in `dlenski/mysotherm` show `dtyCycle` as a 0–1 fraction (relay on =
+  `1.0`), so the current 0–1 assumption is very likely correct and the SDK docstring is misleading. Remaining risk: the
+  SDK could theoretically rescale before emitting — worth one confirmation on a real `BB-V2`.
 - **`auto` mode climate action.** `computeClimateAction` returns `idle` for `auto` (it is not a case in the original
   switch), so an AC running in `auto` reports `idle` even while actively heating/cooling. Preserved as-is; a future
   enhancement could map `auto` to the actual active action when the device reports it.
