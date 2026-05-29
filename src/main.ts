@@ -107,7 +107,9 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
         username: options.mysaUsername,
         password: options.mysaPassword,
         sessionFile: options.mysaSessionFile,
-        temperatureUnit: options.temperatureUnit
+        temperatureUnit: options.temperatureUnit,
+        estimatedCurrent: options.mysaEstimatedCurrent,
+        energyApiEnabled: options.mysaEnergyApi === 'true'
       },
       mqttSettings,
       rootLogger.child({ module: 'mysa' })
