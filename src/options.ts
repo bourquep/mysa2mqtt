@@ -166,5 +166,21 @@ export const options = new Command('mysa2mqtt')
       .default('false')
       .helpGroup('Mysa')
   )
+  .addOption(
+    new Option(
+      '--mysa-diagnostics <enabled>',
+      'write a redacted local diagnostics report (probes Mysa endpoints and captures sample realtime messages)'
+    )
+      .env('M2M_MYSA_DIAGNOSTICS')
+      .choices(['true', 'false'])
+      .default('false')
+      .helpGroup('Mysa')
+  )
+  .addOption(
+    new Option('--mysa-diagnostics-file <path>', 'path for the diagnostics report')
+      .env('M2M_MYSA_DIAGNOSTICS_FILE')
+      .default('mysa-diagnostics.json')
+      .helpGroup('Mysa')
+  )
   .parse()
   .opts();

@@ -42,6 +42,9 @@ SOFTWARE.
 /** The base URL of the Mysa cloud API, as used by `mysa-js-sdk`. */
 export const MYSA_API_BASE_URL = 'https://app-prod.mysa.cloud';
 
+/** The base URL of the newer Mysa backend API (different Cognito app client; the SDK token may not be accepted). */
+export const MYSA_BACKEND_URL = 'https://mysa-backend.mysa.cloud';
+
 /** Options for an energy query. */
 export interface MysaEnergyQuery {
   /** The aggregation scope requested by the API (e.g. `Day`). */
@@ -61,7 +64,7 @@ export interface MysaEnergyQuery {
  *
  * @returns The resolved timezone name.
  */
-function defaultTimezone(): string {
+export function resolveHostTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
@@ -84,7 +87,7 @@ export async function fetchMysaDeviceEnergy(
 ): Promise<unknown> {
   const {
     scope = 'Day',
-    timezone = defaultTimezone(),
+    timezone = resolveHostTimezone(),
     now = new Date(),
     fetcher = fetch,
     baseUrl = MYSA_API_BASE_URL

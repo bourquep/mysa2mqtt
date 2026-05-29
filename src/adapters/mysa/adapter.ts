@@ -27,6 +27,7 @@ import pino from 'pino';
 import { SourceAdapter } from '../../bridge/types';
 import { PinoLogger } from '../../logger';
 import { version } from '../../version';
+import { runMysaDiagnostics } from './diagnostics';
 import { extractEnergyKwh, fetchMysaDeviceEnergy } from './energy-api';
 import { loadSession, saveSession } from './session';
 import { Thermostat } from './thermostat';
@@ -48,6 +49,10 @@ export interface MysaAdapterConfig {
   estimatedCurrent?: number;
   /** Whether to poll the experimental Mysa cloud energy API. */
   energyApiEnabled?: boolean;
+  /** Whether to write a redacted local diagnostics report on startup. */
+  diagnostics?: boolean;
+  /** Path for the diagnostics report. */
+  diagnosticsFile?: string;
 }
 
 /**
@@ -138,6 +143,10 @@ export class MysaAdapter implements SourceAdapter {
 
     if (this.config.energyApiEnabled) {
       this.startEnergyPolling();
+    }
+
+    if (this.config.diagnostics) {
+      this.runDiagnostics(client);
     }
   }
 
@@ -247,5 +256,42 @@ export class MysaAdapter implements SourceAdapter {
     await sensor.writeConfig();
     this.cloudEnergySensors.set(device.Id, sensor);
     return sensor;
+  }
+
+  /**
+   * Runs a one-shot, local diagnostics capture in the background.
+   *
+   * Probes the Mysa REST endpoints and captures a sample of raw realtime messages, then writes a redacted report to
+   * disk. Nothing is transmitted off the machine. Failures are logged and ignored.
+   *
+   * @param client - The authenticated Mysa client.
+   */
+  private runDiagnostics(client: MysaApiClient): void {
+    const idToken = client.session?.idToken;
+    if (!idToken) {
+      this.logger.warn('Diagnostics requested but no Mysa session token is available; skipping.');
+      return;
+    }
+
+    const filePath = this.config.diagnosticsFile ?? 'mysa-diagnostics.json';
+    this.logger.warn(`Running Mysa diagnostics (local only — no data is transmitted); writing to ${filePath}...`);
+
+    runMysaDiagnostics(filePath, {
+      idToken,
+      deviceIds: this.devices.map((device) => device.Id),
+      subscribeRaw: (handler) => {
+        const listener = (message: unknown) => handler(message);
+        client.emitter.on('rawRealtimeMessageReceived', listener);
+        return () => client.emitter.off('rawRealtimeMessageReceived', listener);
+      }
+    })
+      .then((report) =>
+        this.logger.info(
+          `Wrote Mysa diagnostics to ${filePath} (${report.endpoints.length} endpoints, ${report.realtimeMessages.length} realtime messages). Review and redact before sharing.`
+        )
+      )
+      .catch((error) =>
+        this.logger.warn(`Mysa diagnostics failed: ${error instanceof Error ? error.message : error}`)
+      );
   }
 }
