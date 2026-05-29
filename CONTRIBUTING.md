@@ -31,6 +31,10 @@ mysa2mqtt/
 │   │   │   ├── capabilities.test.ts
 │   │   │   ├── conversions.ts    # Pure Mysa <-> Home Assistant value conversions
 │   │   │   ├── conversions.test.ts
+│   │   │   ├── energy.ts         # Power-to-energy (kWh) integration
+│   │   │   ├── energy.test.ts
+│   │   │   ├── energy-api.ts     # Experimental Mysa cloud energy API client
+│   │   │   ├── energy-api.test.ts
 │   │   │   ├── session.ts        # Mysa session persistence
 │   │   │   └── thermostat.ts     # Thermostat control logic
 │   │   └── system/               # Host system-metrics reference adapter

@@ -122,11 +122,26 @@ Envelope and body are consistent across setpoint and mode changes:
 
 ## REST Endpoints
 
-- `GET /devices/state`
-  - Discover devices and capabilities; map `{deviceId → friendlyName, model, firmware, ...}`.
+Base URL: `https://app-prod.mysa.cloud`. Requests are authorized with `Authorization: <Cognito ID token JWT>` (no
+`Bearer` prefix).
+
+**Confirmed** (used by `mysa-js-sdk` and/or documented in [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm)):
+
+- `GET /devices` — device list.
+- `GET /devices/firmware` — firmware versions.
+- `GET /devices/state` — current state; map `{deviceId → friendlyName, model, firmware, ...}` and read
+  `Current`/`Duty`/`Voltage`.
+- `GET /users` — account info.
+- `GET /users/readingsForUser` — **legacy/dead** (returns HTTP 500 on 2024–2025 app versions).
+
+**Unverified / app-level (hypothesis):**
 
 - `GET /energy/v3/home/{id}`, `GET /energy/v3/device/{id}`
-  - Historical energy/usage. (Realtime “power” still comes from `dtyCycle` heuristic in MQTT.)
+  - Believed to back the app's historical energy/usage charts (account-level, not the thermostat). **Not implemented by
+    `mysa-js-sdk` and not corroborated by mysotherm**; the exact path, query parameters, and response schema are
+    unconfirmed. `mysa2mqtt` can probe these behind the opt-in `--mysa-energy-api` flag (which logs the raw response for
+    confirmation). Note that in-app energy is otherwise software-computed from `dtyCycle × rated_watts`, and realtime
+    "power" still comes from the `Current`/`dtyCycle` MQTT heuristic.
 
 ## Python Library Design
 

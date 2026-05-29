@@ -114,15 +114,48 @@ Notable, deliberate constraints:
   `..._power` entity in Home Assistant until it is manually removed. This was judged the correct cleanup since the
   sensor never carried a real value for those models.
 
+## 8. Power/energy: derived energy sensor, opt-in estimate, and an experimental cloud energy probe
+
+Following research into whether richer power/energy data is available (see the sources in section 9), three changes were
+made:
+
+- **Cumulative energy sensor.** `EnergyAccumulator` (`energy.ts`, unit-tested) integrates the instantaneous power over
+  time into a kWh total, published as a `total_increasing` `energy` sensor — directly usable in the Home Assistant
+  Energy dashboard. It resets to zero on restart (not persisted); HA tolerates `total_increasing` resets. Created
+  alongside the power sensor.
+- **Opt-in estimated current.** `--mysa-estimated-current <amps>` supplies a fallback current rating so duty-cycle
+  devices that don't report one (the "Lite" models) can still get estimated power/energy. This mirrors the approach used
+  by the `kgelinas/Mysa_HA` integration.
+- **Experimental cloud energy API (`--mysa-energy-api`).** Research could not confirm a working dedicated energy REST
+  endpoint, but the maintainer believes the app uses account-level `/energy/v3/...` endpoints. Since the SDK authorizes
+  with `Authorization: <idToken>` and exposes `client.session`, we can reach them. This feature is therefore **opt-in,
+  off by default, and fail-soft**: it polls `/energy/v3/device/{id}`, logs the raw response (for schema confirmation
+  against a real account), and only publishes a (clearly-labeled, experimental) sensor when `extractEnergyKwh` finds an
+  unambiguous total. The HTTP/auth construction and the extractor are unit-tested with a mock fetcher; **the live
+  response schema and units remain unverified** and must be confirmed before relying on this sensor.
+
+## 9. Reverse-engineering sources used for the Mysa API
+
+To ground the above, the Mysa REST surface was extracted from two places:
+
+- The installed `mysa-js-sdk` (authoritative for this project): base URL `https://app-prod.mysa.cloud`; `GET /devices`,
+  `/devices/firmware`, `/devices/state`; MQTT `/v1/dev/{id}/{in,out}`; Cognito us-east-1 (`Authorization: <idToken>`).
+  Notably it has **no** energy endpoint.
+- Public reverse-engineering, primarily [`dlenski/mysotherm`](https://github.com/dlenski/mysotherm) and
+  [`kgelinas/Mysa_HA`](https://github.com/kgelinas/Mysa_HA): the legacy `/users/readingsForUser` endpoint is dead;
+  current device data is `GET /devices/state` + `GET /users`; in-app energy is software-computed from duty cycle ×
+  wattage; mysotherm's captures show `dtyCycle` as a **0–1 fraction** (relay on = `1.0`).
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.
 They are surfaced here rather than silently "fixed".
 
-- **Duty-cycle units for V2 power estimation.** `mysa-js-sdk`'s `Status.dutyCycle` is documented as "a percentage
-  (0–100)", but `mysa.md` and the existing power math (`voltage × maxCurrent × dutyCycle`) only produce sensible
-  wattages if it is a fraction (0–1). The current code treats it as 0–1 and that behavior was preserved. Worth
-  confirming against a real V2 (`BB-V2`) device; if the SDK really emits 0–100, the estimate is 100× too high.
+- **Duty-cycle units for V2 power estimation (now corroborated).** `mysa-js-sdk`'s `Status.dutyCycle` is documented as
+  "a percentage (0–100)", but the existing power math (`voltage × maxCurrent × dutyCycle`) only yields sensible wattages
+  if it is a fraction (0–1). Public captures in `dlenski/mysotherm` show `dtyCycle` as a 0–1 fraction (relay on =
+  `1.0`), so the current 0–1 assumption is very likely correct and the SDK docstring is misleading. Remaining risk: the
+  SDK could theoretically rescale before emitting — worth one confirmation on a real `BB-V2`.
 - **`auto` mode climate action.** `computeClimateAction` returns `idle` for `auto` (it is not a case in the original
   switch), so an AC running in `auto` reports `idle` even while actively heating/cooling. Preserved as-is; a future
   enhancement could map `auto` to the actual active action when the device reports it.
