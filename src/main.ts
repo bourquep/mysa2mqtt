@@ -24,12 +24,12 @@ SOFTWARE.
 */
 
 import { MqttSettings } from 'mqtt2ha';
-import { MysaApiClient } from 'mysa-js-sdk';
 import { pino } from 'pino';
-import { PinoLogger } from './logger';
+import { MysaAdapter } from './adapters/mysa/adapter';
+import { SystemAdapter } from './adapters/system/adapter';
+import { BridgeManager } from './bridge/manager';
+import { SourceAdapter } from './bridge/types';
 import { options } from './options';
-import { loadSession, saveSession } from './session';
-import { Thermostat } from './thermostat';
 
 const rootLogger = pino({
   name: 'mysa2mqtt',
@@ -48,8 +48,8 @@ const rootLogger = pino({
       : undefined
 });
 
-/** All thermostats currently bridged by this process, tracked so they can be stopped on shutdown. */
-const thermostats: Thermostat[] = [];
+/** The running bridge, tracked so it can be stopped on shutdown. */
+let bridge: BridgeManager | undefined;
 
 /** Guards against running the shutdown sequence more than once. */
 let isShuttingDown = false;
@@ -60,9 +60,8 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 /**
  * Gracefully shuts down the bridge in response to a termination signal.
  *
- * Stops every thermostat (which marks its Home Assistant entities unavailable) and then exits. A safety timer forces
- * the process to exit if a thermostat fails to stop in time, so a hung broker connection can never wedge the
- * container.
+ * Stops every adapter (which marks its Home Assistant entities unavailable) and then exits. A safety timer forces the
+ * process to exit if an adapter fails to stop in time, so a hung connection can never wedge the container.
  *
  * @param signal - The signal that triggered the shutdown.
  */
@@ -81,11 +80,10 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
   // Don't let the safety timer keep the event loop alive on its own.
   forceExit.unref();
 
-  const results = await Promise.allSettled(thermostats.map((thermostat) => thermostat.stop()));
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      rootLogger.error(result.reason, 'Error while stopping thermostat during shutdown');
-    }
+  try {
+    await bridge?.stop();
+  } catch (error) {
+    rootLogger.error(error, 'Error during shutdown');
   }
 
   clearTimeout(forceExit);
@@ -96,39 +94,36 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
+/**
+ * Builds the set of enabled source adapters from the current configuration.
+ *
+ * @param mqttSettings - Shared MQTT connection settings passed to every adapter.
+ * @returns The adapters to run.
+ */
+function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
+  const adapters: SourceAdapter[] = [
+    new MysaAdapter(
+      {
+        username: options.mysaUsername,
+        password: options.mysaPassword,
+        sessionFile: options.mysaSessionFile,
+        temperatureUnit: options.temperatureUnit
+      },
+      mqttSettings,
+      rootLogger.child({ module: 'mysa' })
+    )
+  ];
+
+  if (options.systemSensors === 'true') {
+    adapters.push(new SystemAdapter(mqttSettings, rootLogger.child({ module: 'system' })));
+  }
+
+  return adapters;
+}
+
 /** Mysa2mqtt entry-point. */
 async function main() {
   rootLogger.info('Starting mysa2mqtt...');
-
-  const session = await loadSession(options.mysaSessionFile, rootLogger);
-  const client = new MysaApiClient(session, { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) });
-
-  client.emitter.on('sessionChanged', async (newSession) => {
-    await saveSession(newSession, options.mysaSessionFile, rootLogger);
-  });
-
-  if (!client.isAuthenticated) {
-    rootLogger.info('Logging in...');
-    await client.login(options.mysaUsername, options.mysaPassword);
-  }
-
-  rootLogger.debug('Fetching devices and firmwares...');
-  const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
-
-  rootLogger.debug('Fetching serial numbers...');
-  const serialNumbers = new Map<string, string>();
-  for (const [deviceId] of Object.entries(devices.DevicesObj)) {
-    try {
-      const serial = await client.getDeviceSerialNumber(deviceId);
-      if (serial) {
-        serialNumbers.set(deviceId, serial);
-      }
-    } catch (error) {
-      rootLogger.error(error, `Failed to retrieve serial number for device ${deviceId}`);
-    }
-  }
-
-  rootLogger.debug('Initializing MQTT entities...');
 
   const mqttSettings: MqttSettings = {
     host: options.mqttHost,
@@ -139,25 +134,10 @@ async function main() {
     state_prefix: options.mqttTopicPrefix
   };
 
-  for (const [, device] of Object.entries(devices.DevicesObj)) {
-    thermostats.push(
-      new Thermostat(
-        client,
-        device,
-        mqttSettings,
-        new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
-        firmwares.Firmware[device.Id],
-        serialNumbers.get(device.Id),
-        options.temperatureUnit
-      )
-    );
-  }
+  bridge = new BridgeManager(buildAdapters(mqttSettings), rootLogger);
+  await bridge.start();
 
-  for (const thermostat of thermostats) {
-    await thermostat.start();
-  }
-
-  rootLogger.info(`Bridging ${thermostats.length} thermostat(s). Press Ctrl+C to stop.`);
+  rootLogger.info('mysa2mqtt is running. Press Ctrl+C to stop.');
 }
 
 main().catch((error) => {

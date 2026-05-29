@@ -23,31 +23,12 @@ SOFTWARE.
 
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
-import { readFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { version } from './version';
 
 configDotenv({
   path: ['.env', '.env.local'],
   override: true
 });
-
-/**
- * Gets the package version at runtime.
- *
- * @returns The package version or 'unknown' if it cannot be read.
- */
-function getPackageVersion(): string {
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const packageJsonPath = join(__dirname, '..', 'package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
-    return packageJson.version || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
 
 /**
  * Parses a required integer value.
@@ -62,8 +43,6 @@ function parseRequiredInt(value: string) {
   }
   return parsedValue;
 }
-
-export const version = getPackageVersion();
 
 const extraHelpText = `
 Copyright (c) 2025 Pascal Bourque
@@ -149,6 +128,13 @@ export const options = new Command('mysa2mqtt')
       .choices(['C', 'F'])
       .default('C')
       .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option('--system-sensors <enabled>', 'expose host system metrics as Home Assistant sensors')
+      .env('M2M_SYSTEM_SENSORS')
+      .choices(['true', 'false'])
+      .default('false')
+      .helpGroup('Adapters')
   )
   .parse()
   .opts();

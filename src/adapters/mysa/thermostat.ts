@@ -23,6 +23,7 @@ SOFTWARE.
 
 import { Climate, DeviceConfiguration, Logger, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import { DeviceBase, FirmwareDevice, MysaApiClient, StateChange, Status } from 'mysa-js-sdk';
+import { version } from '../../version';
 import {
   computeClimateAction,
   computePowerWatts,
@@ -38,7 +39,6 @@ import {
   resolveCommandedMode,
   resolvePowerCommandMode
 } from './conversions';
-import { version } from './options';
 
 export class Thermostat {
   private isStarted = false;
