@@ -250,27 +250,31 @@ function captureRealtimeMessages(
   return new Promise((resolve) => {
     const messages: unknown[] = [];
     let settled = false;
+    let unsubscribe: () => void = () => {};
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    const finish = (unsubscribe: () => void) => {
+    const finish = () => {
       if (settled) {
         return;
       }
       settled = true;
       unsubscribe();
-      clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       resolve(messages);
     };
 
-    const unsubscribe = subscribeRaw((message) => {
+    unsubscribe = subscribeRaw((message) => {
       if (messages.length < maxMessages) {
         messages.push(redactSensitive(message));
       }
       if (messages.length >= maxMessages) {
-        finish(unsubscribe);
+        finish();
       }
     });
 
-    const timer = setTimeout(() => finish(unsubscribe), captureMs);
+    timer = setTimeout(finish, captureMs);
     if (typeof timer.unref === 'function') {
       timer.unref();
     }
