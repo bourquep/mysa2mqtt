@@ -37,10 +37,22 @@ mysa2mqtt/
 │   │   │   ├── energy-api.test.ts
 │   │   │   ├── session.ts        # Mysa session persistence
 │   │   │   └── thermostat.ts     # Thermostat control logic
-│   │   └── system/               # Host system-metrics reference adapter
-│   │       ├── adapter.ts        # SystemAdapter (SourceAdapter implementation)
-│   │       ├── metrics.ts        # Pure host metric collection
-│   │       └── metrics.test.ts
+│   │   ├── shelly-em/            # Shelly energy meter (Pro 3EM / EM / Gen1) adapter
+│   │   │   ├── adapter.ts        # ShellyEmAdapter (whole-circuit energy)
+│   │   │   ├── client.ts         # Gen2 RPC / Gen1 /status client with variant detection
+│   │   │   ├── client.test.ts
+│   │   │   ├── readings.ts       # Pure Gen1/Gen2 reading normalization
+│   │   │   └── readings.test.ts
+│   │   ├── system/               # Host system-metrics reference adapter
+│   │   │   ├── adapter.ts        # SystemAdapter (SourceAdapter implementation)
+│   │   │   ├── metrics.ts        # Pure host metric collection
+│   │   │   └── metrics.test.ts
+│   │   └── tesla-wall-connector/ # Tesla Wall Connector (Gen 3) EV charger adapter
+│   │       ├── adapter.ts        # TeslaWallConnectorAdapter (monitor-only)
+│   │       ├── client.ts         # Local /api/1/* HTTP client
+│   │       ├── client.test.ts
+│   │       ├── vitals.ts         # Pure vitals/lifetime normalization
+│   │       └── vitals.test.ts
 │   ├── bridge/                   # Source-agnostic bridge core
 │   │   ├── manager.ts            # BridgeManager (starts/stops adapters)
 │   │   ├── manager.test.ts

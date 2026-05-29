@@ -3,6 +3,11 @@
 This document records the decisions made while merging the outstanding branches and advancing the project, so they can
 be reviewed asynchronously. It is intentionally candid about trade-offs and open questions.
 
+> **Positioning:** the project is being targeted as an **"electricity usage → MQTT"** bridge. This is
+> **positioning/prioritization, not a scope cut** — we still collect _all_ device data (temperature, humidity, mode,
+> status, …) and still provide _control_ (thermostat setpoint/mode/fan today; charger control via OCPP later). Energy is
+> the headline use case that orders the backlog (`docs/BACKLOG.md`), not a boundary.
+
 ## 1. Merged the `patch-2` branch
 
 `patch-2` only added `mysa.md`, a reverse-engineered reference of the Mysa REST + AWS IoT MQTT API (auth flow, topics,
@@ -149,6 +154,50 @@ To ground the above, the Mysa REST surface was extracted from two places:
   [`kgelinas/Mysa_HA`](https://github.com/kgelinas/Mysa_HA): the legacy `/users/readingsForUser` endpoint is dead;
   current device data is `GET /devices/state` + `GET /users`; in-app energy is software-computed from duty cycle ×
   wattage; mysotherm's captures show `dtyCycle` as a **0–1 fraction** (relay on = `1.0`).
+
+## 11. First non-Mysa device adapter: Tesla Wall Connector (EV charger)
+
+Following the Canadian-charger effort analysis (`docs/SOURCE_RESEARCH.md`), the **Tesla Wall Connector (Gen 3)** was
+chosen as the first EV-charger adapter: highest install base _and_ lowest effort (unauthenticated local JSON), and fully
+testable without hardware.
+
+- `src/adapters/tesla-wall-connector/vitals.ts` — pure normalization of the `/api/1/vitals` (+ `/api/1/lifetime`)
+  payloads into a Home-Assistant-ready snapshot, including a per-phase `Σ V×I` power estimate. Heavily unit-tested.
+- `client.ts` — a tiny injectable-`fetch` HTTP client with a per-request abort/timeout (the firmware is known to hang
+  under prolonged polling).
+- `adapter.ts` — a `SourceAdapter` that polls every 30 s and publishes 6 sensors + 2 binary sensors
+  (`vehicle_connected`, `charging`), mirroring the `SystemAdapter` lifecycle (timer `unref`, mark-unavailable on stop).
+- Enabled by `--tesla-wall-connector-host` / `M2M_TESLA_WALL_CONNECTOR_HOST`.
+
+Deliberate decisions:
+
+- **Monitor-only.** The Wall Connector's local API is read-only — no start/stop or charge-rate. Rather than fake
+  controls, the adapter exposes only sensors and the docs say so plainly. Real charger _control_ is slated for an
+  eventual OCPP layer (see `docs/SOURCE_RESEARCH.md`).
+- **Verified end-to-end, not just unit-tested.** Beyond the unit tests, the adapter was run against a stub Wall
+  Connector HTTP server and a real in-process MQTT broker (`aedes`): it published 8 discovery configs and correct state
+  (e.g. `power = 5760 W` from 240 V × 24 A, `charging = ON`). The broker/stub were dev-only (`--no-save`), so
+  `package.json` is unchanged.
+- **Graceful degradation:** if `/api/1/lifetime` is missing on a given firmware, the adapter logs once and stops
+  querying it rather than erroring each poll.
+
+## 12. Shelly energy meter adapter (whole-circuit electricity usage)
+
+Aligned with the energy-usage positioning, added a `ShellyEmAdapter` (`src/adapters/shelly-em/`) — Shelly EM devices are
+cheap, ubiquitous, **local** whole-circuit/whole-home monitors, so they sit at the center of the energy mission.
+
+- `readings.ts` — pure normalization of all three Shelly report shapes into one `EnergyMeterReading`: Gen2 three-phase
+  (`EM` + `EMData`), Gen2 single-phase (`EM1` + `EM1Data`), and Gen1 (`/status` `emeters`). Field names taken from the
+  official Shelly Gen2 docs; energy converted Wh→kWh. Fully unit-tested.
+- `client.ts` — auto-detects the variant by probing `EM` → `EM1` → `/status` (cached), with injectable `fetch` and a
+  per-request abort/timeout.
+- `adapter.ts` — polls every 15 s; publishes total power/current/voltage, cumulative energy (kWh, `total_increasing`),
+  returned energy (disabled by default), and **lazily-created per-phase power** sensors. Mirrors the established adapter
+  lifecycle.
+- Enabled via `--shelly-em-host` / `M2M_SHELLY_EM_HOST`.
+
+Verified end-to-end (stub Shelly Pro 3EM HTTP server + in-process `aedes` MQTT broker): auto-detected Gen2, published 8
+discovery configs and correct values (power 3300.5 W, energy 25.000 kWh from 25000 Wh, phase-A power 1000 W).
 
 ## Open questions / things deliberately NOT changed
 

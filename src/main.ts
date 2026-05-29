@@ -26,7 +26,9 @@ SOFTWARE.
 import { MqttSettings } from 'mqtt2ha';
 import { pino } from 'pino';
 import { MysaAdapter } from './adapters/mysa/adapter';
+import { ShellyEmAdapter } from './adapters/shelly-em/adapter';
 import { SystemAdapter } from './adapters/system/adapter';
+import { TeslaWallConnectorAdapter } from './adapters/tesla-wall-connector/adapter';
 import { BridgeManager } from './bridge/manager';
 import { SourceAdapter } from './bridge/types';
 import { options } from './options';
@@ -120,6 +122,22 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
 
   if (options.systemSensors === 'true') {
     adapters.push(new SystemAdapter(mqttSettings, rootLogger.child({ module: 'system' })));
+  }
+
+  if (options.teslaWallConnectorHost) {
+    adapters.push(
+      new TeslaWallConnectorAdapter(
+        { host: options.teslaWallConnectorHost },
+        mqttSettings,
+        rootLogger.child({ module: 'tesla-wall-connector' })
+      )
+    );
+  }
+
+  if (options.shellyEmHost) {
+    adapters.push(
+      new ShellyEmAdapter({ host: options.shellyEmHost }, mqttSettings, rootLogger.child({ module: 'shelly-em' }))
+    );
   }
 
   return adapters;
