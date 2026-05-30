@@ -22,7 +22,7 @@ SOFTWARE.
 */
 
 import { describe, expect, it } from 'vitest';
-import { EnergyAccumulator } from './energy';
+import { EnergyAccumulator } from './accumulator';
 
 const HOUR = 3_600_000;
 

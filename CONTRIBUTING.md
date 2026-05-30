@@ -57,6 +57,11 @@ mysa2mqtt/
 │   │   ├── manager.ts            # BridgeManager (starts/stops adapters)
 │   │   ├── manager.test.ts
 │   │   └── types.ts              # SourceAdapter contract
+│   ├── energy/                   # Shared energy/power/cost publishing
+│   │   ├── accumulator.ts        # EnergyAccumulator (power→kWh integration)
+│   │   ├── accumulator.test.ts
+│   │   ├── power-energy-publisher.ts  # Standard power+energy(+cost) entities
+│   │   └── power-energy-publisher.test.ts
 │   ├── commander.d.ts            # Commander type definitions
 │   ├── logger.ts                 # Logging utilities
 │   ├── main.ts                   # Entry point (builds adapters, graceful shutdown)
