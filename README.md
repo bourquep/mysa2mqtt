@@ -183,6 +183,8 @@ turned on as needed.
 | `--tesla-wall-connector-host` | `M2M_TESLA_WALL_CONNECTOR_HOST`  | -       | Hostname/IP of a Tesla Wall Connector (Gen 3) to bridge (monitor-only — see below)                              |
 | `--shelly-em-host`            | `M2M_SHELLY_EM_HOST`             | -       | Hostname/IP of a Shelly energy meter (Pro 3EM / EM / Gen1) to bridge — see below                                |
 | `--shelly-plug-host`          | `M2M_SHELLY_PLUG_HOST`           | -       | Hostname/IP of a Shelly smart plug (Plus/Pro/Gen1) to bridge (power/energy + on/off control) — see below        |
+| `--tasmota-topic`             | `M2M_TASMOTA_TOPIC`              | -       | Tasmota device topic (its `%topic%`) to bridge over MQTT (power/energy + on/off control) — see below            |
+| `--emporia-id-token`          | `M2M_EMPORIA_ID_TOKEN`           | -       | Emporia (Cognito) ID token; enables the Emporia Vue whole-home/per-circuit energy adapter — see below           |
 | `--mysa-estimated-current`    | `M2M_MYSA_ESTIMATED_CURRENT`     | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)          |
 | `--mysa-energy-api`           | `M2M_MYSA_ENERGY_API`            | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
 
@@ -219,6 +221,21 @@ Set `--shelly-plug-host` to the LAN hostname/IP of a Shelly smart plug (Gen2 `Pl
 Gen1 `Plug S`). The adapter auto-detects the generation and publishes **power**, cumulative **energy** (kWh), plus
 **voltage/current/temperature** sensors **and a controllable on/off switch**. Under `--energy-only`, the switch and the
 non-energy sensors are omitted and only power + energy (+ cost) are published.
+
+#### Tasmota
+
+Set `--tasmota-topic` to a Tasmota device's topic (its `%topic%`, e.g. `tasmota_plug`). Because Tasmota already speaks
+MQTT, this adapter **subscribes** to the device's `tele/<topic>/SENSOR` and `STATE` topics on the same broker,
+republishes **power, energy (+ cost), voltage, current, power factor** as Home Assistant entities, and exposes a
+controllable **on/off switch** that issues `cmnd/<topic>/POWER`. Under `--energy-only`, only power + energy (+ cost) are
+published.
+
+#### Emporia Vue
+
+Set `--emporia-id-token` to a current Emporia (Cognito) ID token to bridge an Emporia Vue whole-home monitor. The
+adapter discovers the device's **mains plus each individual circuit** and publishes a **power + energy (+ cost)** trio
+per channel — ideal for whole-home and per-circuit energy tracking. (Obtaining/refreshing the token via username/password
+is a planned enhancement; see `docs/BACKLOG.md`.)
 
 ### Power and energy
 

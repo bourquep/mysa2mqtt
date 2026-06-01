@@ -29,12 +29,20 @@ status / control capabilities that already exist or are planned.
   control**. First adapter with a write/control entity.
 - ✅ **Energy-only safety switch** (`--energy-only`) — bridge-wide `OutputPolicy` that structurally restricts every
   adapter to electricity-usage output (no control, no other telemetry). Verified end-to-end.
+- ✅ **Tasmota** (any flashed plug, local MQTT) — subscribes to `tele/.../SENSOR`+`STATE`, republishes
+  power/energy/voltage/current/power-factor + **on/off control** (`cmnd/.../POWER`). Verified end-to-end.
+- ✅ **Emporia Vue** (cloud) — whole-home **mains + per-circuit** power/energy (+cost) trios. Verified end-to-end
+  against a stub API. Token is supplied via `--emporia-id-token` for now (see follow-up below).
 
 ## Now / next
 
-- ⏭️ **More WiFi/LAN smart plugs** — Tasmota (MQTT-native) and TP-Link Kasa/Tapo next; see the dedicated list below.
-- ⏭️ Retrofit the **Tesla** adapter onto `PowerEnergyPublisher` (Mysa and both Shelly adapters already use it).
-- ⏭️ **Emporia Vue** — popular whole-panel + per-circuit monitor (cloud API). High energy value.
+- ⏭️ **Demand-response device batch** — Sinopé/Neviweb (thermostats + load controller + Calypso), Wallbox, Emporia
+  chargers, Rheem EcoNet, ChargePoint, SolarEdge batteries. Design + API feasibility in `docs/DR_DEVICES.md`; approved
+  for implementation as one PR (Eguana deferred — no public API).
+- ⏭️ **Emporia Cognito login** — obtain/refresh the ID token from username/password (reuse the planned OAuth2/token
+  store) so the Emporia adapter doesn't require a manually-supplied `--emporia-id-token`.
+- ⏭️ **TP-Link Kasa/Tapo** smart plugs (local) — next in the plug family.
+- ⏭️ Retrofit the **Tesla** adapter onto `PowerEnergyPublisher` (Mysa, both Shelly adapters, Tasmota, Emporia use it).
 - ⏭️ **OCPP central system** — vendor-agnostic EV-charger **control + energy** (covers Grizzl-E and many others).
 
 ## WiFi / LAN smart plugs & energy-metering devices
@@ -42,13 +50,13 @@ status / control capabilities that already exist or are planned.
 Cheap, ubiquitous per-outlet/per-device electricity monitors — directly on-mission and mostly **local**. Many share
 plumbing with the Shelly EM adapter already shipped.
 
-| Device family                      | Local? | API                                              | Effort     | Notes                                                                              |
-| ---------------------------------- | ------ | ------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------- |
-| **Shelly Plug/Plus/PlusPlugS/Pro** | Local  | Gen2 RPC (`Switch.GetStatus` `apower`/`aenergy`) | ✅ Shipped | Power/energy + on/off **control**; gated by the energy-only safety switch.         |
-| **Tasmota** (any flashed plug)     | Local  | HTTP `/cm?cmnd=Status%208` **and native MQTT**   | 🟢 Low     | Tasmota already publishes MQTT; can map its topics or poll HTTP. Huge device base. |
-| **TP-Link Kasa/Tapo (KP/HS/P110)** | Local  | Local TCP/UDP (KLAP/encrypted for newer)         | 🟡 Med     | Very popular; newer Tapo needs the KLAP handshake. Node libs exist.                |
-| **ESPHome energy plugs**           | Local  | native API / **MQTT**                            | 🟢 Low     | If MQTT is enabled, near-zero work; otherwise the ESPHome native API.              |
-| **Meross / Gosund / Wyze plugs**   | Cloud  | Vendor cloud (mostly reverse-engineered)         | 🟡 Med     | Cloud-bound; lower priority than the local options above.                          |
+| Device family                      | Local? | API                                               | Effort     | Notes                                                                              |
+| ---------------------------------- | ------ | ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------- |
+| **Shelly Plug/Plus/PlusPlugS/Pro** | Local  | Gen2 RPC (`Switch.GetStatus` `apower`/`aenergy`)  | ✅ Shipped | Power/energy + on/off **control**; gated by the energy-only safety switch.         |
+| **Tasmota** (any flashed plug)     | Local  | native MQTT (`tele/.../SENSOR`, `cmnd/.../POWER`) | ✅ Shipped | Subscribes to its MQTT telemetry; power/energy + on/off control. Huge device base. |
+| **TP-Link Kasa/Tapo (KP/HS/P110)** | Local  | Local TCP/UDP (KLAP/encrypted for newer)          | 🟡 Med     | Very popular; newer Tapo needs the KLAP handshake. Node libs exist.                |
+| **ESPHome energy plugs**           | Local  | native API / **MQTT**                             | 🟢 Low     | If MQTT is enabled, near-zero work; otherwise the ESPHome native API.              |
+| **Meross / Gosund / Wyze plugs**   | Cloud  | Vendor cloud (mostly reverse-engineered)          | 🟡 Med     | Cloud-bound; lower priority than the local options above.                          |
 
 **Order:** Shelly Plug (reuses shipped code + adds control) → Tasmota (MQTT-native, massive base) → TP-Link Kasa/Tapo.
 

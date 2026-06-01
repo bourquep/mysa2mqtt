@@ -25,6 +25,12 @@ npm install
 mysa2mqtt/
 ├── src/                          # Source code
 │   ├── adapters/                 # Source adapters (one per bridged system)
+│   │   ├── emporia/              # Emporia Vue whole-home/per-circuit energy adapter
+│   │   │   ├── adapter.ts        # EmporiaAdapter (per-channel power/energy/cost)
+│   │   │   ├── client.ts         # Emporia cloud API client (authtoken header)
+│   │   │   ├── client.test.ts
+│   │   │   ├── usage.ts          # Pure device/usage parsing (per-second kWh → watts)
+│   │   │   └── usage.test.ts
 │   │   ├── mysa/                 # Mysa thermostats adapter
 │   │   │   ├── adapter.ts        # MysaAdapter (SourceAdapter implementation)
 │   │   │   ├── capabilities.ts   # Per-model capability detection
@@ -53,6 +59,10 @@ mysa2mqtt/
 │   │   │   ├── adapter.ts        # SystemAdapter (SourceAdapter implementation)
 │   │   │   ├── metrics.ts        # Pure host metric collection
 │   │   │   └── metrics.test.ts
+│   │   ├── tasmota/              # Tasmota plug adapter (subscribes to its MQTT telemetry)
+│   │   │   ├── adapter.ts        # TasmotaAdapter (power/energy + on/off control)
+│   │   │   ├── payload.ts        # Pure Tasmota payload/topic parsing
+│   │   │   └── payload.test.ts
 │   │   └── tesla-wall-connector/ # Tesla Wall Connector (Gen 3) EV charger adapter
 │   │       ├── adapter.ts        # TeslaWallConnectorAdapter (monitor-only)
 │   │       ├── client.ts         # Local /api/1/* HTTP client

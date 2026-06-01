@@ -241,6 +241,28 @@ opt-in lockdown for users who want the bridge to behave purely as an energy moni
 plug + real MQTT broker: full mode published 7 entities (incl. the on/off switch and cost); energy-only published only
 power/energy/cost (no switch, no telemetry).
 
+## 15. Tasmota and Emporia Vue adapters
+
+Two more energy sources, both reusing the shared `PowerEnergyPublisher` (and honoring the energy-only safety switch).
+
+**Tasmota** (`src/adapters/tasmota/`) — the first **MQTT-subscribe** adapter. Tasmota already publishes telemetry to the
+broker, so rather than HTTP-poll, the adapter opens its own `mqtt` subscriber connection (injectable `MqttConnector` for
+tests) to the device's `tele/<topic>/SENSOR`+`STATE`, normalizes the `ENERGY` block + `POWER` relay key with a pure,
+tested parser, and republishes power/energy (+cost), voltage/current/power-factor, and a controllable on/off `Switch`
+(`cmnd/<topic>/POWER`). Telemetry + control are policy-gated. A field-initializer ordering bug (referencing
+`this.config` in a property initializer, which runs before parameter-property assignment) was caught by the end-to-end
+test and fixed by moving the topic computation into the constructor body. Verified end-to-end (real broker): telemetry
+republished and an HA switch command reached the device.
+
+**Emporia Vue** (`src/adapters/emporia/`) — whole-home mains + per-circuit monitor via the community-reverse-engineered
+cloud API (`api.emporiaenergy.com`, Cognito `authtoken` header). Pure parsers (`parseEmporiaDevices`,
+`parseEmporiaUsages`) turn the device tree and `getDeviceListUsages` (`scale=1S`, kWh) into per-channel **average
+watts** (per-second kWh × 3.6e6), which the publisher integrates into energy + cost. One power/energy/cost trio is
+published per channel. **Auth:** to ship something usable now without bundling a Cognito SRP implementation, the token
+is provided via `--emporia-id-token` (a `getToken` provider under the hood); deriving/refreshing it from
+username/password is a backlog item that will share the planned OAuth2/token store. HTTP construction + parsers are
+unit-tested with a mock fetch; verified end-to-end against a stub cloud API (mains 1800 W, dryer 300 W).
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.
