@@ -36,6 +36,9 @@ status / control capabilities that already exist or are planned.
 
 ## Now / next
 
+- ⏭️ **Demand-response device batch** — Sinopé/Neviweb (thermostats + load controller + Calypso), Wallbox, Emporia
+  chargers, Rheem EcoNet, ChargePoint, SolarEdge batteries. Design + API feasibility in `docs/DR_DEVICES.md`; approved
+  for implementation as one PR (Eguana deferred — no public API).
 - ⏭️ **Emporia Cognito login** — obtain/refresh the ID token from username/password (reuse the planned OAuth2/token
   store) so the Emporia adapter doesn't require a manually-supplied `--emporia-id-token`.
 - ⏭️ **TP-Link Kasa/Tapo** smart plugs (local) — next in the plug family.
