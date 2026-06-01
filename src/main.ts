@@ -25,10 +25,12 @@ SOFTWARE.
 
 import { MqttSettings } from 'mqtt2ha';
 import { pino } from 'pino';
+import { EmporiaAdapter } from './adapters/emporia/adapter';
 import { MysaAdapter } from './adapters/mysa/adapter';
 import { ShellyEmAdapter } from './adapters/shelly-em/adapter';
 import { ShellyPlugAdapter } from './adapters/shelly-plug/adapter';
 import { SystemAdapter } from './adapters/system/adapter';
+import { TasmotaAdapter } from './adapters/tasmota/adapter';
 import { TeslaWallConnectorAdapter } from './adapters/tesla-wall-connector/adapter';
 import { BridgeManager } from './bridge/manager';
 import { OutputPolicy } from './bridge/output-policy';
@@ -164,6 +166,28 @@ function buildAdapters(mqttSettings: MqttSettings, policy: OutputPolicy): Source
         mqttSettings,
         rootLogger.child({ module: 'shelly-plug' }),
         policy
+      )
+    );
+  }
+
+  if (options.tasmotaTopic) {
+    adapters.push(
+      new TasmotaAdapter(
+        { deviceTopic: options.tasmotaTopic, costPerKwh: options.costPerKwh, currency: options.currency },
+        mqttSettings,
+        rootLogger.child({ module: 'tasmota' }),
+        policy
+      )
+    );
+  }
+
+  if (options.emporiaIdToken) {
+    const idToken = options.emporiaIdToken;
+    adapters.push(
+      new EmporiaAdapter(
+        { getToken: async () => idToken, costPerKwh: options.costPerKwh, currency: options.currency },
+        mqttSettings,
+        rootLogger.child({ module: 'emporia' })
       )
     );
   }

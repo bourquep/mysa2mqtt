@@ -194,6 +194,19 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Adapters')
   )
   .addOption(
+    new Option('--tasmota-topic <topic>', "Tasmota device topic (its %topic%, e.g. 'tasmota_plug') to bridge over MQTT")
+      .env('M2M_TASMOTA_TOPIC')
+      .helpGroup('Adapters')
+  )
+  .addOption(
+    new Option(
+      '--emporia-id-token <token>',
+      'Emporia (Cognito) ID token; enables the Emporia Vue whole-home/per-circuit energy adapter'
+    )
+      .env('M2M_EMPORIA_ID_TOKEN')
+      .helpGroup('Adapters')
+  )
+  .addOption(
     new Option(
       '--mysa-estimated-current <amps>',
       'estimated current (A) used to compute power for devices that do not report it (e.g. Lite models)'
