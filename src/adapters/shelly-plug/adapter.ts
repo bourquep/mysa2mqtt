@@ -21,23 +21,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { DeviceConfiguration, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
+import { DeviceConfiguration, MqttSettings, OriginConfiguration, Sensor, Switch } from 'mqtt2ha';
 import pino from 'pino';
 import { OutputPolicy } from '../../bridge/output-policy';
 import { SourceAdapter } from '../../bridge/types';
 import { PowerEnergyPublisher } from '../../energy/power-energy-publisher';
 import { PinoLogger } from '../../logger';
 import { version } from '../../version';
-import { ShellyEmClient } from './client';
+import { ShellyPlugClient } from './client';
 
-/** Default interval, in milliseconds, between Shelly polls. */
+/** Default interval, in milliseconds, between Shelly plug polls. */
 const DEFAULT_REFRESH_INTERVAL_MS = 15_000;
 
-/** Configuration required by the {@link ShellyEmAdapter}. */
-export interface ShellyEmConfig {
-  /** Hostname or IP of the Shelly energy meter (with or without scheme). */
+/** Configuration required by the {@link ShellyPlugAdapter}. */
+export interface ShellyPlugConfig {
+  /** Hostname or IP of the Shelly plug (with or without scheme). */
   host: string;
-  /** The EM/EM1 component id to read (Gen2 only; default 0). */
+  /** The switch/relay channel id (default 0). */
   channelId?: number;
   /** Optional electricity rate per kWh; when set, a cost sensor is published. */
   costPerKwh?: number;
@@ -46,24 +46,26 @@ export interface ShellyEmConfig {
 }
 
 /**
- * Bridges a Shelly energy meter (Pro 3EM / EM / Gen1 EM) to MQTT / Home Assistant.
+ * Bridges a Shelly smart plug (a metered relay) to MQTT / Home Assistant.
  *
- * Shelly EM devices are whole-circuit/whole-home electricity monitors, so this adapter sits at the center of the
- * project's energy-usage mission. It polls the device's **local** HTTP API (auto-detecting Gen2 vs Gen1) and publishes
- * total power, current, voltage, cumulative energy (kWh, `total_increasing`), and per-channel power as Home Assistant
- * sensors. Per-phase channel sensors are created lazily as the device reports them.
+ * Feature-rich by default: it publishes the standard power + energy (+ optional cost) entities via the shared
+ * {@link PowerEnergyPublisher}, plus voltage/current/temperature sensors, **and a controllable on/off switch**.
+ *
+ * The on/off switch — and the non-energy telemetry (voltage/current/temperature) — are created **only when the bridge's
+ * {@link OutputPolicy} permits** the corresponding category. In energy-only ("safety switch") mode, the plug is reduced
+ * to power + energy (+ cost) and exposes no control surface.
  */
-export class ShellyEmAdapter implements SourceAdapter {
-  readonly id = 'shelly_em';
-  readonly displayName = 'Shelly energy meter';
+export class ShellyPlugAdapter implements SourceAdapter {
+  readonly id = 'shelly_plug';
+  readonly displayName = 'Shelly plug';
 
-  private readonly client: ShellyEmClient;
+  private readonly client: ShellyPlugClient;
 
   private powerEnergy?: PowerEnergyPublisher;
-  private current?: Sensor;
   private voltage?: Sensor;
-  private returnedEnergy?: Sensor;
-  private readonly channelSensors: Sensor[] = [];
+  private current?: Sensor;
+  private temperature?: Sensor;
+  private outputSwitch?: Switch;
 
   private device!: DeviceConfiguration;
   private origin!: OriginConfiguration;
@@ -73,32 +75,33 @@ export class ShellyEmAdapter implements SourceAdapter {
   private timer?: NodeJS.Timeout;
 
   /**
-   * @param config - Shelly connection configuration.
+   * @param config - Shelly plug connection configuration.
    * @param mqttSettings - Shared MQTT connection settings.
    * @param logger - Logger scoped to this adapter.
+   * @param policy - The bridge output policy (the energy-only "safety switch").
    * @param refreshIntervalMs - How often to poll, in milliseconds.
    * @param fetcher - The fetch implementation to use (injectable for testing).
    */
   constructor(
-    private readonly config: ShellyEmConfig,
+    private readonly config: ShellyPlugConfig,
     private readonly mqttSettings: MqttSettings,
     private readonly logger: pino.Logger,
     private readonly policy: OutputPolicy = OutputPolicy.unrestricted(),
     private readonly refreshIntervalMs: number = DEFAULT_REFRESH_INTERVAL_MS,
     fetcher: typeof fetch = fetch
   ) {
-    this.client = new ShellyEmClient(config.host, fetcher, config.channelId ?? 0);
+    this.client = new ShellyPlugClient(config.host, fetcher, config.channelId ?? 0);
   }
 
-  /** Detects the device, registers the Home Assistant sensors, publishes an initial reading, and starts polling. */
+  /** Detects the plug, registers the permitted entities, publishes an initial reading, and starts polling. */
   async start(): Promise<void> {
     const variant = await this.client.detectVariant();
-    this.logger.info(`Detected Shelly energy meter (${variant}) at ${this.config.host}.`);
+    this.logger.info(`Detected Shelly plug (${variant}) at ${this.config.host}.`);
 
-    this.identifier = `shelly_em_${this.config.host.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    this.identifier = `shelly_plug_${this.config.host.replace(/[^a-zA-Z0-9]/g, '_')}`;
     this.device = {
       identifiers: this.identifier,
-      name: 'Shelly energy meter',
+      name: 'Shelly plug',
       manufacturer: 'Shelly',
       model: variant
     };
@@ -108,57 +111,82 @@ export class ShellyEmAdapter implements SourceAdapter {
       support_url: 'https://github.com/bourquep/mysa2mqtt'
     };
 
-    // Power, energy, and (only if a rate is supplied) cost are published via the shared helper. The Shelly reports a
-    // measured cumulative energy total, so this uses the "measured" energy path rather than integrating power.
+    // Energy is always published (it is the core of the bridge's mission and the only thing allowed in energy-only mode).
     this.powerEnergy = new PowerEnergyPublisher({
       mqtt: this.mqttSettings,
-      logger: new PinoLogger(this.logger.child({ module: 'shelly-em', entity: 'power-energy' })),
+      logger: new PinoLogger(this.logger.child({ module: 'shelly-plug', entity: 'power-energy' })),
       device: this.device,
       origin: this.origin,
       uniqueIdPrefix: this.identifier,
       costPerKwh: this.config.costPerKwh,
       currency: this.config.currency
     });
+    await this.powerEnergy.writeConfig();
 
-    // Returned (exported) energy is energy data — always published.
-    this.returnedEnergy = this.makeSensor('energy_returned', 'Energy returned', {
-      device_class: 'energy',
-      state_class: 'total_increasing',
-      unit_of_measurement: 'kWh',
-      suggested_display_precision: 3,
-      enabled_by_default: false
-    });
-
-    // Current and voltage are electrical context (telemetry) — suppressed in energy-only mode.
+    // Voltage/current/temperature are non-energy *electrical* context; treat them as telemetry so energy-only mode
+    // stays strictly power+energy+cost.
     if (this.policy.allowsTelemetry) {
-      this.current = this.makeSensor('current', 'Current', {
-        device_class: 'current',
-        state_class: 'measurement',
-        unit_of_measurement: 'A',
-        suggested_display_precision: 2
-      });
       this.voltage = this.makeSensor('voltage', 'Voltage', {
         device_class: 'voltage',
         state_class: 'measurement',
         unit_of_measurement: 'V',
         suggested_display_precision: 0
       });
+      this.current = this.makeSensor('current', 'Current', {
+        device_class: 'current',
+        state_class: 'measurement',
+        unit_of_measurement: 'A',
+        suggested_display_precision: 2
+      });
+      this.temperature = this.makeSensor('temperature', 'Device temperature', {
+        device_class: 'temperature',
+        state_class: 'measurement',
+        unit_of_measurement: '°C',
+        suggested_display_precision: 1,
+        entity_category: 'diagnostic'
+      });
+      for (const sensor of this.sensors) {
+        await sensor.writeConfig();
+      }
     }
 
-    await this.powerEnergy.writeConfig();
-    for (const sensor of this.sensors) {
-      await sensor.writeConfig();
+    // The on/off relay is control — only created when the policy allows it.
+    if (this.policy.allowsControl) {
+      this.outputSwitch = new Switch(
+        {
+          mqtt: this.mqttSettings,
+          logger: new PinoLogger(this.logger.child({ module: 'shelly-plug', entity: 'switch' })),
+          component: {
+            component: 'switch',
+            device: this.device,
+            origin: this.origin,
+            unique_id: `${this.identifier}_switch`,
+            name: 'Plug',
+            device_class: 'outlet'
+          }
+        },
+        async (_topic, message) => {
+          try {
+            await this.client.setOutput(message === 'ON');
+          } catch (error) {
+            this.logger.error(error, 'Failed to set Shelly plug output');
+          }
+        }
+      );
+      await this.outputSwitch.writeConfig();
+    } else {
+      this.logger.info('Energy-only mode: Shelly plug on/off control is disabled.');
     }
 
     await this.poll();
 
     this.timer = setInterval(() => {
-      this.poll().catch((error) => this.logger.error(error, 'Failed to poll Shelly energy meter'));
+      this.poll().catch((error) => this.logger.error(error, 'Failed to poll Shelly plug'));
     }, this.refreshIntervalMs);
     // Don't let the poll timer keep the process alive on its own.
     this.timer.unref();
 
-    this.logger.info(`Polling Shelly energy meter every ${Math.round(this.refreshIntervalMs / 1000)}s.`);
+    this.logger.info(`Polling Shelly plug every ${Math.round(this.refreshIntervalMs / 1000)}s.`);
   }
 
   /**
@@ -172,7 +200,7 @@ export class ShellyEmAdapter implements SourceAdapter {
   private makeSensor(suffix: string, name: string, extra: Record<string, unknown>): Sensor {
     const sensor = new Sensor({
       mqtt: this.mqttSettings,
-      logger: new PinoLogger(this.logger.child({ module: 'shelly-em', entity: suffix })),
+      logger: new PinoLogger(this.logger.child({ module: 'shelly-plug', entity: suffix })),
       component: {
         component: 'sensor',
         device: this.device,
@@ -187,42 +215,19 @@ export class ShellyEmAdapter implements SourceAdapter {
     return sensor;
   }
 
-  /**
-   * Ensures a per-channel power sensor exists for the given index, creating and configuring it on first use.
-   *
-   * @param index - The zero-based channel/phase index.
-   * @returns The channel's power sensor.
-   */
-  private async channelSensorFor(index: number): Promise<Sensor> {
-    const existing = this.channelSensors[index];
-    if (existing) {
-      return existing;
-    }
-
-    const label = String.fromCharCode('A'.charCodeAt(0) + index);
-    const sensor = this.makeSensor(`power_${index}`, `Power phase ${label}`, {
-      device_class: 'power',
-      state_class: 'measurement',
-      unit_of_measurement: 'W',
-      suggested_display_precision: 1
-    });
-    this.channelSensors[index] = sensor;
-    await sensor.writeConfig();
-    return sensor;
-  }
-
-  /** Fetches the latest reading and publishes it. */
+  /** Fetches the latest reading and publishes the permitted entities. */
   private async poll(): Promise<void> {
     const reading = await this.client.getReading();
 
-    await this.powerEnergy?.updatePowerAndEnergy(reading.totalPowerWatts, reading.totalEnergyKwh);
-    await this.setNumeric(this.current, reading.totalCurrentAmps, 2);
-    await this.setNumeric(this.voltage, reading.voltage, 0);
-    await this.setNumeric(this.returnedEnergy, reading.totalReturnedEnergyKwh, 3);
+    // The Shelly plug reports a cumulative energy total, so use the "measured" energy path.
+    await this.powerEnergy?.updatePowerAndEnergy(reading.powerWatts, reading.totalEnergyKwh);
 
-    for (let index = 0; index < reading.channelPowerWatts.length; index++) {
-      const sensor = await this.channelSensorFor(index);
-      await sensor.setState('state_topic', reading.channelPowerWatts[index].toFixed(1));
+    await this.setNumeric(this.voltage, reading.voltage, 0);
+    await this.setNumeric(this.current, reading.currentAmps, 2);
+    await this.setNumeric(this.temperature, reading.temperatureC, 1);
+
+    if (this.outputSwitch && reading.output != null) {
+      await (reading.output ? this.outputSwitch.on() : this.outputSwitch.off());
     }
   }
 
@@ -244,7 +249,7 @@ export class ShellyEmAdapter implements SourceAdapter {
     await sensor.setState('state_topic', value != null ? value.toFixed(fractionDigits) : 'None');
   }
 
-  /** Stops the poll timer and marks the sensors unavailable. */
+  /** Stops the poll timer and marks the entities unavailable. */
   async stop(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer);
@@ -253,6 +258,7 @@ export class ShellyEmAdapter implements SourceAdapter {
 
     await Promise.all([
       this.powerEnergy?.setUnavailable() ?? Promise.resolve(),
+      this.outputSwitch?.setAvailability(false) ?? Promise.resolve(),
       ...this.sensors.map((sensor) => sensor.setAvailability(false))
     ]);
   }

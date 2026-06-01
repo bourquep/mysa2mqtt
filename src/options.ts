@@ -159,6 +159,16 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Energy')
   )
   .addOption(
+    new Option(
+      '--energy-only <enabled>',
+      'safety switch: publish ONLY electricity-usage data — no control entities and no other telemetry'
+    )
+      .env('M2M_ENERGY_ONLY')
+      .choices(['true', 'false'])
+      .default('false')
+      .helpGroup('Energy')
+  )
+  .addOption(
     new Option('--system-sensors <enabled>', 'expose host system metrics as Home Assistant sensors')
       .env('M2M_SYSTEM_SENSORS')
       .choices(['true', 'false'])
@@ -176,6 +186,11 @@ export const options = new Command('mysa2mqtt')
   .addOption(
     new Option('--shelly-em-host <host>', 'hostname/IP of a Shelly energy meter (Pro 3EM / EM / Gen1) to bridge')
       .env('M2M_SHELLY_EM_HOST')
+      .helpGroup('Adapters')
+  )
+  .addOption(
+    new Option('--shelly-plug-host <host>', 'hostname/IP of a Shelly smart plug (Plus/Pro/Gen1) to bridge')
+      .env('M2M_SHELLY_PLUG_HOST')
       .helpGroup('Adapters')
   )
   .addOption(

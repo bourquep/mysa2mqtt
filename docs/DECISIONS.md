@@ -217,6 +217,30 @@ sensor **only when `--cost-per-kwh` is set**; with no rate, no cost entity exist
 can't know, while still offering turnkey cost when the user does supply one. Verified end-to-end: with a rate, a Shelly
 meter published energy `10.000 kWh` and cost `$1.5000`; the no-rate path (no cost entity) is unit-tested.
 
+## 14. Shelly smart plug adapter + energy-only "safety switch"
+
+Two related additions.
+
+**Shelly plug adapter** (`src/adapters/shelly-plug/`) — the next low-hanging local source, and the project's **first
+adapter with a control entity**. Auto-detects Gen2 (`Switch.GetStatus`/`Switch.Set`) vs Gen1 (`/status`, `/relay/n`),
+publishes power + energy (+ optional cost) via the shared `PowerEnergyPublisher`, plus voltage/current/temperature
+sensors and a controllable on/off `Switch`. Gen1 meter totals are watt-minutes (÷60000 → kWh), a unit gotcha captured in
+the normalizer and tests.
+
+**Energy-only safety switch** (`--energy-only` / `M2M_ENERGY_ONLY`) — a bridge-wide `OutputPolicy`
+(`src/bridge/output-policy.ts`) classifying every output as `energy` | `telemetry` | `control`. In energy-only mode only
+`energy` is permitted; adapters consult the policy and **never create** control or non-energy-telemetry entities, so the
+guarantee is structural (not just suppressed publishing). This required threading the policy through every adapter and,
+most significantly, refactoring the Mysa `Thermostat` so its climate (control) and temperature/humidity (telemetry)
+entities are optional — which also retired its bespoke power/energy sensors in favor of the shared publisher (knocking
+out the backlog's "retrofit Mysa onto PowerEnergyPublisher" item and giving Mysa cost support for free). Mode is now
+tracked locally (`currentMode`) so power/action logic works even when no climate entity exists.
+
+This deliberately reinforces the positioning note at the top: full data + control remain the default; energy-only is an
+opt-in lockdown for users who want the bridge to behave purely as an energy monitor. Verified end-to-end against a stub
+plug + real MQTT broker: full mode published 7 entities (incl. the on/off switch and cost); energy-only published only
+power/energy/cost (no switch, no telemetry).
+
 ## Open questions / things deliberately NOT changed
 
 These were noticed but intentionally left alone, because changing them safely needs a real device or maintainer input.

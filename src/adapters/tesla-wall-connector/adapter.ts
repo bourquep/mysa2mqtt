@@ -23,6 +23,7 @@ SOFTWARE.
 
 import { BinarySensor, DeviceConfiguration, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import pino from 'pino';
+import { OutputPolicy } from '../../bridge/output-policy';
 import { SourceAdapter } from '../../bridge/types';
 import { PinoLogger } from '../../logger';
 import { version } from '../../version';
@@ -76,6 +77,7 @@ export class TeslaWallConnectorAdapter implements SourceAdapter {
     private readonly config: TeslaWallConnectorConfig,
     private readonly mqttSettings: MqttSettings,
     private readonly logger: pino.Logger,
+    private readonly policy: OutputPolicy = OutputPolicy.unrestricted(),
     private readonly refreshIntervalMs: number = DEFAULT_REFRESH_INTERVAL_MS,
     fetcher: typeof fetch = fetch
   ) {
@@ -134,8 +136,7 @@ export class TeslaWallConnectorAdapter implements SourceAdapter {
       return sensor;
     };
 
-    this.vehicleConnected = makeBinarySensor('vehicle_connected', 'Vehicle connected', { device_class: 'plug' });
-    this.charging = makeBinarySensor('charging', 'Charging', { device_class: 'battery_charging' });
+    // Energy / electrical measurements — always published.
     this.power = makeSensor('power', 'Power', {
       device_class: 'power',
       state_class: 'measurement',
@@ -154,24 +155,30 @@ export class TeslaWallConnectorAdapter implements SourceAdapter {
       unit_of_measurement: 'V',
       suggested_display_precision: 0
     });
-    this.session = makeSensor('session', 'Session duration', {
-      device_class: 'duration',
-      state_class: 'measurement',
-      unit_of_measurement: 's',
-      suggested_display_precision: 0
-    });
-    this.handleTemp = makeSensor('handle_temperature', 'Handle temperature', {
-      device_class: 'temperature',
-      state_class: 'measurement',
-      unit_of_measurement: '°C',
-      suggested_display_precision: 1
-    });
     this.lifetimeEnergy = makeSensor('lifetime_energy', 'Lifetime energy', {
       device_class: 'energy',
       state_class: 'total_increasing',
       unit_of_measurement: 'kWh',
       suggested_display_precision: 1
     });
+
+    // Non-energy telemetry (vehicle/charging state, session, handle temperature) — suppressed in energy-only mode.
+    if (this.policy.allowsTelemetry) {
+      this.vehicleConnected = makeBinarySensor('vehicle_connected', 'Vehicle connected', { device_class: 'plug' });
+      this.charging = makeBinarySensor('charging', 'Charging', { device_class: 'battery_charging' });
+      this.session = makeSensor('session', 'Session duration', {
+        device_class: 'duration',
+        state_class: 'measurement',
+        unit_of_measurement: 's',
+        suggested_display_precision: 0
+      });
+      this.handleTemp = makeSensor('handle_temperature', 'Handle temperature', {
+        device_class: 'temperature',
+        state_class: 'measurement',
+        unit_of_measurement: '°C',
+        suggested_display_precision: 1
+      });
+    }
 
     for (const sensor of this.sensors) {
       await sensor.writeConfig();

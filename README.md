@@ -182,8 +182,20 @@ turned on as needed.
 | `--system-sensors`            | `M2M_SYSTEM_SENSORS`             | `false` | Expose host system metrics (uptime, load, memory) as Home Assistant sensors (`true`/`false`)                    |
 | `--tesla-wall-connector-host` | `M2M_TESLA_WALL_CONNECTOR_HOST`  | -       | Hostname/IP of a Tesla Wall Connector (Gen 3) to bridge (monitor-only — see below)                              |
 | `--shelly-em-host`            | `M2M_SHELLY_EM_HOST`             | -       | Hostname/IP of a Shelly energy meter (Pro 3EM / EM / Gen1) to bridge — see below                                |
+| `--shelly-plug-host`          | `M2M_SHELLY_PLUG_HOST`           | -       | Hostname/IP of a Shelly smart plug (Plus/Pro/Gen1) to bridge (power/energy + on/off control) — see below        |
 | `--mysa-estimated-current`    | `M2M_MYSA_ESTIMATED_CURRENT`     | -       | Estimated current (A) used to compute power/energy for devices that don't report it (e.g. Lite models)          |
 | `--mysa-energy-api`           | `M2M_MYSA_ENERGY_API`            | `false` | **Experimental.** Poll Mysa's cloud energy API; logs the raw response and best-effort publishes (`true`/`false`) |
+
+#### Energy-only mode (safety switch)
+
+| CLI Option       | Environment Variable | Default | Description                                                                                       |
+| ---------------- | -------------------- | ------- | ------------------------------------------------------------------------------------------------- |
+| `--energy-only`  | `M2M_ENERGY_ONLY`    | `false` | Safety switch — publish **only** electricity-usage data: no control entities, no other telemetry. |
+
+When `--energy-only true` is set, every adapter is restricted to publishing electricity-usage entities (power, energy,
+cost). **No control surface** (thermostat climate entity, plug on/off switch, …) and **no non-energy telemetry**
+(temperature, humidity, voltage/current, charging/session status, host metrics) are created at all — the entities are
+never registered, so the guarantee is structural. Use this when you want the bridge to act purely as an energy monitor.
 
 #### Tesla Wall Connector (EV charger)
 
@@ -200,6 +212,13 @@ expose whole-circuit electricity usage in Home Assistant. The adapter auto-detec
 **total power, current, voltage**, cumulative **energy** (kWh, `total_increasing`), returned/exported energy, and
 **per-phase power** sensors. This is the recommended way to bring true whole-home/whole-circuit consumption onto the
 bus.
+
+#### Shelly smart plug
+
+Set `--shelly-plug-host` to the LAN hostname/IP of a Shelly smart plug (Gen2 `Plus Plug S`/`Plus 1PM`/`Pro 1PM`, or a
+Gen1 `Plug S`). The adapter auto-detects the generation and publishes **power**, cumulative **energy** (kWh), plus
+**voltage/current/temperature** sensors **and a controllable on/off switch**. Under `--energy-only`, the switch and the
+non-energy sensors are omitted and only power + energy (+ cost) are published.
 
 ### Power and energy
 
