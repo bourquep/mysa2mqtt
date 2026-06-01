@@ -43,6 +43,12 @@ mysa2mqtt/
 │   │   │   ├── client.test.ts
 │   │   │   ├── readings.ts       # Pure Gen1/Gen2 reading normalization
 │   │   │   └── readings.test.ts
+│   │   ├── shelly-plug/          # Shelly smart plug (metered relay) adapter
+│   │   │   ├── adapter.ts        # ShellyPlugAdapter (power/energy + on/off control)
+│   │   │   ├── client.ts         # Gen2 Switch RPC / Gen1 relay client with variant detection
+│   │   │   ├── client.test.ts
+│   │   │   ├── readings.ts       # Pure Gen1/Gen2 plug reading normalization
+│   │   │   └── readings.test.ts
 │   │   ├── system/               # Host system-metrics reference adapter
 │   │   │   ├── adapter.ts        # SystemAdapter (SourceAdapter implementation)
 │   │   │   ├── metrics.ts        # Pure host metric collection
@@ -56,6 +62,8 @@ mysa2mqtt/
 │   ├── bridge/                   # Source-agnostic bridge core
 │   │   ├── manager.ts            # BridgeManager (starts/stops adapters)
 │   │   ├── manager.test.ts
+│   │   ├── output-policy.ts      # OutputPolicy (energy-only "safety switch")
+│   │   ├── output-policy.test.ts
 │   │   └── types.ts              # SourceAdapter contract
 │   ├── energy/                   # Shared energy/power/cost publishing
 │   │   ├── accumulator.ts        # EnergyAccumulator (power→kWh integration)

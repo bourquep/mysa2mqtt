@@ -27,9 +27,11 @@ import { MqttSettings } from 'mqtt2ha';
 import { pino } from 'pino';
 import { MysaAdapter } from './adapters/mysa/adapter';
 import { ShellyEmAdapter } from './adapters/shelly-em/adapter';
+import { ShellyPlugAdapter } from './adapters/shelly-plug/adapter';
 import { SystemAdapter } from './adapters/system/adapter';
 import { TeslaWallConnectorAdapter } from './adapters/tesla-wall-connector/adapter';
 import { BridgeManager } from './bridge/manager';
+import { OutputPolicy } from './bridge/output-policy';
 import { SourceAdapter } from './bridge/types';
 import { options } from './options';
 
@@ -100,9 +102,10 @@ process.once('SIGTERM', shutdown);
  * Builds the set of enabled source adapters from the current configuration.
  *
  * @param mqttSettings - Shared MQTT connection settings passed to every adapter.
+ * @param policy - The bridge output policy (the energy-only "safety switch").
  * @returns The adapters to run.
  */
-function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
+function buildAdapters(mqttSettings: MqttSettings, policy: OutputPolicy): SourceAdapter[] {
   const adapters: SourceAdapter[] = [
     new MysaAdapter(
       {
@@ -113,15 +116,23 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
         estimatedCurrent: options.mysaEstimatedCurrent,
         energyApiEnabled: options.mysaEnergyApi === 'true',
         diagnostics: options.mysaDiagnostics === 'true',
-        diagnosticsFile: options.mysaDiagnosticsFile
+        diagnosticsFile: options.mysaDiagnosticsFile,
+        costPerKwh: options.costPerKwh,
+        currency: options.currency
       },
       mqttSettings,
-      rootLogger.child({ module: 'mysa' })
+      rootLogger.child({ module: 'mysa' }),
+      policy
     )
   ];
 
+  // Host system metrics are pure (non-energy) telemetry, so they are suppressed entirely in energy-only mode.
   if (options.systemSensors === 'true') {
-    adapters.push(new SystemAdapter(mqttSettings, rootLogger.child({ module: 'system' })));
+    if (policy.allowsTelemetry) {
+      adapters.push(new SystemAdapter(mqttSettings, rootLogger.child({ module: 'system' })));
+    } else {
+      rootLogger.info('Energy-only mode: system metrics adapter is disabled.');
+    }
   }
 
   if (options.teslaWallConnectorHost) {
@@ -129,7 +140,8 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
       new TeslaWallConnectorAdapter(
         { host: options.teslaWallConnectorHost },
         mqttSettings,
-        rootLogger.child({ module: 'tesla-wall-connector' })
+        rootLogger.child({ module: 'tesla-wall-connector' }),
+        policy
       )
     );
   }
@@ -139,7 +151,19 @@ function buildAdapters(mqttSettings: MqttSettings): SourceAdapter[] {
       new ShellyEmAdapter(
         { host: options.shellyEmHost, costPerKwh: options.costPerKwh, currency: options.currency },
         mqttSettings,
-        rootLogger.child({ module: 'shelly-em' })
+        rootLogger.child({ module: 'shelly-em' }),
+        policy
+      )
+    );
+  }
+
+  if (options.shellyPlugHost) {
+    adapters.push(
+      new ShellyPlugAdapter(
+        { host: options.shellyPlugHost, costPerKwh: options.costPerKwh, currency: options.currency },
+        mqttSettings,
+        rootLogger.child({ module: 'shelly-plug' }),
+        policy
       )
     );
   }
@@ -160,7 +184,12 @@ async function main() {
     state_prefix: options.mqttTopicPrefix
   };
 
-  bridge = new BridgeManager(buildAdapters(mqttSettings), rootLogger);
+  const policy = new OutputPolicy(options.energyOnly === 'true');
+  if (policy.isEnergyOnly) {
+    rootLogger.warn('Energy-only mode is ON: publishing electricity-usage data only (no control, no other telemetry).');
+  }
+
+  bridge = new BridgeManager(buildAdapters(mqttSettings, policy), rootLogger);
   await bridge.start();
 
   rootLogger.info('mysa2mqtt is running. Press Ctrl+C to stop.');

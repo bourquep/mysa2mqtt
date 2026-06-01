@@ -24,6 +24,7 @@ SOFTWARE.
 import { DeviceConfiguration, MqttSettings, OriginConfiguration, Sensor } from 'mqtt2ha';
 import { DeviceBase, MysaApiClient } from 'mysa-js-sdk';
 import pino from 'pino';
+import { OutputPolicy } from '../../bridge/output-policy';
 import { SourceAdapter } from '../../bridge/types';
 import { PinoLogger } from '../../logger';
 import { version } from '../../version';
@@ -53,6 +54,10 @@ export interface MysaAdapterConfig {
   diagnostics?: boolean;
   /** Path for the diagnostics report. */
   diagnosticsFile?: string;
+  /** Optional electricity rate per kWh; when set, thermostats publish a cost sensor. */
+  costPerKwh?: number;
+  /** Currency symbol for cost sensors (only used when `costPerKwh` is set). */
+  currency?: string;
 }
 
 /**
@@ -78,11 +83,13 @@ export class MysaAdapter implements SourceAdapter {
    * @param config - Mysa account and session configuration.
    * @param mqttSettings - Shared MQTT connection settings.
    * @param logger - Logger scoped to this adapter.
+   * @param policy - The bridge output policy (the energy-only "safety switch").
    */
   constructor(
     private readonly config: MysaAdapterConfig,
     private readonly mqttSettings: MqttSettings,
-    private readonly logger: pino.Logger
+    private readonly logger: pino.Logger,
+    private readonly policy: OutputPolicy = OutputPolicy.unrestricted()
   ) {}
 
   /** Authenticates with Mysa, discovers thermostats, and starts bridging each of them. */
@@ -130,7 +137,10 @@ export class MysaAdapter implements SourceAdapter {
           firmwares.Firmware[device.Id],
           serialNumbers.get(device.Id),
           this.config.temperatureUnit,
-          this.config.estimatedCurrent
+          this.config.estimatedCurrent,
+          this.policy,
+          this.config.costPerKwh,
+          this.config.currency
         )
       );
     }
