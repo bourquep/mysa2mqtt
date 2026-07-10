@@ -63,8 +63,15 @@ const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedM
   8: 'max'
 };
 
+const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
+const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
+const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
+
 export class Thermostat {
   private isStarted = false;
+  private realtimeGeneration = 0;
+  private realtimeRetryAttempt = 0;
+  private realtimeRetryTimer: NodeJS.Timeout | undefined;
   private readonly mqttDevice: DeviceConfiguration;
   private readonly mqttOrigin: OriginConfiguration;
   private readonly mqttClimate: Climate;
@@ -72,8 +79,16 @@ export class Thermostat {
   private readonly mqttHumidity: Sensor;
   private readonly mqttPower: Sensor;
 
-  private readonly mysaStatusUpdateHandler = this.handleMysaStatusUpdate.bind(this);
-  private readonly mysaStateChangeHandler = this.handleMysaStateChange.bind(this);
+  private readonly mysaStatusUpdateHandler = (status: Status) => {
+    void this.handleMysaStatusUpdate(status).catch((error: unknown) => {
+      this.logger.error('Failed to handle Mysa status update', { error, deviceId: this.mysaDevice.Id });
+    });
+  };
+  private readonly mysaStateChangeHandler = (state: StateChange) => {
+    void this.handleMysaStateChange(state).catch((error: unknown) => {
+      this.logger.error('Failed to handle Mysa state change', { error, deviceId: this.mysaDevice.Id });
+    });
+  };
 
   private readonly deviceType: DeviceType;
 
@@ -157,13 +172,12 @@ export class Thermostat {
               : HA_HEAT_ONLY_MODES.includes(messageAsMode)
                 ? messageAsMode
                 : undefined;
-            this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, mode);
+            await this.setDeviceState(undefined, mode);
             break;
           }
 
           case 'power_command_topic':
-            this.mysaApiClient.setDeviceState(
-              this.mysaDevice.Id,
+            await this.setDeviceState(
               undefined,
               message === 'OFF' ? 'off' : message === 'ON' && !isAC ? 'heat' : undefined
             );
@@ -171,7 +185,7 @@ export class Thermostat {
 
           case 'temperature_command_topic':
             if (message === '') {
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined);
+              await this.setDeviceState(undefined, undefined);
             } else {
               let temperature = parseFloat(message);
 
@@ -183,14 +197,14 @@ export class Thermostat {
                 temperature = clamp(setC, this.mysaDevice.MinSetpoint ?? 0, this.mysaDevice.MaxSetpoint ?? 100);
               }
 
-              this.mysaApiClient.setDeviceState(this.mysaDevice.Id, temperature, undefined);
+              await this.setDeviceState(temperature, undefined);
             }
             break;
 
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
             const mode = FAN_SPEED_MODES.includes(messageAsMode) ? messageAsMode : undefined;
-            this.mysaApiClient.setDeviceState(this.mysaDevice.Id, undefined, undefined, mode);
+            await this.setDeviceState(undefined, undefined, mode);
             break;
           }
         }
@@ -255,6 +269,7 @@ export class Thermostat {
     }
 
     this.isStarted = true;
+    this.realtimeGeneration += 1;
 
     try {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
@@ -287,9 +302,11 @@ export class Thermostat {
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
 
-      await this.mysaApiClient.startRealtimeUpdates(this.mysaDevice.Id);
+      await this.startRealtimeUpdates();
     } catch (error) {
       this.isStarted = false;
+      this.realtimeGeneration += 1;
+      this.clearRealtimeRetry();
       throw error;
     }
   }
@@ -300,8 +317,10 @@ export class Thermostat {
     }
 
     this.isStarted = false;
+    this.realtimeGeneration += 1;
+    this.clearRealtimeRetry();
 
-    await this.mysaApiClient.stopRealtimeUpdates(this.mysaDevice.Id);
+    await this.stopRealtimeUpdates();
 
     this.mysaApiClient.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
     this.mysaApiClient.emitter.off('stateChanged', this.mysaStateChangeHandler);
@@ -309,6 +328,72 @@ export class Thermostat {
     await this.mqttPower.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
+  }
+
+  private async setDeviceState(setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode): Promise<void> {
+    try {
+      await this.mysaApiClient.setDeviceState(this.mysaDevice.Id, setPoint, mode, fanSpeed);
+    } catch (error) {
+      this.logger.error('Failed to update Mysa device state', { error, deviceId: this.mysaDevice.Id });
+    }
+  }
+
+  private async startRealtimeUpdates(): Promise<void> {
+    const realtimeGeneration = this.realtimeGeneration;
+
+    try {
+      await this.mysaApiClient.startRealtimeUpdates(this.mysaDevice.Id);
+
+      if (!this.isStarted || realtimeGeneration !== this.realtimeGeneration) {
+        await this.stopRealtimeUpdates();
+        return;
+      }
+
+      this.realtimeRetryAttempt = 0;
+      this.logger.info('Started realtime updates', { deviceId: this.mysaDevice.Id });
+    } catch (error) {
+      if (this.isStarted && realtimeGeneration === this.realtimeGeneration) {
+        this.scheduleRealtimeRetry(error);
+      }
+    }
+  }
+
+  private async stopRealtimeUpdates(): Promise<void> {
+    try {
+      await this.mysaApiClient.stopRealtimeUpdates(this.mysaDevice.Id);
+    } catch (error) {
+      this.logger.warn('Failed to stop realtime updates', { error, deviceId: this.mysaDevice.Id });
+    }
+  }
+
+  private scheduleRealtimeRetry(error: unknown): void {
+    if (!this.isStarted || this.realtimeRetryTimer != null) {
+      return;
+    }
+
+    const retryExponent = Math.min(this.realtimeRetryAttempt, REALTIME_RETRY_MAX_EXPONENT);
+    const delayMs = Math.min(REALTIME_RETRY_MAX_DELAY_MS, REALTIME_RETRY_INITIAL_DELAY_MS * 2 ** retryExponent);
+    this.realtimeRetryAttempt = Math.min(this.realtimeRetryAttempt + 1, REALTIME_RETRY_MAX_EXPONENT);
+
+    this.logger.error('Failed to start realtime updates; retrying', {
+      error,
+      deviceId: this.mysaDevice.Id,
+      retryDelayMs: delayMs
+    });
+
+    this.realtimeRetryTimer = setTimeout(() => {
+      this.realtimeRetryTimer = undefined;
+      void this.startRealtimeUpdates();
+    }, delayMs);
+  }
+
+  private clearRealtimeRetry(): void {
+    if (this.realtimeRetryTimer == null) {
+      return;
+    }
+
+    clearTimeout(this.realtimeRetryTimer);
+    this.realtimeRetryTimer = undefined;
   }
 
   private async handleMysaStatusUpdate(status: Status) {

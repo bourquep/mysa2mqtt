@@ -104,8 +104,18 @@ async function main() {
       )
   );
 
+  let startedThermostatCount = 0;
   for (const thermostat of thermostats) {
-    await thermostat.start();
+    try {
+      await thermostat.start();
+      startedThermostatCount += 1;
+    } catch (error) {
+      rootLogger.error(error, `Failed to start thermostat ${thermostat.mysaDevice.Id}`);
+    }
+  }
+
+  if (thermostats.length > 0 && startedThermostatCount === 0) {
+    throw new Error('Failed to start any thermostats');
   }
 }
 
