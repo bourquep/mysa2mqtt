@@ -31,6 +31,10 @@ import { options } from './options';
 import { loadSession, saveSession } from './session';
 import { Thermostat } from './thermostat';
 
+const START_RETRY_INITIAL_DELAY_MS = 30_000;
+const START_RETRY_MAX_DELAY_MS = 300_000;
+const START_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(START_RETRY_MAX_DELAY_MS / START_RETRY_INITIAL_DELAY_MS));
+
 const rootLogger = pino({
   name: 'mysa2mqtt',
   level: options.logLevel,
@@ -105,17 +109,70 @@ async function main() {
   );
 
   let startedThermostatCount = 0;
+  const failedThermostats: Thermostat[] = [];
   for (const thermostat of thermostats) {
-    try {
-      await thermostat.start();
+    if (await tryStartThermostat(thermostat)) {
       startedThermostatCount += 1;
-    } catch (error) {
-      rootLogger.error(error, `Failed to start thermostat ${thermostat.mysaDevice.Id}`);
+    } else {
+      failedThermostats.push(thermostat);
     }
   }
 
   if (thermostats.length > 0 && startedThermostatCount === 0) {
     throw new Error('Failed to start any thermostats');
+  }
+
+  for (const thermostat of failedThermostats) {
+    scheduleThermostatStartRetry(thermostat);
+  }
+}
+
+/**
+ * Starts a thermostat and captures failures for startup summary logic.
+ *
+ * @param thermostat - Thermostat to start.
+ * @returns True when the thermostat started successfully.
+ */
+async function tryStartThermostat(thermostat: Thermostat): Promise<boolean> {
+  try {
+    await thermostat.start();
+    return true;
+  } catch (error) {
+    rootLogger.error(error, `Failed to start thermostat ${thermostat.mysaDevice.Id}`);
+    return false;
+  }
+}
+
+/**
+ * Schedules a retry for a thermostat that failed during startup.
+ *
+ * @param thermostat - Thermostat to retry.
+ * @param retryAttempt - Current retry attempt.
+ */
+function scheduleThermostatStartRetry(thermostat: Thermostat, retryAttempt = 0): void {
+  const retryExponent = Math.min(retryAttempt, START_RETRY_MAX_EXPONENT);
+  const delayMs = Math.min(START_RETRY_MAX_DELAY_MS, START_RETRY_INITIAL_DELAY_MS * 2 ** retryExponent);
+
+  rootLogger.info(`Retrying thermostat ${thermostat.mysaDevice.Id} startup in ${delayMs}ms`);
+
+  setTimeout(() => {
+    void retryThermostatStart(thermostat, retryAttempt + 1);
+  }, delayMs);
+}
+
+/**
+ * Retries a failed thermostat startup until it succeeds.
+ *
+ * @param thermostat - Thermostat to retry.
+ * @param retryAttempt - Current retry attempt.
+ */
+async function retryThermostatStart(thermostat: Thermostat, retryAttempt: number): Promise<void> {
+  try {
+    await thermostat.start();
+    rootLogger.info(`Started thermostat ${thermostat.mysaDevice.Id} after retry`);
+  } catch (error) {
+    rootLogger.error(error, `Failed to start thermostat ${thermostat.mysaDevice.Id}`);
+    scheduleThermostatStartRetry(thermostat, retryAttempt);
   }
 }
 
