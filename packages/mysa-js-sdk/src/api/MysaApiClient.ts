@@ -448,15 +448,16 @@ export class MysaApiClient {
       resp: 2,
       body: {
         ver: 1,
-        type: device.Model.startsWith('BB-V1')
-          ? 1
-          : device.Model.startsWith('AC-V1')
-            ? 2
-            : device.Model.startsWith('BB-V2')
-              ? device.Model.endsWith('-L')
-                ? 5
-                : 4
-              : 0,
+        type:
+          device.Model.startsWith('BB-V1') || device.Model.startsWith('v1')
+            ? 1
+            : device.Model.startsWith('AC-V1')
+              ? 2
+              : device.Model.startsWith('BB-V2')
+                ? device.Model.endsWith('-L')
+                  ? 5
+                  : 4
+                : 0,
         cmd: [
           {
             tm: -1,
