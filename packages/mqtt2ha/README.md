@@ -26,7 +26,7 @@ npm install mqtt2ha
 
 ## Requirements
 
-- Node.js >= 22.4.0
+- Node.js >= 24.15.0
 - A running MQTT broker
 - Home Assistant with MQTT integration enabled and discovery enabled
 
