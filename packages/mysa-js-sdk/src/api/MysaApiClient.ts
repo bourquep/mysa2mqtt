@@ -798,6 +798,15 @@ export class MysaApiClient {
         this._mqttConnectionPromise = undefined;
 
         try {
+          // Strip listeners before disconnect. Without this, the 6 event-
+          // handler closures registered above (`connect`,
+          // `connection_success`, `connection_failure`, `interrupt`,
+          // `resume`, `error`, `closed`) remain attached to the discarded
+          // connection object. Each closure captures `this` and `_logger`,
+          // and aws-crt's native binding retains the JS object via its
+          // internal callback refs — the dead connection never gets GC'd.
+          // After enough interrupt-storms the process heap grows until OOM.
+          connection.removeAllListeners();
           await connection.disconnect();
 
           try {
