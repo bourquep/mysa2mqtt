@@ -55,7 +55,7 @@
     "amazon-cognito-identity-js": "6.3.16",
     "aws-iot-device-sdk-v2": "1.23.1",
     "dayjs": "1.11.19",
-    "lodash": "4.17.21",
+    "lodash": "4.17.23",
     "nanoid": "5.1.6"
   },
   "devDependencies": {
