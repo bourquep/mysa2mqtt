@@ -6,7 +6,7 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices, DeviceStates, Firmwares } from '@/types/rest';
+import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import {
@@ -347,6 +347,31 @@ export class MysaApiClient {
     const session = await this._getFreshSession();
 
     const response = await this._fetcher(`${MysaApiBaseUrl}/devices/state`, {
+      headers: {
+        Authorization: `${session.getIdToken().getJwtToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new MysaApiError(response);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Retrieves information about all homes associated with the user.
+   *
+   * @returns A promise that resolves to the homes information.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   */
+  async getHomes(): Promise<Homes> {
+    this._logger.debug(`Fetching homes...`);
+
+    const session = await this._getFreshSession();
+
+    const response = await this._fetcher(`${MysaApiBaseUrl}/homes`, {
       headers: {
         Authorization: `${session.getIdToken().getJwtToken()}`
       }

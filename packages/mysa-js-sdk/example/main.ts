@@ -55,6 +55,13 @@ async function main() {
     await client.login(username, password);
   }
 
+  const homes = await client.getHomes();
+  await Promise.all(
+    homes.Homes.map(async (home) => {
+      rootLogger.info(`Home: '${home.Name}' (ID: ${home.Id})`);
+    })
+  );
+
   const devices = await client.getDevices();
 
   if (process.env.MYSA_OUTPUT_RAW_DATA === 'true') {
