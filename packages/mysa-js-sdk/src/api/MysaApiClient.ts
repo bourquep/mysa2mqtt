@@ -18,7 +18,7 @@ import {
   CognitoUserPool,
   CognitoUserSession
 } from 'amazon-cognito-identity-js';
-import { iot, mqtt } from 'aws-iot-device-sdk-v2';
+import { auth, iot, mqtt } from 'aws-iot-device-sdk-v2';
 import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
@@ -773,6 +773,53 @@ export class MysaApiClient {
       .with_reconnect_max_sec(30);
 
     const config = builder.build();
+
+    // `with_credentials` bakes the credentials fetched above into a static
+    // signer. Cognito credentials expire after ~1 hour; if the connection
+    // drops and the native reconnect loop is still retrying when they lapse,
+    // every subsequent handshake fails with a stale signature and no JS event
+    // is ever emitted (`interrupt` only fires when an *established* connection
+    // drops) — the client wedges silently, forever. Override the handshake
+    // transform so every (re)connect attempt signs with freshly refreshed
+    // credentials instead.
+    config.websocket_handshake_transform = async (request, done) => {
+      try {
+        const freshSession = await this._getFreshSession();
+        const freshCredentialsProvider = fromCognitoIdentityPool({
+          clientConfig: {
+            region: AwsRegion
+          },
+          identityPoolId: CognitoIdentityPoolId,
+          logins: {
+            [CognitoLoginKey]: freshSession.getIdToken().getJwtToken()
+          },
+          logger: this._logger
+        });
+        const freshCredentials = await freshCredentialsProvider();
+        if (freshCredentials.expiration) {
+          this._mqttCredentialsExpiration = dayjs(freshCredentials.expiration);
+        }
+
+        await auth.aws_sign_request(request, {
+          algorithm: auth.AwsSigningAlgorithm.SigV4,
+          signature_type: auth.AwsSignatureType.HttpRequestViaQueryParams,
+          provider: auth.AwsCredentialsProvider.newStatic(
+            freshCredentials.accessKeyId,
+            freshCredentials.secretAccessKey,
+            freshCredentials.sessionToken
+          ),
+          region: AwsRegion,
+          service: 'iotdevicegateway',
+          signed_body_value: auth.AwsSignedBodyValue.EmptySha256,
+          omit_session_token: true
+        });
+        done();
+      } catch (error) {
+        this._logger.error('Failed to sign MQTT websocket handshake with fresh credentials', error);
+        done(3 /* AWS_ERROR_UNKNOWN: fail this attempt; the reconnect loop retries */);
+      }
+    };
+
     const client = new mqtt.MqttClient();
     const connection = client.new_connection(config);
 
