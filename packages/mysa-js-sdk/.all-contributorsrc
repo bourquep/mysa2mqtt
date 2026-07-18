@@ -42,6 +42,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "dxdc",
+      "name": "Daniel Caspi",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7200365?v=4",
+      "profile": "https://element26.net",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
