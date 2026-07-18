@@ -931,6 +931,7 @@ export class MysaApiClient {
         }
       } else if (isMsgOutPayload(parsedPayload)) {
         switch (parsedPayload.msg) {
+          case OutMessageType.DEVICE_AC_STATUS:
           case OutMessageType.DEVICE_V2_STATUS:
             this.emitter.emit('statusChanged', {
               deviceId: parsedPayload.src.ref,

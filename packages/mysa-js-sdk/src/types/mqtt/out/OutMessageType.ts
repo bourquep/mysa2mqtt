@@ -28,6 +28,9 @@ export enum OutMessageType {
   /** Version 2 device status report with enhanced device information */
   DEVICE_V2_STATUS = 40,
 
+  /** AC device status report with temperature, humidity, setpoint, and AC-specific fields */
+  DEVICE_AC_STATUS = 30,
+
   /** Notification that a device's operational state has changed */
   DEVICE_STATE_CHANGE = 44
 }
