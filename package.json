@@ -56,19 +56,19 @@
   "devDependencies": {
     "@commander-js/extra-typings": "14.0.0",
     "@eslint/js": "9.39.2",
-    "@semantic-release/npm": "13.1.2",
-    "@types/node": "24.10.1",
+    "@semantic-release/npm": "13.1.5",
+    "@types/node": "26.1.1",
     "conventional-changelog-conventionalcommits": "9.1.0",
-    "eslint": "9.39.1",
-    "eslint-plugin-jsdoc": "61.2.1",
-    "eslint-plugin-tsdoc": "0.5.0",
-    "prettier": "3.6.2",
-    "prettier-plugin-jsdoc": "1.5.0",
+    "eslint": "10.7.0",
+    "eslint-plugin-jsdoc": "63.1.0",
+    "eslint-plugin-tsdoc": "0.5.2",
+    "prettier": "3.9.5",
+    "prettier-plugin-jsdoc": "1.8.1",
     "prettier-plugin-organize-imports": "4.3.0",
-    "semantic-release": "25.0.2",
+    "semantic-release": "25.0.8",
     "tsup": "8.5.1",
     "tsx": "4.21.0",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "typescript-eslint": "8.49.0"
   }
 }
