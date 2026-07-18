@@ -40,7 +40,7 @@ permanently.
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 24+
 - A Mysa account with configured thermostats
 - An MQTT broker (like Mosquitto)
 - Optional: Home Assistant for auto-discovery
