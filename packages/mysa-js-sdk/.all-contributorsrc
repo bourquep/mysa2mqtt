@@ -1,5 +1,7 @@
 {
-  "files": ["README.md"],
+  "files": [
+    "README.md"
+  ],
   "imageSize": 100,
   "commit": false,
   "commitType": "docs",
@@ -10,21 +12,36 @@
       "name": "jagmandan",
       "avatar_url": "https://avatars.githubusercontent.com/u/227265405?v=4",
       "profile": "https://github.com/jagmandan",
-      "contributions": ["code"]
+      "contributions": [
+        "code"
+      ]
     },
     {
       "login": "remiolivier",
       "name": "remiolivier",
       "avatar_url": "https://avatars.githubusercontent.com/u/1379047?v=4",
       "profile": "https://github.com/remiolivier",
-      "contributions": ["code"]
+      "contributions": [
+        "code"
+      ]
     },
     {
       "login": "vavallee",
       "name": "vavallee",
       "avatar_url": "https://avatars.githubusercontent.com/u/75899046?v=4",
       "profile": "https://getbindery.dev",
-      "contributions": ["code"]
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "olicarbo",
+      "name": "Olivier Carbonneau",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1908784?v=4",
+      "profile": "http://olicarbo.me",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,

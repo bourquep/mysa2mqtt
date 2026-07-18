@@ -1,8 +1,7 @@
 # Mysa Smart Thermostat JavaScript SDK
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-
-[![All Contributors](https://img.shields.io/badge/all_contributors-3-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-4-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 [![NPM Version](https://img.shields.io/npm/v/mysa-js-sdk)](https://www.npmjs.com/package/mysa-js-sdk)
@@ -248,6 +247,7 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jagmandan"><img src="https://avatars.githubusercontent.com/u/227265405?v=4?s=100" width="100px;" alt="jagmandan"/><br /><sub><b>jagmandan</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=jagmandan" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/remiolivier"><img src="https://avatars.githubusercontent.com/u/1379047?v=4?s=100" width="100px;" alt="remiolivier"/><br /><sub><b>remiolivier</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=remiolivier" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://getbindery.dev"><img src="https://avatars.githubusercontent.com/u/75899046?v=4?s=100" width="100px;" alt="vavallee"/><br /><sub><b>vavallee</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=vavallee" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="http://olicarbo.me"><img src="https://avatars.githubusercontent.com/u/1908784?v=4?s=100" width="100px;" alt="Olivier Carbonneau"/><br /><sub><b>Olivier Carbonneau</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=olicarbo" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
