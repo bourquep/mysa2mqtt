@@ -36,7 +36,7 @@
     "mysa2mqtt": "dist/main.js"
   },
   "engines": {
-    "node": ">=22.4.0"
+    "node": ">=24.15.0"
   },
   "browser": false,
   "scripts": {
