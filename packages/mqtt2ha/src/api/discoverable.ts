@@ -169,6 +169,20 @@ export class Discoverable<
     if (onConnect) {
       this.mqttClient.on('connect', onConnect);
     }
+
+    // Re-publish availability on reconnect to recover from stale LWT messages.
+    // When the MQTT broker restarts, the LWT fires and sets the availability
+    // topic to "offline" (retained). The mqtt.js client auto-reconnects, but
+    // writeConfig() is only called once during initial setup — so the "offline"
+    // message persists until the application is fully restarted.
+    if (!this.settings.manual_availability) {
+      this.mqttClient.on('connect', () => {
+        if (this.wroteConfiguration) {
+          this.logger.debug(`Re-publishing availability for ${this.identifier} after reconnect...`);
+          this.setAvailability(true);
+        }
+      });
+    }
   }
 
   /**
