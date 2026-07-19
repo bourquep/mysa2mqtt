@@ -1,9 +1,7 @@
 # mysa2mqtt
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-
-[![All Contributors](https://img.shields.io/badge/all_contributors-6-orange.svg?style=flat-square)](#contributors-)
-
+[![All Contributors](https://img.shields.io/badge/all_contributors-7-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 [![NPM Version](https://img.shields.io/npm/v/mysa2mqtt)](https://www.npmjs.com/package/mysa2mqtt)
@@ -83,6 +81,11 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/remiolivier"><img src="https://avatars.githubusercontent.com/u/1379047?v=4?s=100" width="100px;" alt="remiolivier"/><br /><sub><b>remiolivier</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=remiolivier" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Terwox"><img src="https://avatars.githubusercontent.com/u/17753313?v=4?s=100" width="100px;" alt="James Myers"/><br /><sub><b>James Myers</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=Terwox" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jagmandan"><img src="https://avatars.githubusercontent.com/u/227265405?v=4?s=100" width="100px;" alt="jagmandan"/><br /><sub><b>jagmandan</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=jagmandan" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://getbindery.dev"><img src="https://avatars.githubusercontent.com/u/75899046?v=4?s=100" width="100px;" alt="vavallee"/><br /><sub><b>vavallee</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=vavallee" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="http://olicarbo.me"><img src="https://avatars.githubusercontent.com/u/1908784?v=4?s=100" width="100px;" alt="Olivier Carbonneau"/><br /><sub><b>Olivier Carbonneau</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=olicarbo" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://element26.net"><img src="https://avatars.githubusercontent.com/u/7200365?v=4?s=100" width="100px;" alt="Daniel Caspi"/><br /><sub><b>Daniel Caspi</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=dxdc" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/souvik101990"><img src="https://avatars.githubusercontent.com/u/247682655?v=4?s=100" width="100px;" alt="souvik101990"/><br /><sub><b>souvik101990</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=souvik101990" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
