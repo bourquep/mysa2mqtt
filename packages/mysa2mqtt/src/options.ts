@@ -150,5 +150,13 @@ export const options = new Command('mysa2mqtt')
       .default('C')
       .helpGroup('Configuration')
   )
+  .addOption(
+    new Option(
+      '--heartbeat-file <heartbeatFile>',
+      'file touched on every message received from the Mysa cloud, for external liveness checks'
+    )
+      .env('M2M_HEARTBEAT_FILE')
+      .helpGroup('Configuration')
+  )
   .parse()
   .opts();
