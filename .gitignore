@@ -10,3 +10,6 @@ session.json
 
 packages/mqtt2ha/test-environment/homeassistant
 packages/mqtt2ha/test-environment/mosquitto/data
+
+# macOS
+.DS_Store
