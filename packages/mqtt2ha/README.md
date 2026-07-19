@@ -81,7 +81,7 @@ The complete reference documentation for the `mqtt2ha` library can be found at
 
 ## Contributing
 
-If you want to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines.
+If you want to contribute to this project, please read the [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.
 
 ## License
 

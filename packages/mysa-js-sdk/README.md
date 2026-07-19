@@ -204,7 +204,7 @@ The complete reference documentation for the `mysa-js-sdk` library can be found 
 
 ## Contributing
 
-If you want to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines.
+If you want to contribute to this project, please read the [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.
 
 ## License
 

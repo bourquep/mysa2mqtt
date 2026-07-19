@@ -19,6 +19,10 @@ env:
 
 jobs:
   release:
+    # workflow_dispatch accepts any ref, so guard here: `on.workflow_dispatch`
+    # has no `branches` filter. Without this, a manual run from an arbitrary
+    # branch could publish that branch's code to npm.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the version PR branch, tags and releases

@@ -291,7 +291,7 @@ docker run -d --name mysa2mqtt \
 If you prefer to build your own image, create a `Dockerfile`:
 
 ```dockerfile
-FROM node:22-alpine
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -321,7 +321,7 @@ docker run -d --name mysa2mqtt \
   -e M2M_MQTT_HOST=your-mqtt-broker \
   -e M2M_MYSA_USERNAME=your-email \
   -e M2M_MYSA_PASSWORD=your-password \
-  node:22-alpine \
+  node:24-alpine \
   sh -c "npm install -g mysa2mqtt && mysa2mqtt"
 ```
 
@@ -352,7 +352,7 @@ docker-compose up -d
 
 ## Contributing
 
-If you want to contribute to this project, please read the [CONTRIBUTING.md](CONTRIBUTING.md) file for guidelines.
+If you want to contribute to this project, please read the [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.
 
 ## License
 
