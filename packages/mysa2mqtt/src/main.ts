@@ -23,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+import { writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
 import { MysaApiClient } from 'mysa-js-sdk';
 import { pino } from 'pino';
@@ -62,6 +63,25 @@ async function main() {
   client.emitter.on('sessionChanged', async (newSession) => {
     await saveSession(newSession, options.mysaSessionFile, rootLogger);
   });
+
+  const heartbeatFile = options.heartbeatFile;
+  if (heartbeatFile) {
+    // Data-freshness heartbeat: an orchestrator liveness probe can compare
+    // this file's mtime against the expected message cadence (devices report
+    // at least every ~5 minutes while keep-alives flow) and restart the
+    // process when the Mysa cloud connection wedges without emitting errors.
+    let lastBeat = 0;
+    client.emitter.on('rawRealtimeMessageReceived', () => {
+      const now = Date.now();
+      if (now - lastBeat < 10_000) {
+        return;
+      }
+      lastBeat = now;
+      writeFile(heartbeatFile, `${new Date(now).toISOString()}\n`).catch((error) => {
+        rootLogger.warn(error, `Failed to write heartbeat file '${heartbeatFile}'`);
+      });
+    });
+  }
 
   if (!client.isAuthenticated) {
     rootLogger.info('Logging in...');

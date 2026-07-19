@@ -156,6 +156,7 @@ take precedence over command-line defaults.
 | `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
 | `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
 | `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
+| `--heartbeat-file`        | `M2M_HEARTBEAT_FILE`    | -              | File touched on every message received from the Mysa cloud, for external liveness checks (e.g. a container liveness probe on its mtime) |
 
 ## Usage Examples
 
