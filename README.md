@@ -63,7 +63,12 @@ Run directly without installing:
 npx mysa2mqtt --help
 ```
 
-### Option 3: Development Setup
+### Option 3: Home Assistant App (Addon)
+
+@itsamenathan made an [app/addon](https://github.com/itsamenathan/mysa2mqtt-hass-addon) for
+Home Assistant that wraps this tool.
+
+### Option 4: Development Setup
 
 For development or custom modifications:
 
