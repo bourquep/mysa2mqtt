@@ -49,6 +49,7 @@ const CognitoLoginKey = `cognito-idp.${AwsRegion}.amazonaws.com/${CognitoUserPoo
 const MqttEndpoint = 'a3q27gia9qg3zy-ats.iot.us-east-1.amazonaws.com';
 const MysaApiBaseUrl = 'https://app-prod.mysa.cloud';
 const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
+const PublishAckTimeout = dayjs.duration(30, 'seconds');
 
 /**
  * Main client for interacting with the Mysa API and real-time device communication.
@@ -522,19 +523,32 @@ export class MysaApiClient {
       Timestamp: dayjs().unix(),
       Timeout: RealtimeKeepAliveInterval.asSeconds()
     });
-    await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+
+    // A failed publish request must not abort startup (or, in the keep-alive
+    // below, crash the process via an unhandled rejection): the subscription
+    // above still delivers the device's autonomous periodic status reports
+    // even when the request-driven status stream is unavailable.
+    try {
+      await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+    } catch (error) {
+      this._logger.warn(`Failed to request status publishing for '${deviceId}'; relying on periodic reports`, error);
+    }
 
     const timer = setInterval(async () => {
       this._logger.debug(`Sending request to keep-alive publishing device status for '${deviceId}'...`);
 
-      const connection = await this._getMqttConnection();
-      const payload = serializeMqttPayload<StartPublishingDeviceStatus>({
-        Device: deviceId,
-        MsgType: InMessageType.START_PUBLISHING_DEVICE_STATUS,
-        Timestamp: dayjs().unix(),
-        Timeout: RealtimeKeepAliveInterval.asSeconds()
-      });
-      await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+      try {
+        const connection = await this._getMqttConnection();
+        const payload = serializeMqttPayload<StartPublishingDeviceStatus>({
+          Device: deviceId,
+          MsgType: InMessageType.START_PUBLISHING_DEVICE_STATUS,
+          Timestamp: dayjs().unix(),
+          Timeout: RealtimeKeepAliveInterval.asSeconds()
+        });
+        await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+      } catch (error) {
+        this._logger.warn(`Failed to keep-alive status publishing for '${deviceId}'`, error);
+      }
     }, RealtimeKeepAliveInterval.subtract(10, 'seconds').asMilliseconds());
 
     this._realtimeDeviceIds.set(deviceId, timer);
@@ -696,7 +710,27 @@ export class MysaApiClient {
     while (true) {
       attempt++;
       try {
-        await connection.publish(topic, payload, qos);
+        // Guard against publishes that never settle: a QoS1 publish the
+        // broker silently ignores (e.g. an unauthorized topic) produces no
+        // PUBACK and, in practice, no protocol-timeout rejection either —
+        // the pending await would otherwise hang this call chain forever.
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () =>
+              reject(new Error(`MQTT publish timeout: no acknowledgement within ${PublishAckTimeout.asSeconds()}s`)),
+            PublishAckTimeout.asMilliseconds()
+          );
+          connection.publish(topic, payload, qos).then(
+            () => {
+              clearTimeout(timer);
+              resolve();
+            },
+            (err) => {
+              clearTimeout(timer);
+              reject(err);
+            }
+          );
+        });
         return;
       } catch (err) {
         const isTransient = this._isTransientMqttError(err);
