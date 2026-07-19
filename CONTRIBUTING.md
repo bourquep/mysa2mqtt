@@ -1,80 +1,159 @@
 # Contributing to mysa2mqtt
 
-First off, thank you for considering contributing to `mysa2mqtt`! Contributions from the community are essential in
-making this project better. Whether you want to report a bug, propose new features, improve documentation or submit code
-changes, I welcome your input and assistance. This guide will help you get started with contributing.
+First off, thank you for considering contributing! Contributions from the community are essential in making this project
+better. Whether you want to report a bug, propose new features, improve documentation or submit code changes, I welcome
+your input and assistance. This guide will help you get started.
 
-## Development Environment
+## This repository is a monorepo
 
-This project uses Node.js and npm for development. Make sure you have Node.js 22.4.0 or higher installed.
+Three packages live here, each published to npm independently under its own version line:
 
-### Setting Up Your Development Environment
+| Package                               | What it is                                                        |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| [`mysa2mqtt`](packages/mysa2mqtt)     | The command-line tool and Docker image. Depends on the other two. |
+| [`mysa-js-sdk`](packages/mysa-js-sdk) | JavaScript SDK for accessing Mysa smart thermostats.              |
+| [`mqtt2ha`](packages/mqtt2ha)         | Create MQTT entities that Home Assistant discovers automatically. |
+
+`mysa-js-sdk` and `mqtt2ha` were developed in separate repositories until July 2026. They were merged here so that a fix
+spanning several layers is a single pull request and a single release, instead of a chain of releases across repos. They
+remain independent, reusable libraries — the merge changed where the code lives, not who can use it.
+
+**A practical consequence:** if a bug turns out to live in the SDK rather than in the CLI, you do not need to move
+anything. Fix it in `packages/mysa-js-sdk`, in the same branch and the same pull request.
+
+## Reporting issues
+
+All three packages share [this issue tracker](https://github.com/bourquep/mysa2mqtt/issues/new/choose). The issue form
+asks which package is affected — if you aren't sure which layer is at fault, choose **"Not sure"** and it'll get
+triaged. That's the common case for bug reports and it's completely fine.
+
+## Development environment
+
+You need **Node.js 24.15.0 or higher** (see `engines` in the package manifests). The bundled npm is fine — workspace
+support has been present since npm 7.
 
 1. Fork the repository on GitHub
-2. Clone your fork locally
-3. Navigate to the cloned directory
-4. Install dependencies using npm:
+2. Clone your fork locally and navigate into it
+3. Install dependencies **from the repository root**:
 
 ```bash
-npm install
+npm ci
 ```
 
-### Project Structure
+This installs every package's dependencies at once and links `mysa-js-sdk` and `mqtt2ha` into `node_modules` as symlinks
+into `packages/`. Do not run `npm install` inside an individual package directory — there is a single lockfile at the
+root, and installing from a subdirectory will corrupt it.
+
+### Project structure
 
 ```
 mysa2mqtt/
-├── src/                          # Source code
-│   ├── commander.d.ts            # Commander type definitions
-│   ├── logger.ts                 # Logging utilities
-│   ├── main.ts                   # Main application entry point
-│   ├── options.ts                # Command line options handling
-│   ├── session.ts                # Session management
-│   └── thermostat.ts             # Thermostat control logic
-├── .github/                      # GitHub configuration
-│   ├── workflows/                # GitHub Actions workflows
-│   │   └── ci.yml                # Continuous integration workflow
-│   ├── CODEOWNERS                # Code ownership definitions
-│   ├── FUNDING.yml               # GitHub Sponsors configuration
-│   └── dependabot.yml            # Dependabot configuration
-├── dist/                         # Built JavaScript files (generated)
-├── node_modules/                 # Dependencies (generated)
-├── .env.local                    # Local environment variables (not source-controlled)
-├── session.json                  # Session data file (not source-controlled)
-└── package.json                  # Project configuration and dependencies
+├── .changeset/                    # Pending release notes (see "Releasing" below)
+├── .github/
+│   ├── ISSUE_TEMPLATE/            # Issue forms, with a package selector
+│   └── workflows/
+│       ├── ci.yml                 # Lint, typecheck, build, Docker smoke test
+│       ├── release.yml            # Changesets → npm + Docker Hub
+│       ├── documentation.yml      # TypeDoc → GitHub Pages
+│       └── codeql.yml             # Security scanning
+├── docs-landing/                  # Landing page for the published docs site
+├── packages/
+│   ├── mysa2mqtt/                 # The CLI (src/, Dockerfile, tsup + tsconfig)
+│   ├── mysa-js-sdk/               # The SDK (src/, example/, typedoc.json)
+│   └── mqtt2ha/                   # The HA library (src/, test-environment/)
+├── eslint.config.js               # Shared — one config for all packages
+├── prettier.config.cjs            # Shared
+├── tsconfig.base.json             # Shared compiler options only (see caveat below)
+├── package.json                   # Workspace root; all tooling devDependencies
+└── package-lock.json              # The single lockfile
 ```
 
-### Development Workflow
+Linting, formatting and the shared TypeScript options live at the root. Anything genuinely package-specific — the tsup
+config, the TypeDoc config, `tsconfig.json`, `README.md`, `CHANGELOG.md` — stays with its package.
 
-1. Create a new branch for your feature or bug fix
-2. Make your changes
-3. Run linting checks: `npm run lint` and `npm run style-lint`
-4. Build the project: `npm run build`
-5. Commit your changes using conventional commit format
-6. Push your changes to your fork
-7. Create a pull request
+### Everyday commands
 
-### Building
-
-Build the project using [tsup](https://github.com/egoist/tsup):
+Run these from the repository root:
 
 ```bash
-npm run build
+npm run build       # Builds mqtt2ha, then mysa-js-sdk, then mysa2mqtt
+npm run typecheck   # Builds first, then typechecks every package
+npm run lint        # ESLint
+npm run style-lint  # Prettier check
+npm run style-fix   # Prettier write
+npm run build:docs  # TypeDoc for both libraries
 ```
 
-This will generate JavaScript files in the `dist/` directory.
+To run a script in one package only, use `-w`:
 
-## Submitting Pull Requests
+```bash
+npm run build -w mysa-js-sdk
+npm run dev -w mysa2mqtt
+```
 
-### Conventional Commits
+**Build order matters, and typecheck depends on it.** `mysa2mqtt` imports the two libraries through workspace symlinks
+whose type declarations point at their `dist/` output. If you typecheck before building, you'll get a confusing "cannot
+find module 'mysa-js-sdk'". The root `typecheck` script builds first for exactly this reason.
 
-This repository uses [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/). This means that each commit
-message must follow a specific format. The format is as follows:
+### A caveat about `tsconfig.base.json`
+
+The base config deliberately holds only the options that all three packages already shared. Do not move `target`, `lib`
+or `module` into it. Without an explicit `lib`, TypeScript implicitly includes the DOM library, where `response.json()`
+returns `Promise<any>`; adding `lib: ["ES2022"]` drops DOM, the Node types take over, the return becomes
+`Promise<unknown>`, and the SDK stops compiling. Each package keeps the effective configuration it has always had.
+
+Similarly, the `@/*` path alias must stay in each package's own `tsconfig.json`. There is no `baseUrl`, so `paths`
+resolve relative to the file that declares them — hoisting the alias would silently point it at the repository root.
+
+## Submitting pull requests
+
+### Development workflow
+
+1. Create a branch for your change
+2. Make your changes, in as many packages as the fix actually requires
+3. Add a changeset if the change should ship: `npm run changeset`
+4. Run `npm run style-lint`, `npm run lint`, `npm run build`, `npm run typecheck`
+5. Commit using the conventional commit format
+6. Push and open a pull request
+
+### Releasing, and what a changeset is
+
+Releases are managed by [changesets](https://github.com/changesets/changesets). When you make a change that users should
+see, run:
+
+```bash
+npm run changeset
+```
+
+It asks which packages changed and whether each is a major, minor or patch change, then writes a small Markdown file
+into `.changeset/`. Commit that file with your work. The text you write becomes the release note, so write it for users
+rather than for reviewers.
+
+Some guidance:
+
+- **You usually don't need a changeset for `mysa2mqtt` when only a library changed.** It depends on both libraries, so
+  changesets bumps it automatically and records "Updated dependencies" in its changelog.
+- Changes with no user-visible effect — refactors, CI tweaks, docs — don't need one. Use `npx changeset add --empty` if
+  you want to be explicit.
+- Dependency-bump pull requests don't get one automatically. If the bump affects a **runtime** dependency, add a `patch`
+  changeset by hand so it actually reaches users.
+
+Merging to `main` does **not** publish anything. It opens (or updates) a pull request titled _"chore: version packages"_
+that applies all pending changesets. Publishing to npm and Docker Hub happens when a maintainer merges that pull
+request.
+
+Git tags are named `<package>@<version>`, for example `mysa-js-sdk@2.1.0`. Tags of the form `v1.2.3` are pre-monorepo
+`mysa2mqtt` releases and are kept because GitHub Releases are attached to them — please don't delete them.
+
+### Conventional commits
+
+This repository uses [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/):
 
 ```
 <type>[optional scope]: <description>
 ```
 
-The `type` must be one of the following:
+The `type` must be one of:
 
 | Type       | Description                                                                        |
 | ---------- | ---------------------------------------------------------------------------------- |
@@ -90,71 +169,61 @@ The `type` must be one of the following:
 | `ci`       | Changes to CI configuration files and scripts.                                     |
 | `revert`   | Reverting a previous commit.                                                       |
 
-The `scope` is optional and should be used to specify the part of the codebase that the commit affects.
+Use the package name as the scope when a commit is specific to one package, e.g. `fix(mysa-js-sdk): ...`.
 
-The `description` should be a short, concise summary of the changes made in the commit. The description will appear
-as-is in the release notes, so make sure it is clear, informative and not too technical.
+Note that commit messages no longer determine version numbers — changesets do. Conventional commits are kept because
+they make the history readable, but the release notes come from your changeset, not from your commit message.
 
-For example:
+### Semantic versioning
 
-```
-feat: Added support for dark mode
-```
+Each package is versioned independently according to [semver](https://semver.org/):
 
-### Semantic Versioning
+- Major for breaking changes
+- Minor for new features
+- Patch for bug fixes
 
-This repository uses [semantic versioning](https://semver.org/). This means that each release will be versioned
-according to the following rules:
+Because the packages version independently, `mqtt2ha` being at 4.x while `mysa-js-sdk` is at 2.x is expected and correct
+— the numbers are not meant to line up.
 
-- Increment the major version for breaking changes
-- Increment the minor version for new features
-- Increment the patch version for bug fixes
-
-Releases are automatically generated by [semantic-release](https://github.com/semantic-release/semantic-release) based
-on the commit messages. The version number is determined by the type of commits since the last release.
-
-### Coding Standards
-
-This project adheres to a set of coding standards to ensure consistency and maintainability:
+### Coding standards
 
 1. **TypeScript**: Write all code in TypeScript with proper type annotations.
-2. **Documentation**: Use [TSDoc](https://tsdoc.org/) comments for all public APIs.
+2. **Documentation**: Use [TSDoc](https://tsdoc.org/) comments for all public APIs. Both libraries publish generated API
+   documentation, so exported symbols without comments leave visible gaps.
 3. **Clean Code**: Write clear, self-explanatory code with meaningful variable names.
 4. **Error Handling**: Properly handle errors and edge cases.
 
-### Code Style
+Keep the layering intact: `mysa2mqtt` may depend on both libraries, but the libraries must not depend on each other or
+on the CLI. `mqtt2ha` in particular knows nothing about Mysa and should stay that way — it's a general-purpose Home
+Assistant library.
 
-This repository uses [ESLint](https://eslint.org/) and [Prettier](https://prettier.io/) to enforce code style and
-formatting. All code must pass both linting checks:
+### Code style
+
+[ESLint](https://eslint.org/) and [Prettier](https://prettier.io/) are enforced in CI, with a single shared
+configuration for the whole workspace:
 
 ```bash
-# Run ESLint
 npm run lint
-
-# Run Prettier
 npm run style-lint
 ```
 
-The project is configured with specific rules for:
+Formatting is not a matter of taste here — run `npm run style-fix` and move on.
 
-- Maximum line length
-- Indentation (2 spaces)
-- Quote style (single quotes)
-- Semi-colons (required)
-- Trailing commas
-- And more
+### Pull request checklist
 
-These rules are automatically enforced and cannot be overridden. Please make sure that your code follows these
-conventions.
+- `npm run style-lint` passes
+- `npm run lint` passes
+- `npm run build` succeeds
+- `npm run typecheck` passes
+- A changeset is included, if the change should ship to users
+- Documentation is updated to reflect your changes
+- Commit messages follow the conventional commits format
+- You've verified the change works as expected
 
-### Pull Request Checklist
+If your change touches `packages/mysa2mqtt`, CI will also build the Docker image and smoke-test it. If it touches the
+`Dockerfile`, it's worth building locally first — note that the build context is the **repository root**, not the
+package directory:
 
-Before submitting a pull request, please make sure that:
-
-- Your code follows the coding standards and conventions used in the project
-- Your code passes linting checks: `npm run lint`
-- Your code passes style checks: `npm run style-lint`
-- The documentation has been updated to reflect any changes
-- Your commit messages follow the conventional commits format
-- The build completes successfully: `npm run build`
-- You've verified that your changes work as expected
+```bash
+docker build -f packages/mysa2mqtt/Dockerfile -t mysa2mqtt:dev .
+```

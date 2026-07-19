@@ -1,0 +1,61 @@
+name: Publish documentation to GitHub Pages
+
+permissions:
+  contents: read
+
+# Pages deployments must not cancel each other mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: 24.x
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run build
+
+      # One Pages site, two libraries: each keeps its own typedoc config and
+      # theme colour, deployed to its own subpath.
+      - run: npx typedoc --options packages/mysa-js-sdk/typedoc.json --out site/mysa-js-sdk
+      - run: npx typedoc --options packages/mqtt2ha/typedoc.json --out site/mqtt2ha
+      - run: cp docs-landing/index.html site/index.html
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./site
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Setup Pages
+        uses: actions/configure-pages@v6
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

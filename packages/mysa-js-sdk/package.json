@@ -1,0 +1,67 @@
+{
+  "name": "mysa-js-sdk",
+  "version": "2.1.0",
+  "license": "MIT",
+  "private": false,
+  "description": "A JavaScript SDK for accessing Mysa smart thermostats.",
+  "keywords": [
+    "mysa",
+    "thermostat",
+    "sdk",
+    "api"
+  ],
+  "publishConfig": {
+    "provenance": true,
+    "access": "public"
+  },
+  "author": {
+    "name": "Pascal Bourque",
+    "email": "pascal@cosmos.moi"
+  },
+  "bugs": {
+    "url": "https://github.com/bourquep/mysa2mqtt/issues"
+  },
+  "homepage": "https://github.com/bourquep/mysa2mqtt/tree/main/packages/mysa-js-sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bourquep/mysa2mqtt.git",
+    "directory": "packages/mysa-js-sdk"
+  },
+  "files": [
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE.txt",
+    "dist"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "browser": false,
+  "scripts": {
+    "example": "tsx --watch ./example/main.ts",
+    "example:raw": "MYSA_OUTPUT_RAW_DATA=true tsx --watch ./example/main.ts",
+    "lint": "eslint --max-warnings 0 src/**/*.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsup",
+    "build:docs": "typedoc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-iot": "3.1090.0",
+    "@aws-sdk/credential-providers": "3.1090.0",
+    "amazon-cognito-identity-js": "6.3.20",
+    "aws-iot-device-sdk-v2": "1.27.0",
+    "dayjs": "1.11.21",
+    "lodash": "4.18.1",
+    "nanoid": "5.1.16"
+  },
+  "devDependencies": {
+    "@types/lodash": "4.17.24",
+    "dotenv": "17.4.2",
+    "pino": "10.3.1",
+    "pino-pretty": "13.1.3"
+  }
+}

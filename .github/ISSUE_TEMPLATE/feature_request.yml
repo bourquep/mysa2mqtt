@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest an idea or improvement
+labels: ['enhancement']
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package would this affect?
+      options:
+        - mysa2mqtt (CLI / Docker)
+        - mysa-js-sdk (library)
+        - mqtt2ha (library)
+        - Not sure / other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you're in that the current behaviour doesn't handle well.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered

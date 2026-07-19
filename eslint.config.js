@@ -6,6 +6,7 @@ import tseslint from 'typescript-eslint';
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
+  { ignores: ['**/dist/**', '**/docs/**', '**/node_modules/**', 'site/**'] },
   { files: ['**/*.{js,mjs,cjs,ts}'] },
   { languageOptions: { globals: globals.node } },
   pluginJs.configs.recommended,
@@ -16,7 +17,8 @@ export default [
     rules: {
       'jsdoc/tag-lines': 'off',
       'jsdoc/check-tag-names': 'off',
-      'jsdoc/valid-types': 'off'
+      'jsdoc/valid-types': 'off',
+      'jsdoc/require-throws-type': 'off'
     }
   },
   { plugins: { tsdoc }, rules: { 'tsdoc/syntax': 'warn' } }

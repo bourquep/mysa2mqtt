@@ -24,6 +24,42 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "jagmandan",
+      "name": "jagmandan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/227265405?v=4",
+      "profile": "https://github.com/jagmandan",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "vavallee",
+      "name": "vavallee",
+      "avatar_url": "https://avatars.githubusercontent.com/u/75899046?v=4",
+      "profile": "https://getbindery.dev",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "olicarbo",
+      "name": "Olivier Carbonneau",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1908784?v=4",
+      "profile": "http://olicarbo.me",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "dxdc",
+      "name": "Daniel Caspi",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7200365?v=4",
+      "profile": "https://element26.net",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
