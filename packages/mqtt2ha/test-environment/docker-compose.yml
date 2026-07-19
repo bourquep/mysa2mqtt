@@ -1,0 +1,19 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - '1883:1883'
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+    restart: unless-stopped
+
+  homeassistant:
+    image: homeassistant/home-assistant:latest
+    ports:
+      - '8123:8123'
+    volumes:
+      - ./homeassistant/config:/config
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
