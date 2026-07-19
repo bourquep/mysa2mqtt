@@ -1,6 +1,6 @@
 {
   "name": "mqtt2ha",
-  "version": "4.1.3",
+  "version": "4.1.4",
   "license": "MIT",
   "private": false,
   "description": "Javascript library to create MQTT entities that are automatically discovered by Home Assistant.",
