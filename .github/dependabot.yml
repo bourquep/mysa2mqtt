@@ -5,8 +5,10 @@
 
 version: 2
 updates:
-  - package-ecosystem: 'npm' # See documentation for possible values
-    directory: '/' # Location of package manifests
+  # npm workspaces: only the root is watched. The root lockfile governs every
+  # package, and per-package entries produce PRs that cannot update it correctly.
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
       interval: 'weekly'
     labels:
@@ -20,6 +22,22 @@ updates:
           - '@types/*'
           - 'eslint*'
           - 'prettier*'
-          - 'typescript'
-          - 'semantic-release'
-          - '@semantic-release/*'
+          - 'typescript*'
+          - 'tsup'
+          - 'tsx'
+          - 'typedoc*'
+          - '@changesets/*'
+
+  - package-ecosystem: 'docker'
+    directory: '/packages/mysa2mqtt'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    labels:
+      - 'dependencies'

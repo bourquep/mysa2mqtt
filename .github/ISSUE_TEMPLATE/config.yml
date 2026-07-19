@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/bourquep/mysa2mqtt/discussions
+    about: For usage questions and general discussion, please start a discussion instead.

@@ -1,12 +1,8 @@
 # Mysa Smart Thermostat JavaScript SDK
 
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-5-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
-
 [![NPM Version](https://img.shields.io/npm/v/mysa-js-sdk)](https://www.npmjs.com/package/mysa-js-sdk)
-[![CodeQL](https://github.com/bourquep/mysa-js-sdk/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa-js-sdk/actions/workflows/github-code-scanning/codeql)
-[![CI: lint, build and release](https://github.com/bourquep/mysa-js-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/bourquep/mysa-js-sdk/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql)
+[![CI: lint, build and release](https://github.com/bourquep/mysa2mqtt/actions/workflows/ci.yml/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/ci.yml)
 
 A JavaScript SDK for accessing Mysa smart thermostats.
 
@@ -204,7 +200,7 @@ client.emitter.on('sessionChanged', (newSession) => {
 ### Reference documentation
 
 The complete reference documentation for the `mysa-js-sdk` library can be found at
-[https://bourquep.github.io/mysa-js-sdk/](https://bourquep.github.io/mysa-js-sdk/).
+[https://bourquep.github.io/mysa2mqtt/mysa-js-sdk/](https://bourquep.github.io/mysa2mqtt/mysa-js-sdk/).
 
 ## Contributing
 
@@ -223,10 +219,10 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Support
 
-For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mysa-js-sdk/issues)
+For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mysa2mqtt/issues)
 page.
 
-For general questions and discussions, join our [Discussion Forum](https://github.com/bourquep/mysa-js-sdk/discussions).
+For general questions and discussions, join our [Discussion Forum](https://github.com/bourquep/mysa2mqtt/discussions).
 
 ## Acknowledgments
 
@@ -236,27 +232,6 @@ protocol which is being used by this library.
 
 ## Contributors ✨
 
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/jagmandan"><img src="https://avatars.githubusercontent.com/u/227265405?v=4?s=100" width="100px;" alt="jagmandan"/><br /><sub><b>jagmandan</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=jagmandan" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/remiolivier"><img src="https://avatars.githubusercontent.com/u/1379047?v=4?s=100" width="100px;" alt="remiolivier"/><br /><sub><b>remiolivier</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=remiolivier" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://getbindery.dev"><img src="https://avatars.githubusercontent.com/u/75899046?v=4?s=100" width="100px;" alt="vavallee"/><br /><sub><b>vavallee</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=vavallee" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="http://olicarbo.me"><img src="https://avatars.githubusercontent.com/u/1908784?v=4?s=100" width="100px;" alt="Olivier Carbonneau"/><br /><sub><b>Olivier Carbonneau</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=olicarbo" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://element26.net"><img src="https://avatars.githubusercontent.com/u/7200365?v=4?s=100" width="100px;" alt="Daniel Caspi"/><br /><sub><b>Daniel Caspi</b></sub></a><br /><a href="https://github.com/bourquep/mysa-js-sdk/commits?author=dxdc" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
-Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
+specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
+repository README. Contributions of any kind welcome!

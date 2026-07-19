@@ -30,6 +30,7 @@
   },
   "files": [
     "README.md",
+    "CHANGELOG.md",
     "LICENSE.txt",
     "dist"
   ],

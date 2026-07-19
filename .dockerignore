@@ -1,0 +1,14 @@
+.git
+.github
+.changeset
+node_modules
+**/node_modules
+**/dist
+**/docs
+site
+docs-landing
+.env
+.env.local
+session.json
+**/*.md
+!packages/mysa2mqtt/README.md

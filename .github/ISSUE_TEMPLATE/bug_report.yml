@@ -1,0 +1,73 @@
+name: Bug report
+description: Something is not working as expected
+labels: ['bug']
+body:
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package is affected? Pick "Not sure" if you don't know — that's fine.
+      options:
+        - mysa2mqtt (CLI / Docker)
+        - mysa-js-sdk (library)
+        - mqtt2ha (library)
+        - Not sure / other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The package version, or the Docker image tag.
+      placeholder: 'e.g. 1.2.3'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How are you running it?
+      options:
+        - Docker
+        - npm / npx
+        - Home Assistant add-on
+        - From source
+        - N/A — I am using one of the libraries directly
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of `node -v`. Leave as N/A if you are running the Docker image.
+      placeholder: 'e.g. v24.15.0'
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Run with `--log-level debug` if you can.
+        **Please redact any credentials, tokens, device IDs, or email addresses.**
+      render: shell

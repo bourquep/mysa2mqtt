@@ -1,10 +1,6 @@
 # MQTT2HA
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
-
 [![NPM Version](https://img.shields.io/npm/v/mqtt2ha)](https://www.npmjs.com/package/mqtt2ha)
-[![CodeQL](https://github.com/bourquep/mqtt2ha/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mqtt2ha/actions/workflows/github-code-scanning/codeql)
+[![CodeQL](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A JavaScript/TypeScript library to create MQTT entities that are automatically discovered by Home Assistant.
@@ -81,7 +77,7 @@ await motionSensor.setState(true);
 ### Reference documentation
 
 The complete reference documentation for the `mqtt2ha` library can be found at
-[https://bourquep.github.io/mqtt2ha/](https://bourquep.github.io/mqtt2ha/).
+[https://bourquep.github.io/mysa2mqtt/mqtt2ha/](https://bourquep.github.io/mysa2mqtt/mqtt2ha/).
 
 ## Contributing
 
@@ -100,9 +96,9 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Support
 
-For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mqtt2ha/issues) page.
+For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mysa2mqtt/issues) page.
 
-For general questions and discussions, join our [Discussion Forum](https://github.com/bourquep/mqtt2ha/discussions).
+For general questions and discussions, join our [Discussion Forum](https://github.com/bourquep/mysa2mqtt/discussions).
 
 ## Acknowledgments
 
@@ -113,22 +109,6 @@ For general questions and discussions, join our [Discussion Forum](https://githu
 
 ## Contributors ✨
 
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://getbindery.dev"><img src="https://avatars.githubusercontent.com/u/75899046?v=4?s=100" width="100px;" alt="vavallee"/><br /><sub><b>vavallee</b></sub></a><br /><a href="https://github.com/bourquep/mqtt2ha/commits?author=vavallee" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
+specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
+repository README. Contributions of any kind welcome!

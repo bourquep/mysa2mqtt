@@ -1,0 +1,97 @@
+name: Release
+
+# Pushing to main does NOT publish. It opens or updates the "Version Packages"
+# pull request. Publishing happens only when that PR is merged.
+on:
+  push:
+    branches: ['main']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 24.x
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the version PR branch, tags and releases
+      pull-requests: write # open/update the Version Packages PR
+      id-token: write # npm provenance
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      mysa2mqtt_version: ${{ steps.m2m.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: npm ci
+
+      - name: Create Version PR or publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: npm run version-packages
+          publish: npm run release
+          commit: 'chore: version packages'
+          title: 'chore: version packages'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Select by name, never by index: a release that publishes only a library
+      # would otherwise tag the Docker image with that library's version.
+      - name: Extract mysa2mqtt version if it was published
+        id: m2m
+        if: steps.changesets.outputs.published == 'true'
+        env:
+          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          version=$(echo "$PUBLISHED" | jq -r '.[] | select(.name=="mysa2mqtt") | .version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  docker:
+    needs: release
+    if: needs.release.outputs.published == 'true' && needs.release.outputs.mysa2mqtt_version != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./packages/mysa2mqtt/Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            bourquep/mysa2mqtt:${{ needs.release.outputs.mysa2mqtt_version }}
+            bourquep/mysa2mqtt:latest

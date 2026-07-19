@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mysa2mqtt — API documentation</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --fg: #1b1b1f;
+        --muted: #5f5f6b;
+        --card: #f6f6f8;
+        --border: #e2e2e8;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #131316;
+          --fg: #ececf1;
+          --muted: #a0a0ad;
+          --card: #1c1c21;
+          --border: #2c2c34;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 3rem 1.5rem;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.6 -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+      }
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 2rem;
+        margin: 0 0 0.5rem;
+      }
+      p.lede {
+        color: var(--muted);
+        margin: 0 0 2.5rem;
+      }
+      .cards {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+      }
+      a.card {
+        display: block;
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-left-width: 4px;
+        border-radius: 10px;
+        background: var(--card);
+        text-decoration: none;
+        color: inherit;
+        transition: transform 0.12s ease;
+      }
+      a.card:hover {
+        transform: translateY(-2px);
+      }
+      a.card h2 {
+        margin: 0 0 0.35rem;
+        font-size: 1.1rem;
+      }
+      a.card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.925rem;
+      }
+      .sdk {
+        border-left-color: #6b4f8d;
+      }
+      .mqtt2ha {
+        border-left-color: #4ba7ee;
+      }
+      footer {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      footer a {
+        color: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>mysa2mqtt</h1>
+      <p class="lede">
+        API documentation for the libraries published from the
+        <a href="https://github.com/bourquep/mysa2mqtt">mysa2mqtt</a> monorepo.
+      </p>
+
+      <div class="cards">
+        <a class="card sdk" href="./mysa-js-sdk/">
+          <h2>mysa-js-sdk</h2>
+          <p>JavaScript SDK for accessing Mysa smart thermostats.</p>
+        </a>
+        <a class="card mqtt2ha" href="./mqtt2ha/">
+          <h2>mqtt2ha</h2>
+          <p>Create MQTT entities that Home Assistant discovers automatically.</p>
+        </a>
+      </div>
+
+      <footer>
+        <p>
+          <code>mysa2mqtt</code> itself is a command-line tool — see the
+          <a href="https://github.com/bourquep/mysa2mqtt#readme">README</a> for usage.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

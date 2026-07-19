@@ -1,9 +1,5 @@
 # mysa2mqtt
 
-<!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-[![All Contributors](https://img.shields.io/badge/all_contributors-2-orange.svg?style=flat-square)](#contributors-)
-<!-- ALL-CONTRIBUTORS-BADGE:END -->
-
 [![NPM Version](https://img.shields.io/npm/v/mysa2mqtt)](https://www.npmjs.com/package/mysa2mqtt)
 [![Docker Hub](https://img.shields.io/docker/pulls/bourquep/mysa2mqtt)](https://hub.docker.com/r/bourquep/mysa2mqtt)
 [![CodeQL](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql)
@@ -376,35 +372,17 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Acknowledgments
 
-- [mysa-js-sdk](https://github.com/bourquep/mysa-js-sdk) - Mysa API client library
+- [mysa-js-sdk](https://github.com/bourquep/mysa2mqtt/tree/main/packages/mysa-js-sdk) - Mysa API client library
   - This library would not be possible without the amazing work by [@dlenski](https://github.com/dlenski) in his
     [mysotherm](https://github.com/dlenski/mysotherm) repository. He's the one who reversed-engineered the Mysa MQTT
     protocol which is being used by this library.
 
-- [mqtt2ha](https://github.com/bourquep/mqtt2ha) - MQTT to Home Assistant bridge library
+- [mqtt2ha](https://github.com/bourquep/mysa2mqtt/tree/main/packages/mqtt2ha) - MQTT to Home Assistant bridge library
 - [Commander.js](https://github.com/tj/commander.js) - Command-line argument parsing
 - [Pino](https://github.com/pinojs/pino) - Fast JSON logger
 
 ## Contributors ✨
 
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
-
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- prettier-ignore-start -->
-<!-- markdownlint-disable -->
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/remiolivier"><img src="https://avatars.githubusercontent.com/u/1379047?v=4?s=100" width="100px;" alt="remiolivier"/><br /><sub><b>remiolivier</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=remiolivier" title="Code">💻</a></td>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/Terwox"><img src="https://avatars.githubusercontent.com/u/17753313?v=4?s=100" width="100px;" alt="James Myers"/><br /><sub><b>James Myers</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=Terwox" title="Code">💻</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- markdownlint-restore -->
-<!-- prettier-ignore-end -->
-
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification.
-Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
+specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
+repository README. Contributions of any kind welcome!
