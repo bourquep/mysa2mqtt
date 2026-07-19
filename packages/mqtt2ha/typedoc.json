@@ -1,5 +1,6 @@
 {
   "entryPoints": ["./src"],
   "plugin": ["typedoc-material-theme"],
-  "themeColor": "#4ba7ee"
+  "themeColor": "#4ba7ee",
+  "tsconfig": "./tsconfig.json"
 }
