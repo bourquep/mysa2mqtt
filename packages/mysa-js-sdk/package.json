@@ -56,7 +56,7 @@
     "aws-iot-device-sdk-v2": "1.27.0",
     "dayjs": "1.11.21",
     "lodash": "4.18.1",
-    "nanoid": "5.1.16"
+    "nanoid": "6.0.0"
   },
   "devDependencies": {
     "@types/lodash": "4.17.24",
