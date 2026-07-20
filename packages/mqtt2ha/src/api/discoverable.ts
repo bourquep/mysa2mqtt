@@ -283,7 +283,12 @@ export class Discoverable<
       retain: true
     });
 
-    this.stateChangedHandler(topicName, state);
+    // The synchronous API cannot await the handler, but its rejection must
+    // not go unobserved (an unhandled rejection terminates the process under
+    // Node's default policy).
+    Promise.resolve(this.stateChangedHandler(topicName, state)).catch((error: unknown) => {
+      this.logger.error(`State-changed handler failed for ${this.identifier} on topic ${topicName}`, error);
+    });
   }
 
   /**
@@ -309,6 +314,7 @@ export class Discoverable<
       { retain: true }
     );
 
-    this.stateChangedHandler(topicName, state);
+    // Awaited so callers of setState observe handler completion and failures.
+    await this.stateChangedHandler(topicName, state);
   }
 }
