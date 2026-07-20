@@ -23,7 +23,7 @@ import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import { customAlphabet } from 'nanoid';
-import { MqttPublishError, MysaApiError, UnauthenticatedError } from './Errors';
+import { MqttPublishError, MysaApiError, UnauthenticatedError, UnknownDeviceError } from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
@@ -413,6 +413,7 @@ export class MysaApiClient {
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
    * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
@@ -423,6 +424,9 @@ export class MysaApiClient {
     }
 
     const device = this._cachedDevices.DevicesObj[deviceId];
+    if (!device) {
+      throw new UnknownDeviceError(deviceId);
+    }
 
     this._logger.debug(`Initializing MQTT connection...`);
     const mqttConnection = await this._getMqttConnection();
