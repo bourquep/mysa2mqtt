@@ -26,6 +26,25 @@ import { MysaSession } from 'mysa-js-sdk';
 import pino from 'pino';
 
 /**
+ * Type guard validating that a parsed value has the shape of a MysaSession.
+ *
+ * @param value - The parsed JSON value to validate.
+ * @returns True when the value is a non-null object with the four required string token fields.
+ */
+function isMysaSession(value: unknown): value is MysaSession {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const session = value as Record<string, unknown>;
+  return (
+    typeof session.username === 'string' &&
+    typeof session.idToken === 'string' &&
+    typeof session.accessToken === 'string' &&
+    typeof session.refreshToken === 'string'
+  );
+}
+
+/**
  * Loads a Mysa session from a file.
  *
  * @param filename - The path to the file containing the session data.
@@ -36,7 +55,14 @@ export async function loadSession(filename: string, logger: pino.Logger): Promis
   try {
     logger.info('Loading Mysa session...');
     const sessionJson = await readFile(filename, 'utf8');
-    return JSON.parse(sessionJson);
+    const parsed: unknown = JSON.parse(sessionJson);
+    if (isMysaSession(parsed)) {
+      return parsed;
+    }
+    // Well-formed JSON of the wrong shape (a truncated write, {}, null, an
+    // array) used to be returned as-is and fail later in confusing ways;
+    // treat it like any other invalid session file instead.
+    logger.info('No valid Mysa session file found.');
   } catch {
     logger.info('No valid Mysa session file found.');
   }
