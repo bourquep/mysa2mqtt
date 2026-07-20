@@ -126,12 +126,6 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Mysa')
   )
   .addOption(
-    new Option('-s, --mysa-session-file <mysaSessionFile>', 'Mysa session file')
-      .env('M2M_MYSA_SESSION_FILE')
-      .default('session.json')
-      .helpGroup('Configuration')
-  )
-  .addOption(
     new Option('-N, --mqtt-client-name <mqttClientName>', 'name of the MQTT client')
       .env('M2M_MQTT_CLIENT_NAME')
       .default('mysa2mqtt')

@@ -13,7 +13,7 @@ home automation platforms.
 - **MQTT Integration**: Exposes Mysa thermostats as MQTT devices compatible with Home Assistant's auto-discovery
 - **Real-time Updates**: Live temperature, humidity, and power consumption monitoring
 - **Full Control**: Set temperature, change modes (heat/off), and monitor thermostat status
-- **Session Management**: Persistent authentication sessions to minimize API calls
+- **Self-healing Authentication**: Re-authenticates automatically when the Mysa session expires, with no state to persist
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
 
 ## Supported hardware
@@ -154,7 +154,6 @@ take precedence over command-line defaults.
 | ------------------------- | ----------------------- | -------------- | ----------------------------------------------------------------------- |
 | `-l, --log-level`         | `M2M_LOG_LEVEL`         | `info`         | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
 | `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
-| `-s, --mysa-session-file` | `M2M_MYSA_SESSION_FILE` | `session.json` | Path to Mysa session file                                               |
 | `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
 | `--heartbeat-file`        | `M2M_HEARTBEAT_FILE`    | -              | File touched on every message received from the Mysa cloud, for external liveness checks (e.g. a container liveness probe on its mtime) |
 
@@ -226,8 +225,8 @@ When using Home Assistant, devices will be automatically discovered and appear i
 
 1. **Authentication Failures**
    - Verify your Mysa username and password
-   - Check if session.json exists and is valid
-   - Try deleting session.json to force re-authentication
+   - Confirm the same credentials work in the Mysa mobile app
+   - mysa2mqtt re-authenticates on its own when the session expires, so a persistent failure points at the credentials
 
 2. **MQTT Connection Issues**
    - Verify MQTT broker hostname and port
@@ -283,7 +282,6 @@ docker run -d --name mysa2mqtt \
   -e M2M_MYSA_USERNAME=your-email \
   -e M2M_MYSA_PASSWORD=your-password \
   -e M2M_LOG_LEVEL=info \
-  -v $(pwd)/session.json:/app/session.json \
   bourquep/mysa2mqtt:latest
 ```
 
@@ -341,8 +339,6 @@ services:
       - M2M_MYSA_USERNAME=your-email
       - M2M_MYSA_PASSWORD=your-password
       - M2M_LOG_LEVEL=info
-    volumes:
-      - ./session.json:/app/session.json
 ```
 
 Then run:

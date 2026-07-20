@@ -125,8 +125,8 @@ never delete them.
 ## Safety
 
 - **Never commit or log credentials.** Mysa account credentials, tokens, and session data are involved throughout.
-  `.env`, `.env.local` and `session.json` are gitignored — keep it that way, and never paste their contents into code,
-  commits, issues, or pull requests.
+  `.env` and `.env.local` are gitignored — keep it that way, and never paste their contents into code, commits, issues,
+  or pull requests.
 - When adding logging, assume the output will be pasted into a public issue. Redact tokens, passwords, email addresses
   and device identifiers.
 - This project uses undocumented Mysa APIs. Be conservative about adding new endpoint calls or increasing request

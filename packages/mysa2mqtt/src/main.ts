@@ -29,7 +29,6 @@ import { MysaApiClient } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
 import { options } from './options';
-import { loadSession, saveSession } from './session';
 import { Thermostat } from './thermostat';
 
 const START_RETRY_INITIAL_DELAY_MS = 30_000;
@@ -57,12 +56,10 @@ const rootLogger = pino({
 async function main() {
   rootLogger.info('Starting mysa2mqtt...');
 
-  const session = await loadSession(options.mysaSessionFile, rootLogger);
-  const client = new MysaApiClient(session, { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) });
-
-  client.emitter.on('sessionChanged', async (newSession) => {
-    await saveSession(newSession, options.mysaSessionFile, rootLogger);
-  });
+  const client = new MysaApiClient(
+    { username: options.mysaUsername, password: options.mysaPassword },
+    { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) }
+  );
 
   const heartbeatFile = options.heartbeatFile;
   if (heartbeatFile) {
@@ -83,10 +80,8 @@ async function main() {
     });
   }
 
-  if (!client.isAuthenticated) {
-    rootLogger.info('Logging in...');
-    await client.login(options.mysaUsername, options.mysaPassword);
-  }
+  rootLogger.info('Logging in...');
+  await client.login();
 
   rootLogger.debug('Fetching devices and firmwares...');
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
