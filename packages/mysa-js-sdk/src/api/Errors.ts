@@ -33,6 +33,19 @@ export class MysaApiError extends Error {
   }
 }
 
+/** Error thrown when a device id does not match any device on the account. */
+export class UnknownDeviceError extends Error {
+  /**
+   * Creates a new UnknownDeviceError instance.
+   *
+   * @param deviceId - The device id that could not be resolved
+   */
+  constructor(public readonly deviceId: string) {
+    super(`Unknown device id '${deviceId}': no such device on this account.`);
+    this.name = 'UnknownDeviceError';
+  }
+}
+
 /** Error thrown when an MQTT publish ultimately fails after retry attempts. */
 export class MqttPublishError extends Error {
   /**

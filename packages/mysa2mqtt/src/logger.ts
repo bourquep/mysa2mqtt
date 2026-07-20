@@ -27,39 +27,24 @@ import pino from 'pino';
 export class PinoLogger implements Logger {
   constructor(private readonly logger: pino.Logger) {}
 
+  // meta[0] is pino's merge object and must not be repeated in the
+  // interpolation args (it was previously passed twice), and a valid falsy
+  // first value (0, '', false) must still be forwarded rather than dropped
+  // into the null branch — hence ?? instead of a truthiness check.
+
   debug(message: string, ...meta: unknown[]): void {
-    const obj = meta.at(0);
-    if (obj) {
-      this.logger.debug(obj, message, ...meta);
-    } else {
-      this.logger.debug(null, message, ...meta);
-    }
+    this.logger.debug(meta.at(0) ?? null, message, ...meta.slice(1));
   }
 
   info(message: string, ...meta: unknown[]): void {
-    const obj = meta.at(0);
-    if (obj) {
-      this.logger.info(obj, message, ...meta);
-    } else {
-      this.logger.info(null, message, ...meta);
-    }
+    this.logger.info(meta.at(0) ?? null, message, ...meta.slice(1));
   }
 
   warn(message: string, ...meta: unknown[]): void {
-    const obj = meta.at(0);
-    if (obj) {
-      this.logger.warn(obj, message, ...meta);
-    } else {
-      this.logger.warn(null, message, ...meta);
-    }
+    this.logger.warn(meta.at(0) ?? null, message, ...meta.slice(1));
   }
 
   error(message: string, ...meta: unknown[]): void {
-    const obj = meta.at(0);
-    if (obj) {
-      this.logger.error(obj, message, ...meta);
-    } else {
-      this.logger.error(null, message, ...meta);
-    }
+    this.logger.error(meta.at(0) ?? null, message, ...meta.slice(1));
   }
 }
