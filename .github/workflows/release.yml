@@ -30,6 +30,7 @@ jobs:
       id-token: write # npm provenance
     outputs:
       published: ${{ steps.changesets.outputs.published }}
+      published_packages: ${{ steps.changesets.outputs.publishedPackages }}
       mysa2mqtt_version: ${{ steps.m2m.outputs.version }}
 
     steps:
@@ -99,3 +100,74 @@ jobs:
           tags: |
             bourquep/mysa2mqtt:${{ needs.release.outputs.mysa2mqtt_version }}
             bourquep/mysa2mqtt:latest
+
+  # Replaces the "released in version x" comments semantic-release used to post.
+  # Runs after `docker` so the comment can only claim an image tag that exists.
+  comment:
+    needs: [release, docker]
+    # `docker` is skipped when no mysa2mqtt release happened, which would skip
+    # this job too under the default `needs` semantics — hence the explicit
+    # result check rather than plain `needs.release.outputs.published`.
+    if: ${{ !cancelled() && needs.release.outputs.published == 'true' && needs.docker.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # `@changesets/changelog-github` has already resolved every changeset to
+      # its originating PR, so the CHANGELOG diff of the version commit is an
+      # exact per-package list of the PRs in this release. Attribution comes
+      # from which package's CHANGELOG a PR landed in, so a PR touching two
+      # packages gets a single comment listing both versions.
+      - name: Comment on released PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PUBLISHED: ${{ needs.release.outputs.published_packages }}
+          M2M_VERSION: ${{ needs.release.outputs.mysa2mqtt_version }}
+        run: |
+          set -euo pipefail
+          lines=$(mktemp -d)
+
+          while IFS=$'\t' read -r name version; do
+            dir=''
+            for candidate in packages/*/; do
+              if [ "$(jq -r .name "$candidate/package.json")" = "$name" ]; then
+                dir="$candidate"
+                break
+              fi
+            done
+            if [ -z "$dir" ]; then
+              echo "::warning::no package directory found for $name, skipping"
+              continue
+            fi
+
+            entry="- \`$name@$version\` — [npm](https://www.npmjs.com/package/$name/v/$version)"
+            if [ "$name" = 'mysa2mqtt' ] && [ -n "$M2M_VERSION" ]; then
+              entry="$entry, Docker \`bourquep/mysa2mqtt:$M2M_VERSION\`"
+            fi
+
+            # `|| true`: a package whose CHANGELOG entry is only "Updated
+            # dependencies" has no PR links, and grep's exit 1 would trip `set -e`.
+            prs=$(git show HEAD -- "$dir/CHANGELOG.md" \
+              | grep '^+' \
+              | grep -oE 'github\.com/[^/]+/[^/]+/pull/[0-9]+' \
+              | grep -oE '[0-9]+$' \
+              | sort -u || true)
+
+            for pr in $prs; do
+              printf '%s\n' "$entry" >> "$lines/$pr"
+            done
+          done < <(jq -r '.[] | [.name, .version] | @tsv' <<< "$PUBLISHED")
+
+          shopt -s nullglob
+          for f in "$lines"/*; do
+            pr=$(basename "$f")
+            echo "Commenting on #$pr"
+            { printf ':rocket: Released in:\n\n'; sort "$f"; } | gh pr comment "$pr" --body-file -
+          done
