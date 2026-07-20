@@ -142,27 +142,36 @@ async function main() {
   }
 }
 
-/** Cognito error codes that mean the user pool rejected the credentials themselves. */
-const CREDENTIAL_REJECTION_CODES = new Set(['NotAuthorizedException', 'UserNotFoundException']);
+/** Cognito error code returned when the user pool rejects the supplied password. */
+const INVALID_CREDENTIALS_CODE = 'NotAuthorizedException';
 
 /**
- * Reports whether a login failure is Cognito rejecting the credentials rather than a transport or service failure.
+ * Cognito error code returned when the username itself is unknown to the user pool.
+ *
+ * Mysa's app client does not mask user existence: an unknown address fails with this code rather than with
+ * {@link INVALID_CREDENTIALS_CODE}. The two therefore point at different settings, and only the latter says anything
+ * about how the password was carried.
+ */
+const UNKNOWN_USER_CODE = 'UserNotFoundException';
+
+/**
+ * Extracts the Cognito error code from the failure underlying a login error.
  *
  * The SDK surfaces every login failure as an `UnauthenticatedError`, so an unreachable network and a wrong password
- * look identical until the underlying cause is inspected. Only a genuine rejection should draw escaping guidance;
- * suggesting it after a DNS or Cognito outage sends users hunting a quoting bug that is not there.
+ * look identical until the underlying cause is inspected. Guidance keys off this code; without it, a DNS or Cognito
+ * outage would send users hunting a quoting bug that is not there.
  *
- * @param error - The error to classify.
- * @returns True when the cause is a Cognito credential rejection.
+ * @param error - The error to inspect.
+ * @returns The Cognito error code, or undefined when the cause does not carry one.
  */
-function isCredentialRejection(error: UnauthenticatedError): boolean {
+function causeCode(error: UnauthenticatedError): string | undefined {
   const cause: unknown = error.cause;
   if (typeof cause !== 'object' || cause === null) {
-    return false;
+    return undefined;
   }
 
-  const code = (cause as { code?: unknown; name?: unknown }).code ?? (cause as { name?: unknown }).name;
-  return typeof code === 'string' && CREDENTIAL_REJECTION_CODES.has(code);
+  const code = ('code' in cause ? cause.code : undefined) ?? ('name' in cause ? cause.name : undefined);
+  return typeof code === 'string' ? code : undefined;
 }
 
 /**
@@ -174,7 +183,8 @@ function isCredentialRejection(error: UnauthenticatedError): boolean {
  * expanded password is visible without ever logging the secret, or the account it belongs to.
  *
  * @param client - Client to log in.
- * @throws {@link Error} With escaping guidance when Mysa rejects the credentials.
+ * @throws {@link Error} With escaping guidance when Mysa rejects the password, or with username guidance when it does
+ *   not recognize the account.
  */
 async function login(client: MysaApiClient): Promise<void> {
   rootLogger.debug(`Authenticating with a password of ${options.mysaPassword.length} character(s).`);
@@ -182,13 +192,24 @@ async function login(client: MysaApiClient): Promise<void> {
   try {
     await client.login();
   } catch (error) {
-    if (error instanceof UnauthenticatedError && isCredentialRejection(error)) {
+    const code = error instanceof UnauthenticatedError ? causeCode(error) : undefined;
+
+    if (code === INVALID_CREDENTIALS_CODE) {
       throw new Error(
         'Mysa rejected the credentials. Verify that they let you sign in to the Mysa mobile app, then check that the ' +
           'password reaches mysa2mqtt intact: a shell expands $ and ` inside double quotes, and Docker Compose ' +
-          'expands $ in both `environment:` entries and `env_file:` files, so a $ must be written as $$ there. ' +
-          'Re-run with --log-level debug to log the length of the password that was received and compare it against ' +
-          'your actual password.',
+          'expands $ in `environment:` entries and in `env_file:` files, where a $ must be written as $$. An ' +
+          '`env_file:` entry declared with `format: raw` is the exception -- it takes the password verbatim, so a $ ' +
+          'stays a single $ there. Re-run with --log-level debug to log the length of the password that was received ' +
+          'and compare it against your actual password.',
+        { cause: error }
+      );
+    }
+
+    if (code === UNKNOWN_USER_CODE) {
+      throw new Error(
+        'Mysa does not recognize that username. Check --mysa-username (M2M_MYSA_USERNAME): it must be the email ' +
+          'address you sign in to the Mysa mobile app with.',
         { cause: error }
       );
     }
