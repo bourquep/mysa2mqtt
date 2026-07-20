@@ -447,6 +447,19 @@ export class Thermostat {
         this.mqttClimate.currentAction = this.computeCurrentAction();
         this.mqttClimate.currentFanMode = state.fanSpeed;
         break;
+
+      default:
+        // A state change without a mode still carries a valid setPoint (and
+        // possibly a fan speed). Apply what we received without touching the
+        // mode or action — dropping the whole update left Home Assistant
+        // showing a stale target temperature.
+        if (this.mqttClimate.currentMode !== 'off') {
+          this.mqttClimate.targetTemperature = state.setPoint;
+        }
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
+        break;
     }
   }
 
