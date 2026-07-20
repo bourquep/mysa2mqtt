@@ -393,10 +393,18 @@ export class MysaApiClient {
       this._cachedDevices = await this.getDevices();
     }
 
-    const device = this._cachedDevices.DevicesObj[deviceId];
-    if (!device) {
+    // Own-property check: an inherited key such as 'constructor' would otherwise pass the guard below and fail later
+    // with a TypeError on device.Model instead of UnknownDeviceError.
+    if (!Object.prototype.hasOwnProperty.call(this._cachedDevices.DevicesObj, deviceId)) {
       throw new UnknownDeviceError(deviceId);
     }
+
+    const device = this._cachedDevices.DevicesObj[deviceId];
+
+    // Validate the session before reaching for a possibly cached MQTT connection. _getMqttConnection reuses
+    // _mqttConnectionPromise without checking auth, so without this a command could be published on a still-open
+    // connection after the session died — with no source ref to attribute it to.
+    await this._getFreshSession();
 
     this._logger.debug(`Initializing MQTT connection...`);
     const mqttConnection = await this._getMqttConnection();
@@ -413,7 +421,7 @@ export class MysaApiClient {
       time: now.unix(),
       ver: '1.0',
       src: {
-        ref: this._cognitoUser?.getUsername() ?? '',
+        ref: this._cognitoUser!.getUsername(),
         type: 100
       },
       dest: {
