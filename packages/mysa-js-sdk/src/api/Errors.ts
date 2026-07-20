@@ -1,13 +1,24 @@
 /** Error thrown when attempting to access the Mysa API without proper authentication. */
 export class UnauthenticatedError extends Error {
   /**
+   * The underlying failure that prevented authentication.
+   *
+   * Callers need it to tell a credential rejection apart from a transport or service failure, since both surface as
+   * this error. Declared explicitly rather than passed to `super` so the SDK keeps compiling against its current lib,
+   * which predates the two-argument `Error` constructor.
+   */
+  readonly cause?: unknown;
+
+  /**
    * Creates a new UnauthenticatedError instance.
    *
    * @param message - The error message
+   * @param cause - The underlying failure that prevented authentication, if any.
    */
-  constructor(message: string) {
+  constructor(message: string, cause?: unknown) {
     super(message);
     this.name = 'UnauthenticatedError';
+    this.cause = cause;
   }
 }
 
