@@ -76,9 +76,9 @@ const client = new MysaApiClient({
 await client.login();
 ```
 
-The client manages its session on its own: it refreshes the access token before it expires, and logs back in
-automatically when the refresh token has itself expired or been revoked. There is nothing to persist, and no need to
-re-create the client after a long run.
+The client manages its session on its own: it refreshes the session when it needs to, and logs back in automatically
+when the refresh token has itself expired or been revoked. There is nothing to persist, and no need to re-create the
+client after a long run.
 
 ### Retrieving Thermostat Data
 

@@ -226,7 +226,9 @@ When using Home Assistant, devices will be automatically discovered and appear i
 1. **Authentication Failures**
    - Verify your Mysa username and password
    - Confirm the same credentials work in the Mysa mobile app
-   - mysa2mqtt re-authenticates on its own when the session expires, so a persistent failure points at the credentials
+   - mysa2mqtt re-authenticates on its own when the session expires, so a persistent failure usually means either
+     invalid credentials or that it cannot reach Cognito or the Mysa API — check the application logs and your network,
+     and confirm the Mysa service itself is available
 
 2. **MQTT Connection Issues**
    - Verify MQTT broker hostname and port

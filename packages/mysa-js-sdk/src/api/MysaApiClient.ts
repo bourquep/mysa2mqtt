@@ -127,11 +127,11 @@ export class MysaApiClient {
   }
 
   /**
-   * Logs in with the credentials this client was constructed with.
+   * Ensures the client has a usable session, logging in with the credentials it was constructed with if needed.
    *
    * Calling this method is optional: the client authenticates on demand before its first API call, and re-authenticates
    * on its own whenever its session can no longer be refreshed. Call it explicitly at startup to fail fast on invalid
-   * credentials instead of on the first API call.
+   * credentials instead of on the first API call. It is a no-op when the current session is still usable.
    *
    * @example
    *
@@ -144,10 +144,12 @@ export class MysaApiClient {
    * }
    * ```
    *
-   * @throws {@link Error} When authentication fails due to invalid credentials or network issues.
+   * @throws {@link UnauthenticatedError} When authentication fails due to invalid credentials or network issues.
    */
   async login(): Promise<void> {
-    await this._login();
+    // Goes through _getFreshSession so that an explicit login shares any acquisition already in flight instead of
+    // racing a concurrent API call into a second Cognito login.
+    await this._getFreshSession();
   }
 
   /**
