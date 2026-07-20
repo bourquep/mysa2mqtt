@@ -423,8 +423,17 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
     onCommand: CommandCallback<CommandTopicMap>
   ) {
     super(settings, stateTopicNames, onStateChange, commandTopicNames, async (topicName, message) => {
-      await this.handleCommand(topicName, message);
-      await onCommand(topicName, message);
+      // In optimistic mode the commanded state is assumed and published
+      // before the device command runs. Otherwise it is only applied once
+      // onCommand has succeeded, so a failed device command never leaves
+      // Home Assistant showing a state the device never reached.
+      if (this.component.optimistic) {
+        await this.handleCommand(topicName, message);
+        await onCommand(topicName, message);
+      } else {
+        await onCommand(topicName, message);
+        await this.handleCommand(topicName, message);
+      }
     });
   }
 
