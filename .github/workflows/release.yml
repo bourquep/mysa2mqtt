@@ -115,9 +115,12 @@ jobs:
       pull-requests: write
 
     steps:
+      # This job only reads the repo; `gh` authenticates via GH_TOKEN below, so
+      # there is no need to leave a credential in .git/config.
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # `@changesets/changelog-github` has already resolved every changeset to
       # its originating PR, so the CHANGELOG diff of the version commit is an
