@@ -1,5 +1,11 @@
 # mqtt2ha
 
+## 4.1.5
+
+### Patch Changes
+
+- [#187](https://github.com/bourquep/mysa2mqtt/pull/187) [`7affd92`](https://github.com/bourquep/mysa2mqtt/commit/7affd92614ee6f8ac160afacae7c7ea1c3a2a9e9) Thanks [@vavallee](https://github.com/vavallee)! - Errors thrown while subscribing to command topics or handling a received command are now caught and logged instead of escaping as unhandled promise rejections, which could terminate the process under Node's default rejection policy.
+
 ## 4.1.4
 
 ### Patch Changes
