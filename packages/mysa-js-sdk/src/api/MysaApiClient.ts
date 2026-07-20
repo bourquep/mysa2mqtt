@@ -1,4 +1,4 @@
-import { MysaSession } from '@/api/MysaSession';
+import { MysaCredentials } from '@/api/MysaCredentials';
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
 import { isMsgOutPayload, isMsgTypeOutPayload } from '@/lib/PayloadTypeGuards';
@@ -9,15 +9,7 @@ import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
 import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
-import {
-  AuthenticationDetails,
-  CognitoAccessToken,
-  CognitoIdToken,
-  CognitoRefreshToken,
-  CognitoUser,
-  CognitoUserPool,
-  CognitoUserSession
-} from 'amazon-cognito-identity-js';
+import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserSession } from 'amazon-cognito-identity-js';
 import { auth, iot, mqtt } from 'aws-iot-device-sdk-v2';
 import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
@@ -61,9 +53,9 @@ const PublishAckTimeout = dayjs.duration(30, 'seconds');
  * @example
  *
  * ```typescript
- * const client = new MysaApiClient();
+ * const client = new MysaApiClient({ username: 'user@example.com', password: 'password' });
  *
- * await client.login('user@example.com', 'password');
+ * await client.login();
  * const devices = await client.getDevices();
  *
  * client.emitter.on('statusChanged', (status) => {
@@ -76,11 +68,17 @@ const PublishAckTimeout = dayjs.duration(30, 'seconds');
  * ```
  */
 export class MysaApiClient {
+  /** The credentials of the Mysa account this client authenticates as. */
+  private _credentials: MysaCredentials;
+
   /** The current session object, if any. */
   private _cognitoUserSession?: CognitoUserSession;
 
   /** The current user object, if any. */
   private _cognitoUser?: CognitoUser;
+
+  /** The in-flight session acquisition, if any, so that concurrent callers share a single refresh or login. */
+  private _freshSessionPromise?: Promise<CognitoUserSession>;
 
   /** The logger instance used by the client. */
   private _logger: Logger;
@@ -117,97 +115,69 @@ export class MysaApiClient {
   readonly emitter = new EventEmitter<MysaApiClientEventTypes>();
 
   /**
-   * Gets the persistable session object.
-   *
-   * @returns The current persistable session object, if any.
-   */
-  get session(): MysaSession | undefined {
-    if (!this._cognitoUserSession || !this._cognitoUser) {
-      return undefined;
-    }
-
-    return {
-      username: this._cognitoUser.getUsername(),
-      idToken: this._cognitoUserSession.getIdToken().getJwtToken(),
-      accessToken: this._cognitoUserSession.getAccessToken().getJwtToken(),
-      refreshToken: this._cognitoUserSession.getRefreshToken().getToken()
-    };
-  }
-
-  /**
-   * Returns whether the client currently has an active session.
-   *
-   * @returns True if the client has an active session, false otherwise.
-   */
-  get isAuthenticated(): boolean {
-    return !!this.session;
-  }
-
-  /**
    * Constructs a new instance of the MysaApiClient.
    *
-   * @param session - The persistable session object, if any.
+   * @param credentials - The credentials of the Mysa account to authenticate as.
    * @param options - The options for the client.
    */
-  constructor(session?: MysaSession, options?: MysaApiClientOptions) {
+  constructor(credentials: MysaCredentials, options?: MysaApiClientOptions) {
+    this._credentials = credentials;
     this._logger = options?.logger || new VoidLogger();
     this._fetcher = options?.fetcher || fetch;
-
-    if (session) {
-      this._cognitoUser = new CognitoUser({
-        Username: session.username,
-        Pool: new CognitoUserPool({ UserPoolId: CognitoUserPoolId, ClientId: CognitoClientId })
-      });
-      this._cognitoUserSession = new CognitoUserSession({
-        IdToken: new CognitoIdToken({ IdToken: session.idToken }),
-        AccessToken: new CognitoAccessToken({ AccessToken: session.accessToken }),
-        RefreshToken: new CognitoRefreshToken({ RefreshToken: session.refreshToken })
-      });
-    }
   }
 
   /**
-   * Logs in the user with the given email address and password.
+   * Ensures the client has a usable session, logging in with the credentials it was constructed with if needed.
    *
-   * This method authenticates the user with Mysa's Cognito user pool and establishes a session that can be used for
-   * subsequent API calls. Upon successful login, a 'sessionChanged' event is emitted.
+   * Calling this method is optional: the client authenticates on demand before its first API call, and re-authenticates
+   * on its own whenever its session can no longer be refreshed. Call it explicitly at startup to fail fast on invalid
+   * credentials instead of on the first API call. It is a no-op when the current session is still usable.
    *
    * @example
    *
    * ```typescript
    * try {
-   *   await client.login('user@example.com', 'password123');
+   *   await client.login();
    *   console.log('Login successful!');
    * } catch (error) {
    *   console.error('Login failed:', error.message);
    * }
    * ```
    *
-   * @param emailAddress - The email address of the user.
-   * @param password - The password of the user.
+   * @throws {@link UnauthenticatedError} When authentication fails due to invalid credentials or network issues.
+   */
+  async login(): Promise<void> {
+    // Goes through _getFreshSession so that an explicit login shares any acquisition already in flight instead of
+    // racing a concurrent API call into a second Cognito login.
+    await this._getFreshSession();
+  }
+
+  /**
+   * Authenticates with Mysa's Cognito user pool and replaces the current session, if any.
+   *
+   * @returns A promise that resolves to the newly established session.
    * @throws {@link Error} When authentication fails due to invalid credentials or network issues.
    */
-  async login(emailAddress: string, password: string): Promise<void> {
+  private _login(): Promise<CognitoUserSession> {
     this._cognitoUser = undefined;
     this._cognitoUserSession = undefined;
     this._mqttClientId = undefined;
     this._mqttInterrupts = [];
 
-    this.emitter.emit('sessionChanged', this.session);
+    const { username, password } = this._credentials;
 
     return new Promise((resolve, reject) => {
       const user = new CognitoUser({
-        Username: emailAddress,
+        Username: username,
         Pool: new CognitoUserPool({ UserPoolId: CognitoUserPoolId, ClientId: CognitoClientId })
       });
 
-      user.authenticateUser(new AuthenticationDetails({ Username: emailAddress, Password: password }), {
+      user.authenticateUser(new AuthenticationDetails({ Username: username, Password: password }), {
         onSuccess: (session) => {
           this._cognitoUser = user;
           this._cognitoUserSession = session;
-          this.emitter.emit('sessionChanged', this.session);
 
-          resolve();
+          resolve(session);
         },
         onFailure: (err) => {
           reject(err);
@@ -233,7 +203,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the list of devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDevices(): Promise<Devices> {
     this._logger.debug(`Fetching devices...`);
@@ -272,7 +242,7 @@ export class MysaApiClient {
    *
    * @param deviceId - The ID of the device to get the serial number for.
    * @returns A promise that resolves to the serial number, or undefined if not found.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceSerialNumber(deviceId: string): Promise<string | undefined> {
     this._logger.debug(`Fetching serial number for device ${deviceId}...`);
@@ -315,7 +285,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the firmware information for all devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceFirmwares(): Promise<Firmwares> {
     this._logger.debug(`Fetching device firmwares...`);
@@ -340,7 +310,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the current state of all devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceStates(): Promise<DeviceStates> {
     this._logger.debug(`Fetching device states...`);
@@ -365,7 +335,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the homes information.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getHomes(): Promise<Homes> {
     this._logger.debug(`Fetching homes...`);
@@ -412,7 +382,7 @@ export class MysaApiClient {
    * @param mode - The operating mode to set (one of MysaDeviceMode values, or undefined to leave unchanged).
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
@@ -423,10 +393,18 @@ export class MysaApiClient {
       this._cachedDevices = await this.getDevices();
     }
 
-    const device = this._cachedDevices.DevicesObj[deviceId];
-    if (!device) {
+    // Own-property check: an inherited key such as 'constructor' would otherwise pass the guard below and fail later
+    // with a TypeError on device.Model instead of UnknownDeviceError.
+    if (!Object.prototype.hasOwnProperty.call(this._cachedDevices.DevicesObj, deviceId)) {
       throw new UnknownDeviceError(deviceId);
     }
+
+    const device = this._cachedDevices.DevicesObj[deviceId];
+
+    // Validate the session before reaching for a possibly cached MQTT connection. _getMqttConnection reuses
+    // _mqttConnectionPromise without checking auth, so without this a command could be published on a still-open
+    // connection after the session died — with no source ref to attribute it to.
+    await this._getFreshSession();
 
     this._logger.debug(`Initializing MQTT connection...`);
     const mqttConnection = await this._getMqttConnection();
@@ -443,7 +421,7 @@ export class MysaApiClient {
       time: now.unix(),
       ver: '1.0',
       src: {
-        ref: this.session?.username ?? '',
+        ref: this._cognitoUser!.getUsername(),
         type: 100
       },
       dest: {
@@ -590,38 +568,67 @@ export class MysaApiClient {
    * Ensures a valid, non-expired session is available.
    *
    * This method checks if the current session is valid and not expired. If the session is expired, it automatically
-   * refreshes it using the refresh token.
+   * refreshes it using the refresh token. If there is no session yet, or if the refresh token has itself expired or
+   * been revoked, the client logs back in with its credentials.
+   *
+   * Concurrent callers share a single in-flight acquisition, so a burst of API calls never triggers more than one
+   * refresh or login.
    *
    * @returns A promise that resolves to a valid CognitoUserSession.
-   * @throws {@link UnauthenticatedError} When no session exists or refresh fails.
+   * @throws {@link UnauthenticatedError} When neither refreshing nor logging back in succeeds.
    */
   private async _getFreshSession(): Promise<CognitoUserSession> {
-    if (!this._cognitoUser || !this._cognitoUserSession) {
-      throw new UnauthenticatedError('An attempt was made to access a resource without a valid session.');
-    }
-
     if (
-      this._cognitoUserSession.isValid() &&
+      this._cognitoUser &&
+      this._cognitoUserSession?.isValid() &&
       dayjs.unix(this._cognitoUserSession.getIdToken().getExpiration()).isAfter()
     ) {
       this._logger.debug('Session is valid, no need to refresh');
-      return Promise.resolve(this._cognitoUserSession);
+      return this._cognitoUserSession;
     }
 
-    this._logger.debug('Session is not valid or expired, refreshing...');
-    return new Promise<CognitoUserSession>((resolve, reject) => {
-      this._cognitoUser!.refreshSession(this._cognitoUserSession!.getRefreshToken(), (error, session) => {
-        if (error) {
-          this._logger.error('Failed to refresh session:', error);
-          reject(new UnauthenticatedError('Unable to refresh the authentication session.'));
-        } else {
-          this._logger.debug('Session refreshed successfully');
-          this._cognitoUserSession = session;
-          this.emitter.emit('sessionChanged', this.session);
-          resolve(session);
-        }
-      });
+    this._freshSessionPromise ??= this._acquireFreshSession().finally(() => {
+      this._freshSessionPromise = undefined;
     });
+
+    return this._freshSessionPromise;
+  }
+
+  /**
+   * Refreshes the current session, falling back to a full login when it cannot be refreshed.
+   *
+   * @returns A promise that resolves to a valid CognitoUserSession.
+   * @throws {@link UnauthenticatedError} When logging back in fails.
+   */
+  private async _acquireFreshSession(): Promise<CognitoUserSession> {
+    if (this._cognitoUser && this._cognitoUserSession) {
+      this._logger.debug('Session is not valid or expired, refreshing...');
+
+      try {
+        return await new Promise<CognitoUserSession>((resolve, reject) => {
+          this._cognitoUser!.refreshSession(this._cognitoUserSession!.getRefreshToken(), (error, session) => {
+            if (error) {
+              reject(error);
+            } else {
+              this._logger.debug('Session refreshed successfully');
+              this._cognitoUserSession = session;
+              resolve(session);
+            }
+          });
+        });
+      } catch (error) {
+        // The refresh token itself expired, was revoked, or was rotated away. Fall through to a full login.
+        this._logger.warn('Failed to refresh session, logging back in:', error);
+      }
+    }
+
+    try {
+      this._logger.info('Logging in...');
+      return await this._login();
+    } catch (error) {
+      this._logger.error('Failed to log in:', error);
+      throw new UnauthenticatedError('Unable to establish an authentication session.');
+    }
   }
 
   /**
@@ -794,7 +801,7 @@ export class MysaApiClient {
 
     // Per-process stable client id. Random suffix avoids collisions with other running processes.
     if (!this._mqttClientId) {
-      const username = this.session?.username ?? 'anon';
+      const username = this._cognitoUser?.getUsername() ?? 'anon';
       const usernameHash = hash('sha1', username);
       this._mqttClientId = `mysa-js-sdk-${usernameHash}-${process.pid}-${getRandomClientId()}`;
     }
