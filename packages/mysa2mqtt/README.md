@@ -250,16 +250,32 @@ process receives is not the value you typed:
 
 Taking `pa$w0rd` and `pa#w0rd` as example passwords:
 
-| Where the password is set                 | Gotcha                                                   | Write it as                       |
-| ----------------------------------------- | -------------------------------------------------------- | --------------------------------- |
-| Shell (`export`, `docker run -e`, `-p …`) | `$`, backticks, `\` and `"` are expanded inside `"…"`    | `-p 'pa$w0rd'` (single quotes)     |
-| Docker Compose `environment:`             | `$` starts an interpolation (`$FOO`, `${FOO}`)           | `M2M_MYSA_PASSWORD=pa$$w0rd`      |
-| `.env` file or Compose `env_file:`        | an unquoted `#` starts a comment and truncates the value | `M2M_MYSA_PASSWORD="pa#w0rd"`     |
+| Where the password is set                 | Gotcha                                                       | Write it as                   |
+| ----------------------------------------- | ------------------------------------------------------------ | ----------------------------- |
+| Shell (`export`, `docker run -e`, `-p …`) | `$` and backticks are expanded inside `"…"`                  | `-p 'pa$w0rd'` (single quotes) |
+| Docker Compose `environment:`             | `$` starts an interpolation (`$FOO`, `${FOO}`)               | `M2M_MYSA_PASSWORD=pa$$w0rd`  |
+| Docker Compose `env_file:`                | same `$` interpolation as `environment:`                     | `M2M_MYSA_PASSWORD=pa$$w0rd`  |
+| `.env` file (read by mysa2mqtt itself)    | `$` is safe, but a `#` anywhere in an unquoted value comments the rest out | `M2M_MYSA_PASSWORD="pa#w0rd"` |
 
-Docker Compose is the most common culprit: in an `environment:` entry a single `$` is consumed as interpolation, so
-`pa$w0rd` silently becomes `pa` plus whatever `$w0rd` expands to (usually nothing). Doubling it to `$$` passes a literal
-`$` through. Using `env_file:` instead sidesteps interpolation entirely, since Compose does not interpolate the contents
-of those files.
+Docker Compose is the most common culprit, and note that `env_file:` does **not** avoid it: Compose interpolates `$` in
+those files too, so `pa$w0rd` silently becomes `pa` plus whatever `$w0rd` expands to (usually nothing). Doubling it to
+`$$` passes a literal `$` through in both places.
+
+The `#` rules differ between the two file formats, so a password that works in one may break in the other. Compose's
+`env_file:` only treats `#` as a comment when whitespace precedes it, leaving `pa#w0rd` intact; the `.env` file
+mysa2mqtt loads itself is parsed by [dotenv](https://github.com/motdotla/dotenv), which truncates `pa#w0rd` to `pa`.
+Quoting the value is safe in both.
+
+On Compose v2.30 and later you can opt an `env_file` out of both rules with `format: raw`, which passes every line
+through verbatim — and therefore expects the value **unquoted** and `$` **undoubled**:
+
+```yaml
+services:
+  mysa2mqtt:
+    env_file:
+      - path: secrets.env
+        format: raw
+```
 
 To confirm what actually arrived, run with `--log-level debug`: mysa2mqtt logs the length of the password it received
 (never the password itself). If that length does not match your real password, the value is being mangled by one of the

@@ -627,7 +627,7 @@ export class MysaApiClient {
       return await this._login();
     } catch (error) {
       this._logger.error('Failed to log in:', error);
-      throw new UnauthenticatedError('Unable to establish an authentication session.');
+      throw new UnauthenticatedError('Unable to establish an authentication session.', error);
     }
   }
 

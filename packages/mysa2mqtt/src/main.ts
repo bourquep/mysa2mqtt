@@ -142,31 +142,53 @@ async function main() {
   }
 }
 
+/** Cognito error codes that mean the user pool rejected the credentials themselves. */
+const CREDENTIAL_REJECTION_CODES = new Set(['NotAuthorizedException', 'UserNotFoundException']);
+
+/**
+ * Reports whether a login failure is Cognito rejecting the credentials rather than a transport or service failure.
+ *
+ * The SDK surfaces every login failure as an `UnauthenticatedError`, so an unreachable network and a wrong password
+ * look identical until the underlying cause is inspected. Only a genuine rejection should draw escaping guidance;
+ * suggesting it after a DNS or Cognito outage sends users hunting a quoting bug that is not there.
+ *
+ * @param error - The error to classify.
+ * @returns True when the cause is a Cognito credential rejection.
+ */
+function isCredentialRejection(error: UnauthenticatedError): boolean {
+  const cause: unknown = error.cause;
+  if (typeof cause !== 'object' || cause === null) {
+    return false;
+  }
+
+  const code = (cause as { code?: unknown; name?: unknown }).code ?? (cause as { name?: unknown }).name;
+  return typeof code === 'string' && CREDENTIAL_REJECTION_CODES.has(code);
+}
+
 /**
  * Logs in to the Mysa cloud, turning a credential rejection into an actionable message.
  *
- * Rejected credentials are usually not a typo but a mangled value: the configured password reaches the process already
- * altered because the layer that carries it -- a shell, a Docker Compose `environment:` entry, a `.env` file -- treats
- * some of its characters specially. The debug line reports the length of what actually arrived so a truncated or
- * expanded password is visible without ever logging the secret itself.
+ * A rejection is often not a typo but a mangled value: the configured password reaches the process already altered
+ * because the layer that carries it -- a shell, a Docker Compose `environment:` entry or `env_file:`, a `.env` file --
+ * treats some of its characters specially. The debug line reports the length of what actually arrived so a truncated or
+ * expanded password is visible without ever logging the secret, or the account it belongs to.
  *
  * @param client - Client to log in.
  * @throws {@link Error} With escaping guidance when Mysa rejects the credentials.
  */
 async function login(client: MysaApiClient): Promise<void> {
-  rootLogger.debug(
-    `Authenticating as '${options.mysaUsername}' with a password of ${options.mysaPassword.length} character(s).`
-  );
+  rootLogger.debug(`Authenticating with a password of ${options.mysaPassword.length} character(s).`);
 
   try {
     await client.login();
   } catch (error) {
-    if (error instanceof UnauthenticatedError) {
+    if (error instanceof UnauthenticatedError && isCredentialRejection(error)) {
       throw new Error(
         'Mysa rejected the credentials. Verify that they let you sign in to the Mysa mobile app, then check that the ' +
-          'password reaches mysa2mqtt intact: characters such as $ # ! \\ " \' are consumed or expanded by shells, ' +
-          'Docker Compose and .env files unless they are escaped or single-quoted. Re-run with --log-level debug to ' +
-          'log the length of the password that was received and compare it against your actual password.',
+          'password reaches mysa2mqtt intact: a shell expands $ and ` inside double quotes, and Docker Compose ' +
+          'expands $ in both `environment:` entries and `env_file:` files, so a $ must be written as $$ there. ' +
+          'Re-run with --log-level debug to log the length of the password that was received and compare it against ' +
+          'your actual password.',
         { cause: error }
       );
     }
