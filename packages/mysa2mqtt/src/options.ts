@@ -63,6 +63,42 @@ function parseRequiredInt(value: string) {
   return parsedValue;
 }
 
+/**
+ * Parses a comma-separated list of `<device>=<watts>` pairs.
+ *
+ * @param value - The value to parse.
+ * @returns A map of lowercased device id or name to rated wattage.
+ */
+function parseHeaterWatts(value: string): Map<string, number> {
+  const mapping = new Map<string, number>();
+
+  for (const pair of value.split(',')) {
+    const trimmedPair = pair.trim();
+    if (trimmedPair.length === 0) {
+      continue;
+    }
+
+    const separatorIndex = trimmedPair.lastIndexOf('=');
+    if (separatorIndex < 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' is not a <device>=<watts> pair.`);
+    }
+
+    const device = trimmedPair.slice(0, separatorIndex).trim();
+    const watts = Number(trimmedPair.slice(separatorIndex + 1).trim());
+
+    if (device.length === 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' is missing a device id or name.`);
+    }
+    if (!Number.isFinite(watts) || watts <= 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' must specify a wattage greater than zero.`);
+    }
+
+    mapping.set(device.toLowerCase(), watts);
+  }
+
+  return mapping;
+}
+
 export const version = getPackageVersion();
 
 const extraHelpText = `
@@ -142,6 +178,15 @@ export const options = new Command('mysa2mqtt')
       .env('M2M_TEMPERATURE_UNIT')
       .choices(['C', 'F'])
       .default('C')
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option(
+      '--heater-watts <heaterWatts>',
+      'rated wattage of the heaters controlled by each thermostat, as a comma-separated list of <device>=<watts> pairs, where <device> is a device id or name (e.g. "Kitchen=1500,<device-id>=750"). Required for V2 thermostats to report power, as they do not measure current themselves'
+    )
+      .env('M2M_HEATER_WATTS')
+      .argParser(parseHeaterWatts)
       .helpGroup('Configuration')
   )
   .addOption(

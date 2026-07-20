@@ -25,7 +25,7 @@ SOFTWARE.
 
 import { writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
-import { MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
+import { DeviceBase, MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
 import { options } from './options';
@@ -110,6 +110,32 @@ async function main() {
     state_prefix: options.mqttTopicPrefix
   };
 
+  const heaterWatts: Map<string, number> = options.heaterWatts ?? new Map();
+  const matchedHeaterWattsKeys = new Set<string>();
+
+  /**
+   * Resolves the configured heater wattage for a device, by id or by name.
+   *
+   * @param device - The Mysa device to resolve the wattage for.
+   * @returns The configured wattage, or undefined when the device was not configured.
+   */
+  function resolveHeaterWatts(device: DeviceBase): number | undefined {
+    for (const key of [device.Id, device.Name]) {
+      const normalizedKey = key?.toLowerCase();
+      if (normalizedKey == null) {
+        continue;
+      }
+
+      const watts = heaterWatts.get(normalizedKey);
+      if (watts != null) {
+        matchedHeaterWattsKeys.add(normalizedKey);
+        return watts;
+      }
+    }
+
+    return undefined;
+  }
+
   const thermostats = Object.entries(devices.DevicesObj).map(
     ([, device]) =>
       new Thermostat(
@@ -119,9 +145,19 @@ async function main() {
         new PinoLogger(rootLogger.child({ module: 'thermostat', deviceId: device.Id })),
         firmwares.Firmware[device.Id],
         serialNumbers.get(device.Id),
-        options.temperatureUnit
+        options.temperatureUnit,
+        resolveHeaterWatts(device)
       )
   );
+
+  // The unmatched keys are device ids or names, so they are not logged: this output is routinely
+  // pasted into public issues. The count is enough to prompt a re-read of the configuration.
+  const unmatchedHeaterWattsCount = heaterWatts.size - matchedHeaterWattsKeys.size;
+  if (unmatchedHeaterWattsCount > 0) {
+    rootLogger.warn(
+      `${unmatchedHeaterWattsCount} of the ${heaterWatts.size} heater wattage entries match no device id or name. Check the configured names and ids against your devices.`
+    );
+  }
 
   let startedThermostatCount = 0;
   const failedThermostats: Thermostat[] = [];

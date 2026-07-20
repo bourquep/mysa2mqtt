@@ -77,7 +77,9 @@ export class Thermostat {
   private readonly mqttClimate: Climate;
   private readonly mqttTemperature: Sensor;
   private readonly mqttHumidity: Sensor;
-  private readonly mqttPower: Sensor;
+  private readonly mqttPower: Sensor | undefined;
+  /** Set instead of {@link mqttPower} when this device cannot report power, to retire a previously published entity. */
+  private readonly mqttRetiredPower: Sensor | undefined;
 
   private readonly mysaStatusUpdateHandler = (status: Status) => {
     void this.handleMysaStatusUpdate(status).catch((error: unknown) => {
@@ -99,7 +101,8 @@ export class Thermostat {
     private readonly logger: Logger,
     public readonly mysaDeviceFirmware?: FirmwareDevice,
     public readonly mysaDeviceSerialNumber?: string,
-    public readonly temperatureUnit?: 'C' | 'F'
+    public readonly temperatureUnit?: 'C' | 'F',
+    public readonly heaterWatts?: number
   ) {
     const is_celsius = (temperatureUnit ?? 'C') === 'C';
 
@@ -120,6 +123,13 @@ export class Thermostat {
 
     const isAC = mysaDevice.Model.startsWith('AC');
     this.deviceType = isAC ? 'AC' : 'BB';
+
+    // V2 hardware has no current sensor: its status messages carry a duty cycle but never a
+    // `Current` reading, so power can only be derived from a user-supplied heater rating. AC
+    // devices report neither. Testing for V2 rather than allowlisting V1 keeps the sensor for
+    // unrecognized models, which report `Current` natively today.
+    const isV2 = /-v2-/i.test(mysaDevice.Model);
+    const canReportPower = !isAC && (!isV2 || heaterWatts != null);
 
     this.mqttClimate = new Climate(
       {
@@ -245,7 +255,7 @@ export class Thermostat {
       }
     });
 
-    this.mqttPower = new Sensor({
+    const powerSensor = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
       component: {
@@ -261,6 +271,12 @@ export class Thermostat {
         force_update: true
       }
     });
+
+    // The discovery config is retained, so a device that can no longer report power has to have
+    // its topic cleared explicitly — otherwise an entity published by an earlier run lingers in
+    // Home Assistant forever.
+    this.mqttPower = canReportPower ? powerSensor : undefined;
+    this.mqttRetiredPower = canReportPower ? undefined : powerSensor;
   }
 
   async start() {
@@ -295,9 +311,14 @@ export class Thermostat {
       await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
       await this.mqttHumidity.writeConfig();
 
-      // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
-      await this.mqttPower.setState('state_topic', 'None');
-      await this.mqttPower.writeConfig();
+      // Neither REST field is usable as an initial power state: `state.Current.v` always has a
+      // non-zero value, even for thermostats that are off, and `state.Duty.v` lags the realtime
+      // duty cycle badly. Publish nothing until the first status message arrives.
+      if (this.mqttPower != null) {
+        await this.mqttPower.setState('state_topic', 'None');
+        await this.mqttPower.writeConfig();
+      }
+      await this.mqttRetiredPower?.removeConfig();
 
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
@@ -325,7 +346,7 @@ export class Thermostat {
     this.mysaApiClient.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
     this.mysaApiClient.emitter.off('stateChanged', this.mysaStateChangeHandler);
 
-    await this.mqttPower.setState('state_topic', 'None');
+    await this.mqttPower?.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
   }
@@ -406,11 +427,10 @@ export class Thermostat {
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
-    if (this.mysaDevice.Voltage != null && status.current != null) {
-      const watts = this.mysaDevice.Voltage * status.current;
-      await this.mqttPower.setState('state_topic', watts.toFixed(2));
-    } else {
-      await this.mqttPower.setState('state_topic', 'None');
+    if (this.mqttPower != null) {
+      const watts = this.computeWatts(status);
+      this.logger.debug('Computed power draw', { current: status.current, dutyCycle: status.dutyCycle, watts });
+      await this.mqttPower.setState('state_topic', watts != null ? watts.toFixed(2) : 'None');
     }
 
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
@@ -461,6 +481,20 @@ export class Thermostat {
         }
         break;
     }
+  }
+
+  private computeWatts(status: Status): number | undefined {
+    if (status.current != null && this.mysaDevice.Voltage != null) {
+      return this.mysaDevice.Voltage * status.current;
+    }
+
+    if (status.dutyCycle != null && this.heaterWatts != null) {
+      // The duty cycle is a 0.0-1.0 fraction of the heating element's rated output. Clamping
+      // bounds the error should some firmware ever report it on a different scale.
+      return this.heaterWatts * Math.min(Math.max(status.dutyCycle, 0), 1);
+    }
+
+    return undefined;
   }
 
   private computeCurrentAction(current?: number, dutyCycle?: number): ClimateAction {
