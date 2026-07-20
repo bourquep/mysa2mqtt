@@ -1,6 +1,6 @@
 {
   "name": "mysa-js-sdk",
-  "version": "2.1.2",
+  "version": "3.0.0",
   "license": "MIT",
   "private": false,
   "description": "A JavaScript SDK for accessing Mysa smart thermostats.",
