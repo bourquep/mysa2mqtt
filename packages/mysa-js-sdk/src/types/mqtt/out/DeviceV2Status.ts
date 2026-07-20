@@ -20,7 +20,7 @@ export interface DeviceV2Status extends MsgPayload<OutMessageType.DEVICE_V2_STAT
   body: {
     /** Ambient temperature reading from the device sensor */
     ambTemp: number;
-    /** Current duty cycle percentage of the heating element */
+    /** Current duty cycle of the heating element, as a fraction between 0.0 and 1.0 */
     dtyCycle: number;
     /** Relative humidity percentage reading from the device sensor */
     hum: number;
