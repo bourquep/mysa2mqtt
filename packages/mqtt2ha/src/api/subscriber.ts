@@ -92,8 +92,16 @@ export class Subscriber<
       throw new Error('No command topics provided');
     }
 
+    // The MQTT client does not await or observe its listeners, so any
+    // rejection escaping these async callbacks becomes an unhandled promise
+    // rejection and terminates the process under Node's default policy.
+    // Catch and log instead.
     super(settings, stateTopicNames, onStateChange, async () => {
-      await this.subscribeToCommandTopics();
+      try {
+        await this.subscribeToCommandTopics();
+      } catch (error) {
+        this.logger.error(`Failed to subscribe to command topics for ${this.identifier}`, error);
+      }
     });
 
     this.commandCallback = commandCallback;
@@ -104,7 +112,11 @@ export class Subscriber<
     }));
 
     this.mqttClient.on('message', async (topic, message) => {
-      await this.handleCommandMessage(topic, message);
+      try {
+        await this.handleCommandMessage(topic, message);
+      } catch (error) {
+        this.logger.error(`Failed to handle command message for ${this.identifier} on topic ${topic}`, error);
+      }
     });
   }
 
