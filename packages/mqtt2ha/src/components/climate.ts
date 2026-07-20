@@ -463,24 +463,57 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
         this.currentSwingMode = message;
         break;
 
-      case 'target_humidity_command_topic':
-        this.targetHumidity = parseFloat(message);
+      case 'target_humidity_command_topic': {
+        const humidity = this.parseNumericCommand(topicName, message);
+        if (humidity !== undefined) {
+          this.targetHumidity = humidity;
+        }
         break;
+      }
 
-      case 'temperature_command_topic':
-        this.targetTemperature = parseFloat(message);
+      case 'temperature_command_topic': {
+        const temperature = this.parseNumericCommand(topicName, message);
+        if (temperature !== undefined) {
+          this.targetTemperature = temperature;
+        }
         break;
+      }
 
-      case 'temperature_high_command_topic':
-        this.temperatureHigh = parseFloat(message);
+      case 'temperature_high_command_topic': {
+        const temperatureHigh = this.parseNumericCommand(topicName, message);
+        if (temperatureHigh !== undefined) {
+          this.temperatureHigh = temperatureHigh;
+        }
         break;
+      }
 
-      case 'temperature_low_command_topic':
-        this.temperatureLow = parseFloat(message);
+      case 'temperature_low_command_topic': {
+        const temperatureLow = this.parseNumericCommand(topicName, message);
+        if (temperatureLow !== undefined) {
+          this.temperatureLow = temperatureLow;
+        }
         break;
+      }
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);
     }
+  }
+
+  /**
+   * Parses a numeric command payload, returning undefined for anything that does not parse to a finite number so a
+   * malformed message is ignored instead of storing and republishing NaN.
+   *
+   * @param topicName - The command topic the payload arrived on (for the warning log)
+   * @param message - The raw command payload
+   * @returns The parsed finite number, or undefined when the payload is not numeric
+   */
+  private parseNumericCommand(topicName: string, message: string): number | undefined {
+    const value = parseFloat(message);
+    if (!Number.isFinite(value)) {
+      this.logger.warn(`Received a non-numeric payload on the '${topicName}':`, message);
+      return undefined;
+    }
+    return value;
   }
 }
