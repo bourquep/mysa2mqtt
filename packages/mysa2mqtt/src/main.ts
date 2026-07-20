@@ -25,7 +25,7 @@ SOFTWARE.
 
 import { writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
-import { MysaApiClient } from 'mysa-js-sdk';
+import { MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
 import { options } from './options';
@@ -81,7 +81,7 @@ async function main() {
   }
 
   rootLogger.info('Logging in...');
-  await client.login();
+  await login(client);
 
   rootLogger.debug('Fetching devices and firmwares...');
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
@@ -139,6 +139,39 @@ async function main() {
 
   for (const thermostat of failedThermostats) {
     scheduleThermostatStartRetry(thermostat);
+  }
+}
+
+/**
+ * Logs in to the Mysa cloud, turning a credential rejection into an actionable message.
+ *
+ * Rejected credentials are usually not a typo but a mangled value: the configured password reaches the process already
+ * altered because the layer that carries it -- a shell, a Docker Compose `environment:` entry, a `.env` file -- treats
+ * some of its characters specially. The debug line reports the length of what actually arrived so a truncated or
+ * expanded password is visible without ever logging the secret itself.
+ *
+ * @param client - Client to log in.
+ * @throws {@link Error} With escaping guidance when Mysa rejects the credentials.
+ */
+async function login(client: MysaApiClient): Promise<void> {
+  rootLogger.debug(
+    `Authenticating as '${options.mysaUsername}' with a password of ${options.mysaPassword.length} character(s).`
+  );
+
+  try {
+    await client.login();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError) {
+      throw new Error(
+        'Mysa rejected the credentials. Verify that they let you sign in to the Mysa mobile app, then check that the ' +
+          'password reaches mysa2mqtt intact: characters such as $ # ! \\ " \' are consumed or expanded by shells, ' +
+          'Docker Compose and .env files unless they are escaped or single-quoted. Re-run with --log-level debug to ' +
+          'log the length of the password that was received and compare it against your actual password.',
+        { cause: error }
+      );
+    }
+
+    throw error;
   }
 }
 

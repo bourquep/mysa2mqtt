@@ -229,6 +229,8 @@ When using Home Assistant, devices will be automatically discovered and appear i
    - mysa2mqtt re-authenticates on its own when the session expires, so a persistent failure usually means either
      invalid credentials or that it cannot reach Cognito or the Mysa API — check the application logs and your network,
      and confirm the Mysa service itself is available
+   - If your password contains special characters, see
+     [Passwords with special characters](#passwords-with-special-characters) below
 
 2. **MQTT Connection Issues**
    - Verify MQTT broker hostname and port
@@ -239,6 +241,29 @@ When using Home Assistant, devices will be automatically discovered and appear i
    - Ensure your Mysa thermostats are properly configured in the Mysa app
    - Check logs for API errors
    - Verify your Mysa account has active devices
+
+### Passwords with special characters
+
+`Incorrect username or password.` when the very same credentials work in the Mysa app almost always means the password
+was altered on its way into mysa2mqtt. Every layer that can carry it treats some characters specially, so the value the
+process receives is not the value you typed:
+
+Taking `pa$w0rd` and `pa#w0rd` as example passwords:
+
+| Where the password is set                 | Gotcha                                                   | Write it as                       |
+| ----------------------------------------- | -------------------------------------------------------- | --------------------------------- |
+| Shell (`export`, `docker run -e`, `-p …`) | `$`, backticks, `\` and `"` are expanded inside `"…"`    | `-p 'pa$w0rd'` (single quotes)     |
+| Docker Compose `environment:`             | `$` starts an interpolation (`$FOO`, `${FOO}`)           | `M2M_MYSA_PASSWORD=pa$$w0rd`      |
+| `.env` file or Compose `env_file:`        | an unquoted `#` starts a comment and truncates the value | `M2M_MYSA_PASSWORD="pa#w0rd"`     |
+
+Docker Compose is the most common culprit: in an `environment:` entry a single `$` is consumed as interpolation, so
+`pa$w0rd` silently becomes `pa` plus whatever `$w0rd` expands to (usually nothing). Doubling it to `$$` passes a literal
+`$` through. Using `env_file:` instead sidesteps interpolation entirely, since Compose does not interpolate the contents
+of those files.
+
+To confirm what actually arrived, run with `--log-level debug`: mysa2mqtt logs the length of the password it received
+(never the password itself). If that length does not match your real password, the value is being mangled by one of the
+layers above rather than rejected by Mysa.
 
 ### Debug Mode
 
