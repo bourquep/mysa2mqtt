@@ -25,7 +25,7 @@ SOFTWARE.
 
 import { writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
-import { DeviceBase, MysaApiClient } from 'mysa-js-sdk';
+import { DeviceBase, MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
 import { options } from './options';
@@ -81,7 +81,7 @@ async function main() {
   }
 
   rootLogger.info('Logging in...');
-  await client.login();
+  await login(client);
 
   rootLogger.debug('Fetching devices and firmwares...');
   const [devices, firmwares] = await Promise.all([client.getDevices(), client.getDeviceFirmwares()]);
@@ -175,6 +175,82 @@ async function main() {
 
   for (const thermostat of failedThermostats) {
     scheduleThermostatStartRetry(thermostat);
+  }
+}
+
+/** Cognito error code returned when the user pool rejects the supplied password. */
+const INVALID_CREDENTIALS_CODE = 'NotAuthorizedException';
+
+/**
+ * Cognito error code returned when the username itself is unknown to the user pool.
+ *
+ * Mysa's app client does not mask user existence: an unknown address fails with this code rather than with
+ * {@link INVALID_CREDENTIALS_CODE}. The two therefore point at different settings, and only the latter says anything
+ * about how the password was carried.
+ */
+const UNKNOWN_USER_CODE = 'UserNotFoundException';
+
+/**
+ * Extracts the Cognito error code from the failure underlying a login error.
+ *
+ * The SDK surfaces every login failure as an `UnauthenticatedError`, so an unreachable network and a wrong password
+ * look identical until the underlying cause is inspected. Guidance keys off this code; without it, a DNS or Cognito
+ * outage would send users hunting a quoting bug that is not there.
+ *
+ * @param error - The error to inspect.
+ * @returns The Cognito error code, or undefined when the cause does not carry one.
+ */
+function causeCode(error: UnauthenticatedError): string | undefined {
+  const cause: unknown = error.cause;
+  if (typeof cause !== 'object' || cause === null) {
+    return undefined;
+  }
+
+  const code = ('code' in cause ? cause.code : undefined) ?? ('name' in cause ? cause.name : undefined);
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * Logs in to the Mysa cloud, turning a credential rejection into an actionable message.
+ *
+ * A rejection is often not a typo but a mangled value: the configured password reaches the process already altered
+ * because the layer that carries it -- a shell, a Docker Compose `environment:` entry or `env_file:`, a `.env` file --
+ * treats some of its characters specially. The debug line reports the length of what actually arrived so a truncated or
+ * expanded password is visible without ever logging the secret, or the account it belongs to.
+ *
+ * @param client - Client to log in.
+ * @throws {@link Error} With escaping guidance when Mysa rejects the password, or with username guidance when it does
+ *   not recognize the account.
+ */
+async function login(client: MysaApiClient): Promise<void> {
+  rootLogger.debug(`Authenticating with a password of ${options.mysaPassword.length} character(s).`);
+
+  try {
+    await client.login();
+  } catch (error) {
+    const code = error instanceof UnauthenticatedError ? causeCode(error) : undefined;
+
+    if (code === INVALID_CREDENTIALS_CODE) {
+      throw new Error(
+        'Mysa rejected the credentials. Verify that they let you sign in to the Mysa mobile app, then check that the ' +
+          'password reaches mysa2mqtt intact: a shell expands $ and ` inside double quotes, and Docker Compose ' +
+          'expands $ in `environment:` entries and in `env_file:` files, where a $ must be written as $$. An ' +
+          '`env_file:` entry declared with `format: raw` is the exception -- it takes the password verbatim, so a $ ' +
+          'stays a single $ there. Re-run with --log-level debug to log the length of the password that was received ' +
+          'and compare it against your actual password.',
+        { cause: error }
+      );
+    }
+
+    if (code === UNKNOWN_USER_CODE) {
+      throw new Error(
+        'Mysa does not recognize that username. Check --mysa-username (M2M_MYSA_USERNAME): it must be the email ' +
+          'address you sign in to the Mysa mobile app with.',
+        { cause: error }
+      );
+    }
+
+    throw error;
   }
 }
 
