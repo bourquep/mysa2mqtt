@@ -998,8 +998,8 @@ export class MysaApiClient {
   /**
    * Re-subscribes every device currently receiving real-time updates on the given connection.
    *
-   * Safe to call on every (re)connect: aws-crt replaces the per-topic callback on a duplicate
-   * subscribe, so this never registers a message handler more than once.
+   * Safe to call on every (re)connect: aws-crt replaces the per-topic callback on a duplicate subscribe, so this never
+   * registers a message handler more than once.
    *
    * @param connection - The connection to (re-)establish subscriptions on.
    */
@@ -1014,12 +1014,11 @@ export class MysaApiClient {
   }
 
   /**
-   * Arms (or re-arms) the stability timer. When a connection stays interrupt-free for
-   * {@link MqttStabilityWindow}, the consecutive-reset backoff counter is cleared so a future
-   * isolated storm still gets a fast first reset.
+   * Arms (or re-arms) the stability timer. When a connection stays interrupt-free for {@link MqttStabilityWindow}, the
+   * consecutive-reset backoff counter is cleared so a future isolated storm still gets a fast first reset.
    *
-   * @param generation - The connection generation that armed the timer; the callback is a no-op if
-   *   the connection has since been replaced.
+   * @param generation - The connection generation that armed the timer; the callback is a no-op if the connection has
+   *   since been replaced.
    */
   private _armMqttStabilityTimer(generation: number): void {
     this._clearMqttStabilityTimer();
@@ -1043,12 +1042,12 @@ export class MysaApiClient {
   }
 
   /**
-   * Forcefully tears down the current MQTT connection and rebuilds it with a fresh client id and
-   * fresh credentials, escaping interrupt storms that a plain native reconnect cannot.
+   * Forcefully tears down the current MQTT connection and rebuilds it with a fresh client id and fresh credentials,
+   * escaping interrupt storms that a plain native reconnect cannot.
    *
-   * Repeatable and self-contained: only one reset runs at a time, consecutive resets without an
-   * intervening stable period back off exponentially (up to {@link MqttResetMaxDelay}), and it never
-   * rejects — so it is safe to invoke fire-and-forget from an event handler.
+   * Repeatable and self-contained: only one reset runs at a time, consecutive resets without an intervening stable
+   * period back off exponentially (up to {@link MqttResetMaxDelay}), and it never rejects — so it is safe to invoke
+   * fire-and-forget from an event handler.
    *
    * @param reason - Human-readable reason for the reset, used in logs.
    */
