@@ -22,7 +22,7 @@ home automation platforms.
 | ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
 | `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                   |
 | `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                       |
-| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not report power consumption    |
+| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not measure power, but can report an estimate (see [Power reporting](#power-reporting)) |
 | `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                           |
 | `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions |
 
@@ -168,7 +168,7 @@ so power can only be estimated as `duty cycle × the rated wattage of the attach
 property of your heaters and not of the thermostat, you have to supply it:
 
 ```bash
-M2M_HEATER_WATTS="Kitchen=1500,34ab95ecff20=750"
+M2M_HEATER_WATTS="Kitchen=1500,<device-id>=750"
 ```
 
 Each entry maps a device — by name or by device id, both case-insensitive — to the total wattage of the heaters that

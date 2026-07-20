@@ -214,6 +214,18 @@ export class Discoverable<
   }
 
   /**
+   * Clears the entity's retained discovery configuration, causing Home Assistant to remove the entity.
+   *
+   * Use this when an entity that may have been published by a previous run should no longer exist. Because
+   * {@link writeConfig} retains its payload, simply not calling it leaves the entity in place indefinitely.
+   */
+  async removeConfig() {
+    this.logger.debug(`Removing configuration for ${this.identifier}...`);
+    await this.mqttClient.publishAsync(this.configTopic, '', { retain: true });
+    this.wroteConfiguration = false;
+  }
+
+  /**
    * Sets additional attributes for the entity
    *
    * @param attributes - Key-value pairs of attributes to set

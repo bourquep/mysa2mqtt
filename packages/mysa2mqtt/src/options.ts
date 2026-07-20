@@ -69,7 +69,7 @@ function parseRequiredInt(value: string) {
  * @param value - The value to parse.
  * @returns A map of lowercased device id or name to rated wattage.
  */
-function parseHeaterWatts(value: string) {
+function parseHeaterWatts(value: string): Map<string, number> {
   const mapping = new Map<string, number>();
 
   for (const pair of value.split(',')) {
@@ -183,7 +183,7 @@ export const options = new Command('mysa2mqtt')
   .addOption(
     new Option(
       '--heater-watts <heaterWatts>',
-      'rated wattage of the heaters controlled by each thermostat, as a comma-separated list of <device>=<watts> pairs, where <device> is a device id or name (e.g. "Kitchen=1500,34ab95ecff20=750"). Required for V2 thermostats to report power, as they do not measure current themselves'
+      'rated wattage of the heaters controlled by each thermostat, as a comma-separated list of <device>=<watts> pairs, where <device> is a device id or name (e.g. "Kitchen=1500,<device-id>=750"). Required for V2 thermostats to report power, as they do not measure current themselves'
     )
       .env('M2M_HEATER_WATTS')
       .argParser(parseHeaterWatts)

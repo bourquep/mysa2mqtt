@@ -150,11 +150,14 @@ async function main() {
       )
   );
 
-  heaterWatts.forEach((_watts, key) => {
-    if (!matchedHeaterWattsKeys.has(key)) {
-      rootLogger.warn(`Heater wattage was configured for '${key}', which matches no device id or name.`);
-    }
-  });
+  // The unmatched keys are device ids or names, so they are not logged: this output is routinely
+  // pasted into public issues. The count is enough to prompt a re-read of the configuration.
+  const unmatchedHeaterWattsCount = heaterWatts.size - matchedHeaterWattsKeys.size;
+  if (unmatchedHeaterWattsCount > 0) {
+    rootLogger.warn(
+      `${unmatchedHeaterWattsCount} of the ${heaterWatts.size} heater wattage entries match no device id or name. Check the configured names and ids against your devices.`
+    );
+  }
 
   let startedThermostatCount = 0;
   const failedThermostats: Thermostat[] = [];

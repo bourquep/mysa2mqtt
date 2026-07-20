@@ -78,6 +78,8 @@ export class Thermostat {
   private readonly mqttTemperature: Sensor;
   private readonly mqttHumidity: Sensor;
   private readonly mqttPower: Sensor | undefined;
+  /** Set instead of {@link mqttPower} when this device cannot report power, to retire a previously published entity. */
+  private readonly mqttRetiredPower: Sensor | undefined;
 
   private readonly mysaStatusUpdateHandler = (status: Status) => {
     void this.handleMysaStatusUpdate(status).catch((error: unknown) => {
@@ -253,24 +255,28 @@ export class Thermostat {
       }
     });
 
-    this.mqttPower = canReportPower
-      ? new Sensor({
-          mqtt: this.mqttSettings,
-          logger: this.logger,
-          component: {
-            component: 'sensor',
-            device: this.mqttDevice,
-            origin: this.mqttOrigin,
-            unique_id: `mysa_${mysaDevice.Id}_power`,
-            name: 'Current power',
-            device_class: 'power',
-            state_class: 'measurement',
-            unit_of_measurement: 'W',
-            suggested_display_precision: 0,
-            force_update: true
-          }
-        })
-      : undefined;
+    const powerSensor = new Sensor({
+      mqtt: this.mqttSettings,
+      logger: this.logger,
+      component: {
+        component: 'sensor',
+        device: this.mqttDevice,
+        origin: this.mqttOrigin,
+        unique_id: `mysa_${mysaDevice.Id}_power`,
+        name: 'Current power',
+        device_class: 'power',
+        state_class: 'measurement',
+        unit_of_measurement: 'W',
+        suggested_display_precision: 0,
+        force_update: true
+      }
+    });
+
+    // The discovery config is retained, so a device that can no longer report power has to have
+    // its topic cleared explicitly — otherwise an entity published by an earlier run lingers in
+    // Home Assistant forever.
+    this.mqttPower = canReportPower ? powerSensor : undefined;
+    this.mqttRetiredPower = canReportPower ? undefined : powerSensor;
   }
 
   async start() {
@@ -312,6 +318,7 @@ export class Thermostat {
         await this.mqttPower.setState('state_topic', 'None');
         await this.mqttPower.writeConfig();
       }
+      await this.mqttRetiredPower?.removeConfig();
 
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
