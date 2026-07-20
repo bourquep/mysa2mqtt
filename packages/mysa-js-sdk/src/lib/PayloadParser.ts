@@ -17,8 +17,14 @@ export function parseMqttPayload(payload: ArrayBuffer): OutPayload {
     const jsonString = decoder.decode(payload);
     return JSON.parse(jsonString);
   } catch (error) {
-    console.error('Error parsing MQTT payload:', error);
-    throw new Error('Failed to parse MQTT payload');
+    // No console output here: the SDK logger is the only sanctioned sink, and
+    // the raw payload must not leak into output the consumer cannot route or
+    // silence. The caller (_processMqttMessage) logs through the Logger.
+    // The cause is attached via assignment because the project's TS lib
+    // predates the ES2022 Error options constructor; Node supports it.
+    const parseError = new Error('Failed to parse MQTT payload');
+    (parseError as Error & { cause?: unknown }).cause = error;
+    throw parseError;
   }
 }
 
