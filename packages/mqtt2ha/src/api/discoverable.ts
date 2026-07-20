@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+import { readFileSync } from 'fs';
 import { connect, MqttClient } from 'mqtt';
 import { BaseComponentConfiguration, ResolvedComponentConfiguration } from '../configuration/component_configuration';
 import { Logger, VoidLogger } from '../lib/logger';
@@ -144,6 +145,18 @@ export class Discoverable<
     }));
 
     this.logger.debug(`Creating MQTT client for ${identifier}...`);
+    // The TLS settings hold file paths while mqtt.js expects the key and
+    // certificate contents, so they are read here at client creation. A
+    // missing or unreadable file throws immediately: silently connecting
+    // without the configured certificates is the one behaviour a security
+    // setting must never have.
+    const tlsOptions = settings.mqtt.use_tls
+      ? {
+          key: settings.mqtt.tls_key ? readFileSync(settings.mqtt.tls_key) : undefined,
+          cert: settings.mqtt.tls_certfile ? readFileSync(settings.mqtt.tls_certfile) : undefined,
+          ca: settings.mqtt.tls_ca_cert ? readFileSync(settings.mqtt.tls_ca_cert) : undefined
+        }
+      : undefined;
     const client = connect({
       host: settings.mqtt.host,
       port: settings.mqtt.port,
@@ -151,6 +164,7 @@ export class Discoverable<
       password: settings.mqtt.password,
       clientId: `${settings.mqtt.client_name}-${identifier}`,
       protocol: settings.mqtt.use_tls ? 'mqtts' : 'mqtt',
+      ...tlsOptions,
       will: !this.settings.manual_availability
         ? {
             topic: this.availabilityTopic,
