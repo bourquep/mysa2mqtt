@@ -23,6 +23,7 @@
     "build": "npm run build -w mqtt2ha && npm run build -w mysa-js-sdk && npm run build -w mysa2mqtt",
     "build:docs": "npm run build:docs --workspaces --if-present",
     "typecheck": "npm run build && npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "lint": "eslint --max-warnings 0 \"packages/*/src/**/*.ts\"",
     "style-lint": "prettier -c .",
     "style-fix": "prettier -w .",
@@ -52,6 +53,7 @@
     "typedoc": "0.28.20",
     "typedoc-material-theme": "1.4.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.64.0"
+    "typescript-eslint": "8.64.0",
+    "vitest": "4.1.10"
   }
 }
