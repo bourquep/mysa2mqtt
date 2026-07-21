@@ -15,7 +15,13 @@ import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import { customAlphabet } from 'nanoid';
-import { MqttPublishError, MysaApiError, UnauthenticatedError, UnknownDeviceError } from './Errors';
+import {
+  MqttPublishError,
+  MysaApiError,
+  UnauthenticatedError,
+  UnknownDeviceError,
+  UnsupportedFanSpeedError
+} from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
@@ -454,6 +460,7 @@ export class MysaApiClient {
    *   unchanged).
    * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
+   * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
@@ -484,6 +491,12 @@ export class MysaApiClient {
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
     const modeMap = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
     const fanSpeedMap = buildFanSpeedSendMap(device);
+
+    // Reject an unsupported fan speed (e.g. 'max' on a device whose SupportedCaps.fanSpeeds only covers auto/low/
+    // medium/high) rather than silently publishing fn: undefined, which the caller would perceive as a no-op.
+    if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
+      throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
+    }
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
