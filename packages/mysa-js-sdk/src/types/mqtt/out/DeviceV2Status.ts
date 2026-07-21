@@ -20,8 +20,11 @@ export interface DeviceV2Status extends MsgPayload<OutMessageType.DEVICE_V2_STAT
   body: {
     /** Ambient temperature reading from the device sensor */
     ambTemp: number;
-    /** Current duty cycle of the heating element, as a fraction between 0.0 and 1.0 */
-    dtyCycle: number;
+    /**
+     * Current duty cycle of the heating element, as a fraction between 0.0 and 1.0. Reported by baseboard V2 devices;
+     * absent on in-floor heating thermostats (INF-V1-0), which report {@link heatStat} instead.
+     */
+    dtyCycle?: number;
     /** Relative humidity percentage reading from the device sensor */
     hum: number;
     /** Current temperature setpoint setting */
