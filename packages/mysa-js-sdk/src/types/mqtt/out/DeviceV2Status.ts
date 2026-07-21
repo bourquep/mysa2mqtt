@@ -20,11 +20,28 @@ export interface DeviceV2Status extends MsgPayload<OutMessageType.DEVICE_V2_STAT
   body: {
     /** Ambient temperature reading from the device sensor */
     ambTemp: number;
-    /** Current duty cycle of the heating element, as a fraction between 0.0 and 1.0 */
-    dtyCycle: number;
+    /**
+     * Current duty cycle of the heating element, as a fraction between 0.0 and 1.0. Reported by baseboard V2 devices;
+     * absent on in-floor heating thermostats (INF-V1-0), which report {@link heatStat} instead.
+     */
+    dtyCycle?: number;
     /** Relative humidity percentage reading from the device sensor */
     hum: number;
     /** Current temperature setpoint setting */
     stpt: number;
+    /**
+     * Binary heating-relay state (0 = off, 1 = energized) reported by in-floor heating thermostats (INF-V1-0) in place
+     * of {@link dtyCycle}. Absent on baseboard V2 devices.
+     */
+    heatStat?: number;
+    /** Floor-probe temperature reading (°C) from in-floor heating thermostats. Absent on baseboard V2 devices. */
+    flrSnsrTemp?: number;
+    /**
+     * Which sensor the in-floor thermostat regulates against (3 = floor probe, 5 = ambient air). Absent on baseboard V2
+     * devices.
+     */
+    trackedSnsr?: number;
+    /** Line voltage (V) reported by in-floor heating thermostats. Absent on baseboard V2 devices. */
+    lineVtg?: number;
   };
 }

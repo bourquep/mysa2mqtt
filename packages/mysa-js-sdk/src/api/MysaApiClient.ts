@@ -519,11 +519,13 @@ export class MysaApiClient {
             ? 1
             : device.Model.startsWith('AC-V1')
               ? 2
-              : device.Model.startsWith('BB-V2')
-                ? device.Model.endsWith('-L')
-                  ? 5
-                  : 4
-                : 0,
+              : device.Model.startsWith('INF-V1')
+                ? 3
+                : device.Model.startsWith('BB-V2')
+                  ? device.Model.endsWith('-L')
+                    ? 5
+                    : 4
+                  : 0,
         cmd: [
           {
             tm: -1,
@@ -1208,13 +1210,26 @@ export class MysaApiClient {
       } else if (isMsgOutPayload(parsedPayload)) {
         switch (parsedPayload.msg) {
           case OutMessageType.DEVICE_AC_STATUS:
-          case OutMessageType.DEVICE_V2_STATUS:
             this.emitter.emit('statusChanged', {
               deviceId: parsedPayload.src.ref,
               temperature: parsedPayload.body.ambTemp,
               humidity: parsedPayload.body.hum,
               setPoint: parsedPayload.body.stpt,
               dutyCycle: parsedPayload.body.dtyCycle
+            });
+            break;
+
+          case OutMessageType.DEVICE_V2_STATUS:
+            // In-floor heating thermostats (INF-V1-0) share this message type but report a binary heating-relay state
+            // (`heatStat`) instead of a fractional `dtyCycle`, plus a floor-probe temperature. `heatStat` (0 or 1) is a
+            // valid 0.0-1.0 duty fraction, so it maps straight onto `dutyCycle`.
+            this.emitter.emit('statusChanged', {
+              deviceId: parsedPayload.src.ref,
+              temperature: parsedPayload.body.ambTemp,
+              humidity: parsedPayload.body.hum,
+              setPoint: parsedPayload.body.stpt,
+              dutyCycle: parsedPayload.body.dtyCycle ?? parsedPayload.body.heatStat,
+              floorTemperature: parsedPayload.body.flrSnsrTemp
             });
             break;
 
