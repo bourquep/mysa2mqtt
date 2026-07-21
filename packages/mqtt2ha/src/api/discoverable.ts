@@ -45,6 +45,15 @@ interface StateTopicConfiguration {
   topic: string;
 }
 
+/** Optional behavioural flags for a {@link Discoverable} entity. */
+export interface DiscoverableOptions {
+  /**
+   * Permit an entity with no state topics (a command-only entity such as a button). By default at least one state topic
+   * is required.
+   */
+  allowNoStateTopics?: boolean;
+}
+
 /**
  * Base class for Home Assistant MQTT discoverable entities. Handles the MQTT discovery protocol and provides common
  * functionality for all entity types.
@@ -104,14 +113,16 @@ export class Discoverable<
    * @param stateTopicNames - Array of state topic names
    * @param onStateChange - Callback to be called when state changes
    * @param onConnect - Optional callback to be called when MQTT connection is established
+   * @param options - Optional behavioural flags. See {@link DiscoverableOptions}.
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
     stateTopicNames: Extract<keyof TStateMap, string>[],
     onStateChange: StateChangedHandler<TStateMap>,
-    onConnect?: () => void
+    onConnect?: () => void,
+    options?: DiscoverableOptions
   ) {
-    if (stateTopicNames.length === 0) {
+    if (stateTopicNames.length === 0 && !options?.allowNoStateTopics) {
       throw new Error('No state topics provided');
     }
 
