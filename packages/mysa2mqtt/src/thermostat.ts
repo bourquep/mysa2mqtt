@@ -32,6 +32,7 @@ import {
 } from 'mqtt2ha';
 import {
   DeviceBase,
+  DeviceState,
   FirmwareDevice,
   MysaApiClient,
   MysaDeviceMode,
@@ -291,24 +292,10 @@ export class Thermostat {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
       const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
 
-      this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
-      this.mqttClimate.currentHumidity = state.Humidity?.v;
-      this.mqttClimate.currentMode =
-        MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
-      this.mqttClimate.currentFanMode =
-        MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
-      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
-      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
+      await this.publishRestState(state);
 
       await this.mqttClimate.writeConfig();
-
-      await this.mqttTemperature.setState(
-        'state_topic',
-        state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
-      );
       await this.mqttTemperature.writeConfig();
-
-      await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
       await this.mqttHumidity.writeConfig();
 
       // Neither REST field is usable as an initial power state: `state.Current.v` always has a
@@ -330,6 +317,58 @@ export class Thermostat {
       this.clearRealtimeRetry();
       throw error;
     }
+  }
+
+  /**
+   * Refreshes the published entities from a periodic REST state poll.
+   *
+   * The bridge normally tracks state through the real-time MQTT stream, but that connection never establishes for some
+   * fleets (e.g. all-Lite accounts, whose AWS IoT WebSocket handshake fails) and is chronically unstable for others.
+   * This keeps Home Assistant current in those cases: the REST `getDeviceStates` endpoint reports fresh temperature,
+   * humidity, setpoint and mode for every device type regardless of the real-time path.
+   *
+   * A no-op until the thermostat is started, and when the poll response omits this device. Power is intentionally not
+   * refreshed here — see {@link publishRestState}.
+   *
+   * @param state - This device's entry from a `getDeviceStates` response, or undefined when it was absent.
+   */
+  async refreshFromRest(state: DeviceState | undefined): Promise<void> {
+    if (!this.isStarted || state == null) {
+      return;
+    }
+
+    try {
+      await this.publishRestState(state);
+    } catch (error) {
+      this.logger.error('Failed to apply REST state poll', { error, deviceId: this.mysaDevice.Id });
+    }
+  }
+
+  /**
+   * Maps a REST device-state snapshot onto the climate, temperature and humidity entities.
+   *
+   * Shared by startup and the periodic {@link refreshFromRest} poll. It publishes entity state only; discovery config is
+   * written separately. The power sensor is deliberately left untouched: `state.Current` is non-zero even when the
+   * thermostat is off and `state.Duty` lags the real-time duty cycle badly, so power is published only from real-time
+   * status messages.
+   *
+   * @param state - This device's entry from a `getDeviceStates` response.
+   */
+  private async publishRestState(state: DeviceState): Promise<void> {
+    this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
+    this.mqttClimate.currentHumidity = state.Humidity?.v;
+    this.mqttClimate.currentMode =
+      MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
+    this.mqttClimate.currentFanMode =
+      MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
+    this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
+    this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
+
+    await this.mqttTemperature.setState(
+      'state_topic',
+      state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
+    );
+    await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
   }
 
   async stop() {
