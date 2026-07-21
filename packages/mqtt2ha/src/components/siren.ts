@@ -71,12 +71,12 @@ export class Siren extends Subscriber<SirenInfo, StateTopicMap, CommandTopicMap>
    * Creates a new siren instance
    *
    * @param settings - Configuration settings for the siren
-   * @param commandCallback - Callback function to handle siren commands. The message is the raw command payload, which
-   *   may be a plain string or, when tone/duration/volume are used, a JSON object.
+   * @param commandCallback - Callback function to handle siren commands. The message is the raw command payload string;
+   *   when tone/duration/volume are used it is a JSON-encoded string the caller is responsible for decoding.
    */
   constructor(
     settings: ComponentSettings<SirenInfo>,
-    commandCallback: (topicName: string, message: unknown) => Promise<void>
+    commandCallback: (topicName: string, message: string) => Promise<void>
   ) {
     super(settings, ['state_topic'], async () => {}, ['command_topic'], commandCallback);
   }

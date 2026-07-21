@@ -37,9 +37,11 @@ describe('Siren', () => {
     expect(client.lastPayload(STATE)).toBe('sounding');
   });
 
-  it('forwards a JSON command to the callback', async () => {
+  it('forwards the raw command payload to the callback', () => {
     const { client, callback } = makeSiren();
-    client.deliver(stateTopic('siren', 'sr1', 'command'), JSON.stringify({ state: 'ON', tone: 'wail' }));
-    await vi.waitFor(() => expect(callback).toHaveBeenCalledWith('command_topic', { state: 'ON', tone: 'wail' }));
+    // Command payloads arrive as raw strings; a component that expects JSON decodes it itself.
+    const payload = JSON.stringify({ state: 'ON', tone: 'wail' });
+    client.deliver(stateTopic('siren', 'sr1', 'command'), payload);
+    expect(callback).toHaveBeenCalledWith('command_topic', payload);
   });
 });
