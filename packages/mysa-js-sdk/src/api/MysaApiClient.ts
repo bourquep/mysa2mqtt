@@ -179,6 +179,12 @@ export class MysaApiClient {
   /** The device IDs that are currently being updated in real-time, mapped to their respective timeouts. */
   private _realtimeDeviceIds: Map<string, NodeJS.Timeout> = new Map();
 
+  /**
+   * Raw topic filters registered via {@link startRawTopicCapture}, mapped to their message handlers. Re-subscribed on
+   * every reconnect so a debug capture survives connection resets.
+   */
+  private _rawTopicCaptures: Map<string, (topic: string, payload: string) => void> = new Map();
+
   /** The cached devices object, if any. */
   private _cachedDevices?: Devices;
 
@@ -648,6 +654,55 @@ export class MysaApiClient {
   }
 
   /**
+   * Subscribes to raw MQTT topic filters and relays every message verbatim.
+   *
+   * Unlike {@link startRealtimeUpdates}, this performs no parsing, emits no typed events and sends no "start
+   * publishing" request to the device — it simply forwards the full message topic and the decoded UTF-8 payload of
+   * everything that arrives on the given filters. It exists to reverse-engineer device families the SDK does not model
+   * yet, most notably the AWS IoT Device Shadow protocol used by the central-HVAC ST-V1 thermostats, where both the
+   * topic (which shadow, and `accepted`/`rejected`/`delta`/`documents`) and the raw JSON body carry the information a
+   * new implementation needs.
+   *
+   * The capture is passive: the device only publishes to its shadow topics when something drives a change (the Mysa
+   * mobile app, a schedule, or the device itself), so exercise the thermostat while a capture is running.
+   *
+   * Registered filters are re-subscribed automatically after a reconnect.
+   *
+   * @param topicFilters - MQTT topic filters to subscribe to. Wildcards (`+`, `#`) are allowed, subject to the AWS IoT
+   *   policy attached to the account's Cognito identity — a filter the policy forbids resolves with a non-zero
+   *   `error_code`, which is logged rather than thrown so the remaining filters still subscribe.
+   * @param handler - Invoked with the full message topic and the decoded UTF-8 payload for every message received.
+   * @throws {@link Error} When the MQTT connection cannot be established.
+   */
+  async startRawTopicCapture(
+    topicFilters: string[],
+    handler: (topic: string, payload: string) => void
+  ): Promise<void> {
+    this._logger.info(`Starting raw topic capture for ${topicFilters.length} filter(s)`);
+
+    const connection = await this._getMqttConnection();
+    const decoder = new TextDecoder('utf-8');
+
+    for (const filter of topicFilters) {
+      this._rawTopicCaptures.set(filter, handler);
+      this._logger.debug(`Subscribing to raw topic filter '${filter}'...`);
+      try {
+        const result = await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
+          handler(topic, decoder.decode(payload));
+        });
+        this._logger.debug(
+          `Raw subscribe to '${filter}' granted (topic='${result.topic}', qos=${result.qos}, ` +
+            `error_code=${result.error_code ?? 0})`
+        );
+      } catch (error) {
+        // A rejected filter (e.g. denied by the IoT policy) must not abort the whole capture: keep the
+        // registration so a reconnect retries it, and let the remaining filters subscribe.
+        this._logger.warn(`Failed to subscribe to raw topic filter '${filter}'`, error);
+      }
+    }
+  }
+
+  /**
    * Ensures a valid, non-expired session is available.
    *
    * This method checks if the current session is valid and not expired. If the session is expired, it automatically
@@ -1068,6 +1123,16 @@ export class MysaApiClient {
       this._logger.debug(`Re-subscribing to ${topic}`);
       await connection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
         this._processMqttMessage(payload);
+      });
+    }
+
+    // Restore any raw debug-capture subscriptions (see startRawTopicCapture) so a capture keeps
+    // flowing across reconnects.
+    const decoder = new TextDecoder('utf-8');
+    for (const [filter, handler] of Array.from(this._rawTopicCaptures.entries())) {
+      this._logger.debug(`Re-subscribing to raw topic filter '${filter}'`);
+      await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
+        handler(topic, decoder.decode(payload));
       });
     }
   }
