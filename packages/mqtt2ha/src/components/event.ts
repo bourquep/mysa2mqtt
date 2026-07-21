@@ -57,7 +57,10 @@ export class Event extends Discoverable<EventInfo, StateTopicMap> {
    */
   async trigger(eventType: string, attributes?: Record<string, unknown>) {
     if (!this.component.event_types.includes(eventType)) {
-      this.logger.warn(`Event type '${eventType}' is not part of the configured 'event_types'.`);
+      // Home Assistant rejects any event_type not declared in event_types, so
+      // there is nothing to gain from publishing it.
+      this.logger.warn(`Event type '${eventType}' is not part of the configured 'event_types'; ignoring.`);
+      return;
     }
 
     // The event payload must not be retained: an event is a momentary

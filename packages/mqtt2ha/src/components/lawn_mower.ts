@@ -26,6 +26,7 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/** The activity a lawn mower can report: `mowing`, `docked`, `paused`, in an `error` state, or `returning` to base. */
 export type LawnMowerActivity = 'mowing' | 'docked' | 'paused' | 'error' | 'returning';
 
 type StateTopicMap = {
@@ -70,6 +71,7 @@ export interface LawnMowerInfo extends ComponentConfiguration<'lawn_mower'> {
 export class LawnMower extends Subscriber<LawnMowerInfo, StateTopicMap, CommandTopicMap> {
   private _activity?: LawnMowerActivity;
 
+  /** @returns The current activity. Setting a defined value publishes it on the `activity_state_topic`. */
   get activity() {
     return this._activity;
   }

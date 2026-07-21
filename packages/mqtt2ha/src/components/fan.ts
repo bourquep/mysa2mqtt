@@ -26,6 +26,7 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/** The rotation direction a fan can report. */
 export type FanDirection = 'forward' | 'reverse';
 
 type StateTopicMap = {
@@ -96,6 +97,7 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
   private _oscillation?: boolean;
   private _direction?: FanDirection;
 
+  /** @returns Whether the fan is on. Setting a value publishes the configured on/off payload on the `state_topic`. */
   get isOn() {
     return this._isOn;
   }
@@ -110,17 +112,26 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
     }
   }
 
+  /**
+   * @returns The fan speed as a percentage (0-100). Setting a defined value publishes it on the
+   *   `percentage_state_topic`; setting `undefined` publishes the configured `payload_reset_percentage`.
+   */
   get percentage() {
     return this._percentage;
   }
 
   set percentage(percentage: number | undefined) {
     this._percentage = percentage;
-    if (percentage !== undefined) {
-      this.setStateSync('percentage_state_topic', String(percentage));
-    }
+    this.setStateSync(
+      'percentage_state_topic',
+      percentage !== undefined ? String(percentage) : (this.component.payload_reset_percentage ?? 'None')
+    );
   }
 
+  /**
+   * @returns The active preset mode. Setting it publishes the value on the `preset_mode_state_topic`; setting
+   *   `undefined` publishes the configured `payload_reset_preset_mode`.
+   */
   get presetMode() {
     return this._presetMode;
   }
@@ -130,6 +141,10 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
     this.setStateSync('preset_mode_state_topic', presetMode ?? this.component.payload_reset_preset_mode ?? 'None');
   }
 
+  /**
+   * @returns Whether the fan is oscillating. Setting a defined value publishes the configured oscillation on/off
+   *   payload on the `oscillation_state_topic`.
+   */
   get oscillation() {
     return this._oscillation;
   }
@@ -146,6 +161,7 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
     }
   }
 
+  /** @returns The rotation direction. Setting a defined value publishes it on the `direction_state_topic`. */
   get direction() {
     return this._direction;
   }
@@ -194,9 +210,15 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
         }
         break;
 
-      case 'percentage_command_topic':
-        this.percentage = parseInt(message, 10);
+      case 'percentage_command_topic': {
+        const percentage = parseInt(message, 10);
+        if (Number.isNaN(percentage)) {
+          this.logger.warn("Received a non-numeric payload on the 'percentage_command_topic':", message);
+          break;
+        }
+        this.percentage = percentage;
         break;
+      }
 
       case 'preset_mode_command_topic':
         this.presetMode = message;

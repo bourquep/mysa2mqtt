@@ -26,6 +26,7 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/** The states a valve can report: fully `open`, `opening`, fully `closed`, or `closing`. */
 export type ValveState = 'open' | 'opening' | 'closed' | 'closing';
 
 type StateTopicMap = {
@@ -77,6 +78,7 @@ export class Valve extends Subscriber<ValveInfo, StateTopicMap, CommandTopicMap>
   private _currentState?: ValveState;
   private _position?: number;
 
+  /** @returns The current valve state. Setting it publishes the configured payload for that state on the `state_topic`. */
   get currentState() {
     return this._currentState;
   }
@@ -94,6 +96,10 @@ export class Valve extends Subscriber<ValveInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /**
+   * @returns The current valve position (typically 0-100), used when `reports_position` is enabled. Setting a defined
+   *   value publishes it on the `position_topic`.
+   */
   get position() {
     return this._position;
   }
@@ -142,9 +148,15 @@ export class Valve extends Subscriber<ValveInfo, StateTopicMap, CommandTopicMap>
         }
         break;
 
-      case 'set_position_topic':
-        this.position = parseFloat(message);
+      case 'set_position_topic': {
+        const position = parseFloat(message);
+        if (Number.isNaN(position)) {
+          this.logger.warn("Received a non-numeric payload on the 'set_position_topic':", message);
+          break;
+        }
+        this.position = position;
         break;
+      }
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);

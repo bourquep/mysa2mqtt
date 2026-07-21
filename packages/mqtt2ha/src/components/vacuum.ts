@@ -26,6 +26,10 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/**
+ * The activity a vacuum can report: `cleaning`, `docked`, `returning` to base, `paused`, `idle`, or in an `error`
+ * state.
+ */
 export type VacuumState = 'cleaning' | 'docked' | 'returning' | 'paused' | 'idle' | 'error';
 
 /** The JSON payload published on a vacuum's state topic. */
@@ -87,6 +91,7 @@ export class Vacuum extends Subscriber<VacuumInfo, StateTopicMap, CommandTopicMa
     return this._state;
   }
 
+  /** @returns The current activity. Setting it updates and republishes the full state payload on the `state_topic`. */
   get activity() {
     return this._state.state;
   }
@@ -96,6 +101,7 @@ export class Vacuum extends Subscriber<VacuumInfo, StateTopicMap, CommandTopicMa
     this.setStateSync('state_topic', this._state);
   }
 
+  /** @returns The current battery level, as a percentage. Setting it updates and republishes the full state payload. */
   get batteryLevel() {
     return this._state.battery_level;
   }
@@ -105,6 +111,7 @@ export class Vacuum extends Subscriber<VacuumInfo, StateTopicMap, CommandTopicMa
     this.setStateSync('state_topic', this._state);
   }
 
+  /** @returns The current fan speed. Setting it updates and republishes the full state payload. */
   get fanSpeed() {
     return this._state.fan_speed;
   }
@@ -130,7 +137,41 @@ export class Vacuum extends Subscriber<VacuumInfo, StateTopicMap, CommandTopicMa
     commandTopicNames: Extract<keyof CommandTopicMap, string>[],
     onCommand: CommandCallback<CommandTopicMap>
   ) {
-    super(settings, stateTopicNames, onStateChange, commandTopicNames, onCommand);
+    super(settings, stateTopicNames, onStateChange, commandTopicNames, async (topicName, message) => {
+      this.handleCommand(topicName, message);
+      await onCommand(topicName, message);
+    });
+  }
+
+  private handleCommand<TTopicName extends keyof CommandTopicMap & string>(
+    topicName: TTopicName,
+    message: CommandTopicMap[TTopicName]
+  ) {
+    switch (topicName) {
+      case 'command_topic':
+        // Reflect the recognized primary commands into an optimistic activity.
+        // The `locate` command has no associated state, and any custom payload
+        // is left for the caller's onCommand handler to interpret.
+        if (message === (this.component.payload_start ?? 'start')) {
+          this.activity = 'cleaning';
+        } else if (message === (this.component.payload_stop ?? 'stop')) {
+          this.activity = 'idle';
+        } else if (message === (this.component.payload_pause ?? 'pause')) {
+          this.activity = 'paused';
+        } else if (message === (this.component.payload_return_to_base ?? 'return_to_base')) {
+          this.activity = 'returning';
+        } else if (message === (this.component.payload_clean_spot ?? 'clean_spot')) {
+          this.activity = 'cleaning';
+        }
+        break;
+
+      case 'set_fan_speed_command_topic':
+        this.fanSpeed = message;
+        break;
+
+      // `send_command_topic` carries arbitrary custom commands with no state
+      // mapping, so it is handled entirely by the caller's onCommand handler.
+    }
   }
 
   /**

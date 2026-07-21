@@ -26,6 +26,10 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/**
+ * The operation modes a water heater can report: `off`, `eco`, `electric`, `gas`, `heat_pump`, `high_demand`,
+ * `performance`.
+ */
 export type WaterHeaterMode = 'off' | 'eco' | 'electric' | 'gas' | 'heat_pump' | 'high_demand' | 'performance';
 
 type StateTopicMap = {
@@ -99,6 +103,10 @@ export class WaterHeater extends Subscriber<WaterHeaterInfo, StateTopicMap, Comm
   private _targetTemperature?: number;
   private _currentTemperature?: number;
 
+  /**
+   * @returns The active operation mode. Setting a mode other than `off` also records it as the last "on" mode used to
+   *   restore power, and publishes the value on the `mode_state_topic`.
+   */
   get currentMode() {
     return this._currentMode;
   }
@@ -111,6 +119,10 @@ export class WaterHeater extends Subscriber<WaterHeaterInfo, StateTopicMap, Comm
     this.setStateSync('mode_state_topic', mode ?? 'None');
   }
 
+  /**
+   * @returns The target temperature. Setting it publishes the value on the `temperature_state_topic`; setting
+   *   `undefined` publishes `"None"` to reset it.
+   */
   get targetTemperature() {
     return this._targetTemperature;
   }
@@ -120,6 +132,10 @@ export class WaterHeater extends Subscriber<WaterHeaterInfo, StateTopicMap, Comm
     this.setStateSync('temperature_state_topic', temperature?.toFixed(1) ?? 'None');
   }
 
+  /**
+   * @returns The measured current temperature. Setting it publishes the value on the `current_temperature_topic`;
+   *   setting `undefined` publishes `"None"` to reset it.
+   */
   get currentTemperature() {
     return this._currentTemperature;
   }
@@ -160,13 +176,22 @@ export class WaterHeater extends Subscriber<WaterHeaterInfo, StateTopicMap, Comm
         this.currentMode = message;
         break;
 
-      case 'temperature_command_topic':
-        this.targetTemperature = parseFloat(message);
+      case 'temperature_command_topic': {
+        const temperature = parseFloat(message);
+        if (Number.isNaN(temperature)) {
+          this.logger.warn("Received a non-numeric payload on the 'temperature_command_topic':", message);
+          break;
+        }
+        this.targetTemperature = temperature;
         break;
+      }
 
       case 'power_command_topic':
         if (message === (this.component.payload_on ?? 'ON')) {
-          this.currentMode = this._lastOnMode;
+          // When the device has never reported an "on" mode, fall back to the
+          // first configured non-off mode so a power-on never publishes an
+          // undefined mode.
+          this.currentMode = this._lastOnMode ?? this.component.modes?.find((mode) => mode !== 'off');
         } else if (message === (this.component.payload_off ?? 'OFF')) {
           this.currentMode = 'off';
         } else {

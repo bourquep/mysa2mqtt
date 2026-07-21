@@ -29,8 +29,8 @@ import { Subscriber } from '../api/subscriber';
 export interface UpdatePayload {
   /** The currently installed version. */
   installed_version: string;
-  /** The latest available version. */
-  latest_version: string;
+  /** The latest available version. When omitted, Home Assistant assumes it is equal to the installed version. */
+  latest_version?: string;
   /** Title of the software or firmware update. */
   title?: string;
   /** Summary of the release notes or changelog. */
@@ -41,12 +41,16 @@ export interface UpdatePayload {
   entity_picture?: string;
   /** Whether the update is currently in progress, or a percentage (0-100) of completion. */
   in_progress?: boolean;
-  /** The current progress of an in-progress update, as a percentage (0-100). */
-  update_percentage?: number;
+  /** The current progress of an in-progress update, as a percentage (0-100), or `null` when not in progress. */
+  update_percentage?: number | null;
 }
 
 type StateTopicMap = {
-  state_topic: UpdatePayload;
+  /**
+   * The update state, published either as a plain installed-version string or as a full {@link UpdatePayload} JSON
+   * object.
+   */
+  state_topic: string | UpdatePayload;
 };
 
 type CommandTopicMap = {
@@ -70,9 +74,9 @@ export interface UpdateInfo extends ComponentConfiguration<'update'> {
  * an `install` command topic is provided, trigger an installation.
  */
 export class Update extends Subscriber<UpdateInfo, StateTopicMap, CommandTopicMap> {
-  private _payload?: UpdatePayload;
+  private _payload?: string | UpdatePayload;
 
-  /** @returns The last published update payload. */
+  /** @returns The last published update state (a plain version string or a full payload). */
   get payload() {
     return this._payload;
   }
@@ -93,9 +97,10 @@ export class Update extends Subscriber<UpdateInfo, StateTopicMap, CommandTopicMa
   /**
    * Reports the current version information.
    *
-   * @param payload - The update payload describing installed and latest versions and optional metadata.
+   * @param payload - The update state. Either a plain installed-version string, or an {@link UpdatePayload} describing
+   *   the installed and latest versions and optional metadata.
    */
-  async setUpdateState(payload: UpdatePayload) {
+  async setUpdateState(payload: string | UpdatePayload) {
     this._payload = payload;
     await this.setState('state_topic', payload);
   }

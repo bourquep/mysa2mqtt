@@ -26,6 +26,7 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/** The current action a humidifier can report: `off`, actively `humidifying`, `drying`, or `idle`. */
 export type HumidifierAction = 'off' | 'humidifying' | 'drying' | 'idle';
 
 type StateTopicMap = {
@@ -93,6 +94,10 @@ export class Humidifier extends Subscriber<HumidifierInfo, StateTopicMap, Comman
   private _currentMode?: string;
   private _currentAction?: HumidifierAction;
 
+  /**
+   * @returns Whether the humidifier is on. Setting a value publishes the configured on/off payload on the
+   *   `state_topic`.
+   */
   get isOn() {
     return this._isOn;
   }
@@ -107,6 +112,10 @@ export class Humidifier extends Subscriber<HumidifierInfo, StateTopicMap, Comman
     }
   }
 
+  /**
+   * @returns The measured current humidity, as a percentage. Setting it publishes the value on the
+   *   `current_humidity_topic`; setting `undefined` publishes `"None"` to reset it.
+   */
   get currentHumidity() {
     return this._currentHumidity;
   }
@@ -116,24 +125,36 @@ export class Humidifier extends Subscriber<HumidifierInfo, StateTopicMap, Comman
     this.setStateSync('current_humidity_topic', humidity?.toFixed(1) ?? 'None');
   }
 
+  /**
+   * @returns The target humidity, as a percentage. Setting it publishes the value on the `target_humidity_state_topic`;
+   *   setting `undefined` publishes the configured `payload_reset_humidity`.
+   */
   get targetHumidity() {
     return this._targetHumidity;
   }
 
   set targetHumidity(humidity: number | undefined) {
     this._targetHumidity = humidity;
-    this.setStateSync('target_humidity_state_topic', humidity?.toFixed(1) ?? 'None');
+    this.setStateSync(
+      'target_humidity_state_topic',
+      humidity?.toFixed(1) ?? this.component.payload_reset_humidity ?? 'None'
+    );
   }
 
+  /**
+   * @returns The active mode. Setting it publishes the value on the `mode_state_topic`; setting `undefined` publishes
+   *   the configured `payload_reset_mode`.
+   */
   get currentMode() {
     return this._currentMode;
   }
 
   set currentMode(mode: string | undefined) {
     this._currentMode = mode;
-    this.setStateSync('mode_state_topic', mode ?? 'None');
+    this.setStateSync('mode_state_topic', mode ?? this.component.payload_reset_mode ?? 'None');
   }
 
+  /** @returns The current action. Setting a defined value publishes it on the `action_topic`. */
   get currentAction() {
     return this._currentAction;
   }
@@ -182,9 +203,15 @@ export class Humidifier extends Subscriber<HumidifierInfo, StateTopicMap, Comman
         }
         break;
 
-      case 'target_humidity_command_topic':
-        this.targetHumidity = parseFloat(message);
+      case 'target_humidity_command_topic': {
+        const humidity = parseFloat(message);
+        if (Number.isNaN(humidity)) {
+          this.logger.warn("Received a non-numeric payload on the 'target_humidity_command_topic':", message);
+          break;
+        }
+        this.targetHumidity = humidity;
         break;
+      }
 
       case 'mode_command_topic':
         this.currentMode = message;

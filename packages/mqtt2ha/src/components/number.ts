@@ -84,7 +84,11 @@ export class NumberEntity extends Subscriber<NumberInfo, StateTopicMap, CommandT
       async () => {},
       ['command_topic'],
       async (topicName: string, message: unknown) => {
-        const value = typeof message === 'number' ? message : parseFloat(String(message));
+        const value = typeof message === 'number' ? message : Number(String(message));
+        if (!Number.isFinite(value)) {
+          this.logger.warn("Received a non-numeric payload on the 'command_topic':", message);
+          return;
+        }
         await this.setValue(value);
         await commandCallback(topicName, value);
       }
@@ -97,6 +101,10 @@ export class NumberEntity extends Subscriber<NumberInfo, StateTopicMap, CommandT
    * @param value - The numeric value to report.
    */
   async setValue(value: number) {
+    if (!Number.isFinite(value)) {
+      this.logger.warn('Refusing to publish a non-finite number value:', value);
+      return;
+    }
     this._value = value;
     await this.setState('state_topic', String(value));
   }

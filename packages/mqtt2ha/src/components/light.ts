@@ -88,7 +88,10 @@ export interface LightInfo extends ComponentConfiguration<'light'> {
   max_mireds?: number;
   /** The list of effects the light supports. */
   effect_list?: string[];
-  /** Defines when the payload sent to `command_topic` should be sent. Either `"last"` or `"first"`. Default: `"last"`. */
+  /**
+   * Defines when the payload sent to `command_topic` should be sent. One of `"last"`, `"first"` or `"brightness"`.
+   * Default: `"last"`.
+   */
   on_command_type?: 'first' | 'last' | 'brightness';
   /** Flag that defines if the light works in optimistic mode. Default: `true` if no state topic defined, else `false`. */
   optimistic?: boolean;
@@ -104,6 +107,7 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
   private _rgb?: RgbColor;
   private _effect?: string;
 
+  /** @returns Whether the light is on. Setting a value publishes the configured on/off payload on the `state_topic`. */
   get isOn() {
     return this._isOn;
   }
@@ -118,6 +122,10 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /**
+   * @returns The brightness (0 to `brightness_scale`, default 255). Setting a defined value publishes it on the
+   *   `brightness_state_topic`.
+   */
   get brightness() {
     return this._brightness;
   }
@@ -129,6 +137,10 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /**
+   * @returns The color temperature (in mireds, or Kelvin when `color_temp_kelvin` is set). Setting a defined value
+   *   publishes it on the `color_temp_state_topic`.
+   */
   get colorTemp() {
     return this._colorTemp;
   }
@@ -140,6 +152,7 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /** @returns The RGB color. Setting a defined value publishes it as a `r,g,b` string on the `rgb_state_topic`. */
   get rgb() {
     return this._rgb;
   }
@@ -151,6 +164,7 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /** @returns The active effect. Setting a defined value publishes it on the `effect_state_topic`. */
   get effect() {
     return this._effect;
   }
@@ -199,16 +213,33 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
         }
         break;
 
-      case 'brightness_command_topic':
-        this.brightness = parseInt(message, 10);
+      case 'brightness_command_topic': {
+        const brightness = parseInt(message, 10);
+        if (Number.isNaN(brightness)) {
+          this.logger.warn("Received a non-numeric payload on the 'brightness_command_topic':", message);
+          break;
+        }
+        this.brightness = brightness;
         break;
+      }
 
-      case 'color_temp_command_topic':
-        this.colorTemp = parseInt(message, 10);
+      case 'color_temp_command_topic': {
+        const colorTemp = parseInt(message, 10);
+        if (Number.isNaN(colorTemp)) {
+          this.logger.warn("Received a non-numeric payload on the 'color_temp_command_topic':", message);
+          break;
+        }
+        this.colorTemp = colorTemp;
         break;
+      }
 
       case 'rgb_command_topic': {
-        const [r, g, b] = message.split(',').map((v) => parseInt(v, 10));
+        const parts = message.split(',').map((v) => parseInt(v, 10));
+        if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) {
+          this.logger.warn("Received an invalid RGB payload on the 'rgb_command_topic':", message);
+          break;
+        }
+        const [r, g, b] = parts;
         this.rgb = { r, g, b };
         break;
       }

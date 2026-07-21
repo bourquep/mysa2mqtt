@@ -26,6 +26,7 @@ import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
 
+/** The states a cover can report: fully `open`, `opening`, fully `closed`, `closing`, or `stopped` mid-travel. */
 export type CoverState = 'open' | 'opening' | 'closed' | 'closing' | 'stopped';
 
 type StateTopicMap = {
@@ -96,6 +97,7 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
   private _position?: number;
   private _tiltPosition?: number;
 
+  /** @returns The current cover state. Setting it publishes the configured payload for that state on the `state_topic`. */
   get currentState() {
     return this._currentState;
   }
@@ -114,6 +116,10 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /**
+   * @returns The current cover position (typically 0-100). Setting a defined value publishes it on the
+   *   `position_topic`.
+   */
   get position() {
     return this._position;
   }
@@ -125,6 +131,10 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
     }
   }
 
+  /**
+   * @returns The current cover tilt position (typically 0-100). Setting a value publishes it on the
+   *   `tilt_status_topic`.
+   */
   get tiltPosition() {
     return this._tiltPosition;
   }
@@ -175,13 +185,25 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
         }
         break;
 
-      case 'set_position_topic':
-        this.position = parseFloat(message);
+      case 'set_position_topic': {
+        const position = parseFloat(message);
+        if (Number.isNaN(position)) {
+          this.logger.warn("Received a non-numeric payload on the 'set_position_topic':", message);
+          break;
+        }
+        this.position = position;
         break;
+      }
 
-      case 'tilt_command_topic':
-        this.tiltPosition = parseFloat(message);
+      case 'tilt_command_topic': {
+        const tilt = parseFloat(message);
+        if (Number.isNaN(tilt)) {
+          this.logger.warn("Received a non-numeric payload on the 'tilt_command_topic':", message);
+          break;
+        }
+        this.tiltPosition = tilt;
         break;
+      }
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);

@@ -80,7 +80,10 @@ export class Select extends Subscriber<SelectInfo, StateTopicMap, CommandTopicMa
    */
   async setSelectedOption(option: string) {
     if (!this.component.options.includes(option)) {
-      this.logger.warn(`Option '${option}' is not part of the configured 'options'.`);
+      // Home Assistant only accepts a value present in the options list, so
+      // publishing anything else would just be ignored.
+      this.logger.warn(`Option '${option}' is not part of the configured 'options'; ignoring.`);
+      return;
     }
     this._selectedOption = option;
     await this.setState('state_topic', option);
