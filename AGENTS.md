@@ -21,6 +21,10 @@ merged.
 Layering rule: `mysa2mqtt` may depend on both libraries; the libraries must not depend on each other or on the CLI. Do
 not introduce Mysa-specific concepts into `mqtt2ha`.
 
+## Worktree Setup
+
+After creating a worktree, run `npm ci` from the repository root to install dependencies.
+
 ## Commands
 
 Always run from the repository root:
