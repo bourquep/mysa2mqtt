@@ -214,8 +214,9 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
         break;
 
       case 'brightness_command_topic': {
+        // `Number('')` and `Number('  ')` are 0, so a blank payload must be rejected explicitly.
         const brightness = Number(message);
-        if (!Number.isFinite(brightness)) {
+        if (message.trim() === '' || !Number.isFinite(brightness)) {
           this.logger.warn("Received a non-numeric payload on the 'brightness_command_topic':", message);
           break;
         }
@@ -225,7 +226,7 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
 
       case 'color_temp_command_topic': {
         const colorTemp = Number(message);
-        if (!Number.isFinite(colorTemp)) {
+        if (message.trim() === '' || !Number.isFinite(colorTemp)) {
           this.logger.warn("Received a non-numeric payload on the 'color_temp_command_topic':", message);
           break;
         }

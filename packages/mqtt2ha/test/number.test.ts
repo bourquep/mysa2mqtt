@@ -37,6 +37,15 @@ describe('NumberEntity', () => {
     expect(callback).not.toHaveBeenCalled();
   });
 
+  it('rejects a blank command instead of treating it as zero', async () => {
+    const { number, client, callback } = makeNumber();
+    client.deliver(COMMAND, '   ');
+    await Promise.resolve();
+    expect(number.value).toBeUndefined();
+    expect(client.publishesFor(STATE)).toHaveLength(0);
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it('refuses to publish a non-finite value passed directly', async () => {
     const { number, client } = makeNumber();
     await number.setValue(Number.POSITIVE_INFINITY);

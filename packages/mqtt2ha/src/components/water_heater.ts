@@ -178,7 +178,7 @@ export class WaterHeater extends Subscriber<WaterHeaterInfo, StateTopicMap, Comm
 
       case 'temperature_command_topic': {
         const temperature = Number(message);
-        if (!Number.isFinite(temperature)) {
+        if (message.trim() === '' || !Number.isFinite(temperature)) {
           this.logger.warn("Received a non-numeric payload on the 'temperature_command_topic':", message);
           break;
         }

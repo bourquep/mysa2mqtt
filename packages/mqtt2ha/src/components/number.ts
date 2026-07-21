@@ -84,8 +84,9 @@ export class NumberEntity extends Subscriber<NumberInfo, StateTopicMap, CommandT
       async () => {},
       ['command_topic'],
       async (topicName: string, message: unknown) => {
+        // `Number('')` and `Number('  ')` are 0, so a blank string payload must be rejected explicitly.
         const value = typeof message === 'number' ? message : Number(String(message));
-        if (!Number.isFinite(value)) {
+        if ((typeof message === 'string' && message.trim() === '') || !Number.isFinite(value)) {
           this.logger.warn("Received a non-numeric payload on the 'command_topic':", message);
           return;
         }

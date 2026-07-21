@@ -57,4 +57,11 @@ describe('Light', () => {
     expect(light.brightness).toBeUndefined();
     expect(client.publishesFor(BRIGHTNESS)).toHaveLength(0);
   });
+
+  it('rejects a blank brightness command instead of treating it as zero', () => {
+    const { light, client } = makeLight();
+    client.deliver(stateTopic('light', 'l1', 'brightness_command'), '   ');
+    expect(light.brightness).toBeUndefined();
+    expect(client.publishesFor(BRIGHTNESS)).toHaveLength(0);
+  });
 });

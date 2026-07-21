@@ -187,7 +187,7 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
 
       case 'set_position_topic': {
         const position = Number(message);
-        if (!Number.isFinite(position)) {
+        if (message.trim() === '' || !Number.isFinite(position)) {
           this.logger.warn("Received a non-numeric payload on the 'set_position_topic':", message);
           break;
         }
@@ -197,7 +197,7 @@ export class Cover extends Subscriber<CoverInfo, StateTopicMap, CommandTopicMap>
 
       case 'tilt_command_topic': {
         const tilt = Number(message);
-        if (!Number.isFinite(tilt)) {
+        if (message.trim() === '' || !Number.isFinite(tilt)) {
           this.logger.warn("Received a non-numeric payload on the 'tilt_command_topic':", message);
           break;
         }

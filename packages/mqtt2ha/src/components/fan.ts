@@ -212,7 +212,7 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
 
       case 'percentage_command_topic': {
         const percentage = Number(message);
-        if (!Number.isFinite(percentage)) {
+        if (message.trim() === '' || !Number.isFinite(percentage)) {
           this.logger.warn("Received a non-numeric payload on the 'percentage_command_topic':", message);
           break;
         }

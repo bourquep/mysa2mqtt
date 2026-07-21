@@ -150,7 +150,7 @@ export class Valve extends Subscriber<ValveInfo, StateTopicMap, CommandTopicMap>
 
       case 'set_position_topic': {
         const position = Number(message);
-        if (!Number.isFinite(position)) {
+        if (message.trim() === '' || !Number.isFinite(position)) {
           this.logger.warn("Received a non-numeric payload on the 'set_position_topic':", message);
           break;
         }
