@@ -1,5 +1,12 @@
 # mysa2mqtt
 
+## 3.0.1
+
+### Patch Changes
+
+- Updated dependencies [[`42b7008`](https://github.com/bourquep/mysa2mqtt/commit/42b7008a4b5f71a27f6b041a9fd0811a7efc0f4a), [`d578966`](https://github.com/bourquep/mysa2mqtt/commit/d5789661c7f134e183102291cdce09fc4364d8eb)]:
+  - mqtt2ha@5.1.0
+
 ## 3.0.0
 
 ### Major Changes

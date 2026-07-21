@@ -1,5 +1,21 @@
 # mqtt2ha
 
+## 5.1.0
+
+### Minor Changes
+
+- [#215](https://github.com/bourquep/mysa2mqtt/pull/215) [`d578966`](https://github.com/bourquep/mysa2mqtt/commit/d5789661c7f134e183102291cdce09fc4364d8eb) Thanks [@bourquep](https://github.com/bourquep)! - Implement the remaining Home Assistant MQTT components ([#180](https://github.com/bourquep/mysa2mqtt/issues/180)).
+
+  Adds `alarm_control_panel`, `camera`, `cover`, `event`, `fan`, `humidifier`, `image`, `lawn_mower`, `light`, `lock`, `number`, `scene`, `select`, `siren`, `text`, `update`, `vacuum`, `valve` and `water_heater`, completing the set of discoverable entity types. Each follows the existing component conventions: state-only entities extend `Discoverable`, while entities that accept commands extend `Subscriber`, exposing typed configuration interfaces and convenience accessors that publish state and reflect incoming commands.
+
+  The `number` component is exported as `NumberEntity` to avoid shadowing the built-in `Number` global.
+
+### Patch Changes
+
+- [#213](https://github.com/bourquep/mysa2mqtt/pull/213) [`42b7008`](https://github.com/bourquep/mysa2mqtt/commit/42b7008a4b5f71a27f6b041a9fd0811a7efc0f4a) Thanks [@bourquep](https://github.com/bourquep)! - Stop `JSON.parse`-ing command payloads, which changed their runtime type ([#163](https://github.com/bourquep/mysa2mqtt/issues/163)).
+
+  `Subscriber` used to `JSON.parse` each incoming command payload and fall back to the raw string, then cast the result to the command-map type. Because Home Assistant MQTT command payloads are strings, this meant `'123'` reached handlers as a `number` and `'true'` as a `boolean`, while `'ON'` stayed a `string` — the runtime type depended on the payload's content, contradicting the declared type. The raw string is now passed through unchanged, and `CommandCallback`/`Subscriber` constrain command-map values to `string`. Components that carry a JSON-encoded payload on a command topic are responsible for decoding it in their own handler.
+
 ## 5.0.0
 
 ### Major Changes
