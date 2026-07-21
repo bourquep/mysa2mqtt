@@ -418,6 +418,54 @@ Then run:
 docker-compose up -d
 ```
 
+## Capturing data for a new thermostat type
+
+Supporting a new Mysa model means knowing exactly how it talks to the cloud. The baseboard and AC thermostats use a
+custom `/v1/dev/{id}/...` MQTT protocol, but the central-HVAC **ST-V1** thermostats use a completely different one — AWS
+IoT Device Shadows (`$aws/things/{id}/shadow/...`) — which mysa2mqtt does not model yet. Implementing it requires seeing
+the real messages the device reports and the app sends.
+
+The `mysa2mqtt-capture` tool gathers exactly that. It logs in to your Mysa account, dumps the REST metadata for the
+target device(s), then **passively records every shadow message** to a file until you stop it. It needs no MQTT broker —
+it only reads from Mysa.
+
+> [!NOTE]
+> The capture is passive: a device only publishes to its shadow when something changes it. You must exercise the
+> thermostat from the Mysa mobile app while the capture runs, otherwise nothing is recorded.
+
+Run it from a clone of the repository (no build step needed):
+
+```bash
+git clone https://github.com/bourquep/mysa2mqtt
+cd mysa2mqtt
+npm ci
+# Pass the password via the environment so it stays out of your shell history and the process list.
+export M2M_MYSA_PASSWORD='your-password'
+npm run capture -w mysa2mqtt -- \
+  --mysa-username you@example.com \
+  --output mysa-capture.txt
+```
+
+By default it targets every central-HVAC (`ST-*`) device on the account. Use `--device <id-or-name>` to target a
+specific one, `--all-devices` to capture from everything, or `--log-level debug` to see the per-topic subscribe results.
+Run `npm run capture -w mysa2mqtt -- --help` for the full option list.
+
+While it runs, drive the thermostat from the Mysa app so every interaction is recorded:
+
+1. Turn the system **off**, then back **on**.
+2. Switch modes: **Heat**, **Cool**, **Auto**, **Fan-only** (whatever it offers).
+3. Change the **heat** setpoint, then the **cool** setpoint.
+4. In **Auto**, change both setpoints (and the deadband if shown).
+5. Change the **fan** mode (Auto / On / Circulate).
+6. Leave it idle a few minutes to catch periodic telemetry.
+
+Pause a few seconds between actions, then press **Ctrl+C**. Attach the resulting file to a
+[GitHub issue](https://github.com/bourquep/mysa2mqtt/issues).
+
+> [!IMPORTANT]
+> The metadata dump can contain account identifiers (`Owner`, `Home`, `AllowedUsers`, `Zone`). Review the file before
+> sharing it publicly. Authentication tokens and your password are **never** included.
+
 ## Contributing
 
 If you want to contribute to this project, please read the [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.

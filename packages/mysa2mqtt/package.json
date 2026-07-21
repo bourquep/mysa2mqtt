@@ -36,7 +36,8 @@
   ],
   "type": "module",
   "bin": {
-    "mysa2mqtt": "dist/main.js"
+    "mysa2mqtt": "dist/main.js",
+    "mysa2mqtt-capture": "dist/capture.js"
   },
   "engines": {
     "node": ">=24.15.0"
@@ -44,6 +45,7 @@
   "browser": false,
   "scripts": {
     "dev": "tsx src/main.ts",
+    "capture": "tsx src/capture.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsup"
