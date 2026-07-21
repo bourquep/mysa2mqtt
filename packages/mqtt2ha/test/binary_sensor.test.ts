@@ -48,6 +48,20 @@ describe('BinarySensor', () => {
     return pending;
   });
 
+  it('rolls isOn back when the publish fails, keeping toggle consistent', async () => {
+    const { sensor, client } = makeSensor({}, false);
+    client.failPublishesWith = new Error('broker unavailable');
+    await expect(sensor.on()).rejects.toThrow('broker unavailable');
+    // The ON state was never published, so isOn must remain false.
+    expect(sensor.isOn).toBe(false);
+
+    // A subsequent successful toggle should therefore publish ON, not OFF.
+    client.failPublishesWith = undefined;
+    await sensor.toggle();
+    expect(sensor.isOn).toBe(true);
+    expect(client.lastPayload(STATE)).toBe('ON');
+  });
+
   it('toggles based on current state', async () => {
     const { sensor, client } = makeSensor({}, false);
     await sensor.toggle();

@@ -16,6 +16,8 @@ export class FakeMqttClient {
   /** Every publish (async and sync) in one chronological history. */
   readonly publishes: Published[] = [];
   readonly subscriptions: string[] = [];
+  /** When set, `publishAsync` rejects with this error to simulate a broker failure. */
+  failPublishesWith?: Error;
   private readonly handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
 
   constructor(options: Record<string, unknown>) {
@@ -28,6 +30,9 @@ export class FakeMqttClient {
   }
 
   async publishAsync(topic: string, payload: string | Buffer, opts?: Record<string, unknown>) {
+    if (this.failPublishesWith) {
+      throw this.failPublishesWith;
+    }
     this.publishes.push({ topic, payload, opts });
   }
 
