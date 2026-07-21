@@ -38,6 +38,7 @@ jobs:
       # through workspace symlinks whose `types` point at their dist/ output.
       - run: npm run build
       - run: npm run typecheck --workspaces --if-present
+      - run: npm test
 
   docker:
     # Build (without pushing) so Dockerfile breakage surfaces on the PR rather

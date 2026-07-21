@@ -64,12 +64,29 @@ export class BinarySensor extends Discoverable<BinarySensorInfo, StateTopicMap> 
 
   /** Sets the sensor state to ON/active */
   async on() {
-    await this.setState('state_topic', this.component.payload_on || 'ON');
+    // Update the cached state synchronously so `isOn` is correct immediately,
+    // not only once the awaited publish resolves, but roll it back if the
+    // publish fails so `isOn` never reports a state that was never published.
+    const previous = this._isOn;
+    this._isOn = true;
+    try {
+      await this.setState('state_topic', this.component.payload_on || 'ON');
+    } catch (error) {
+      this._isOn = previous;
+      throw error;
+    }
   }
 
   /** Sets the sensor state to OFF/inactive */
   async off() {
-    await this.setState('state_topic', this.component.payload_off || 'OFF');
+    const previous = this._isOn;
+    this._isOn = false;
+    try {
+      await this.setState('state_topic', this.component.payload_off || 'OFF');
+    } catch (error) {
+      this._isOn = previous;
+      throw error;
+    }
   }
 
   /** Toggles the sensor state */
