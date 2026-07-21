@@ -1,5 +1,34 @@
 # mysa-js-sdk
 
+## 3.1.0
+
+### Minor Changes
+
+- [#211](https://github.com/bourquep/mysa2mqtt/pull/211) [`5dc3270`](https://github.com/bourquep/mysa2mqtt/commit/5dc32709beee8fa7caf487f422c0ed97ebc7c4a2) Thanks [@bourquep](https://github.com/bourquep)! - Support Mysa in-floor heating thermostats (INF-V1-0) ([#94](https://github.com/bourquep/mysa2mqtt/issues/94)).
+
+  - Parse the in-floor-specific status fields — floor-probe temperature (`flrSnsrTemp`), binary heating-relay state (`heatStat`), tracked sensor (`trackedSnsr`) and line voltage (`lineVtg`) — which share the V2 status message type (`msg: 40`). `heatStat` maps onto the emitted `dutyCycle`, and the floor-probe reading is surfaced as a new `Status.floorTemperature`.
+  - Send the correct control command `type` (3) for in-floor thermostats so setpoint and mode changes take effect instead of being silently ignored.
+
+- [#212](https://github.com/bourquep/mysa2mqtt/pull/212) [`a1000a7`](https://github.com/bourquep/mysa2mqtt/commit/a1000a7475c4487931edddab678ace6558a1d0e7) Thanks [@bourquep](https://github.com/bourquep)! - Add a `mysa2mqtt-capture` tool (and the underlying `MysaApiClient.startRawTopicCapture()` SDK method) to record the raw AWS IoT Device Shadow traffic of unsupported thermostats, most notably the central-HVAC ST-V1.
+
+  Unlike the real-time path, `startRawTopicCapture()` subscribes to arbitrary MQTT topic filters and relays every message verbatim (full topic + decoded payload) with no parsing, re-subscribing across reconnects. The `mysa2mqtt-capture` command uses it to dump a device's REST metadata and passively record every shadow message to a file, providing the raw material needed to implement support for a new device family. Run `npm run capture -w mysa2mqtt -- --help` for usage.
+
+### Patch Changes
+
+- [#205](https://github.com/bourquep/mysa2mqtt/pull/205) [`b5bf8f9`](https://github.com/bourquep/mysa2mqtt/commit/b5bf8f922c90a2342466e9ea1ba7e398ff0cd5d6) Thanks [@bourquep](https://github.com/bourquep)! - Fix fan-speed `fn` mapping for AC-V1-X (CodeNum=1117) devices ([#179](https://github.com/bourquep/mysa2mqtt/issues/179)).
+
+  - Derive the send-side `fn` values from the device's reported `SupportedCaps.fanSpeeds` (positionally mapped to the canonical `[auto, low, medium, high, max]` order) instead of a hardcoded universal map. Devices that don't report `fanSpeeds` keep the previous behaviour.
+  - Recognise the CodeNum=1117 canonical receive values (`fn` 2/4/6 → low/medium/high) so the current fan speed is surfaced instead of coming back `undefined`.
+  - Add the `fanSpeeds` field to the `SupportedCaps` type so consumers no longer need to cast to access it.
+  - Throw a new `UnsupportedFanSpeedError` when a requested fan speed is not supported by the target device (e.g. `max` on a device that only exposes auto/low/medium/high), instead of silently publishing a no-op command.
+
+- [#202](https://github.com/bourquep/mysa2mqtt/pull/202) [`49d3017`](https://github.com/bourquep/mysa2mqtt/commit/49d3017fd301c1b79560d1a6403927a7c15de3be) Thanks [@bourquep](https://github.com/bourquep)! - Harden the MQTT connection against `AWS_ERROR_MQTT_UNEXPECTED_HANGUP` interrupt storms ([#178](https://github.com/bourquep/mysa2mqtt/issues/178)).
+
+  - Switch to clean MQTT sessions so the broker no longer redelivers a backlog of queued QoS1 messages on reconnect (the source of the ~1000x message bursts and exponential Home Assistant database growth) and so forced resets no longer leave orphaned broker sessions.
+  - Make the forced connection reset repeatable with exponential backoff instead of one-shot, so a persistent storm keeps recovering (fresh client id + fresh credentials) rather than giving up.
+  - Tag each connection with a generation and ignore events from discarded connections, and ensure the reset never rejects — preventing the in-flight publish crash (`AWS_ERROR_MQTT_CONNECTION_DESTROYED`) that terminated the process.
+  - Add interrupt dwell-time and session diagnostics to help pin down the server-side hangup trigger.
+
 ## 3.0.0
 
 ### Major Changes

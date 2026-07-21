@@ -1,5 +1,38 @@
 # mysa2mqtt
 
+## 3.0.0
+
+### Major Changes
+
+- [#206](https://github.com/bourquep/mysa2mqtt/pull/206) [`49fb518`](https://github.com/bourquep/mysa2mqtt/commit/49fb5186e383fb112240a87c6bdeb0fd23712a63) Thanks [@bourquep](https://github.com/bourquep)! - Fix colliding MQTT discovery topics produced by `cleanString` ([#153](https://github.com/bourquep/mysa2mqtt/issues/153)).
+
+  Previously every unsupported character was replaced with a single hyphen, so distinct inputs collided (`cleanString('a/b') === cleanString('a b')`). Two entities whose names differed only in punctuation received the **same** discovery topic and silently overwrote each other in Home Assistant.
+
+  `cleanString` now uses a reversible, collision-free percent-style encoding: alphanumerics and underscores pass through unchanged, while every other character (including a literal hyphen) is escaped as `-XX`, where `XX` is the uppercase hex value of each UTF-8 byte. A hyphen is used as the escape sigil instead of `%` because Home Assistant only accepts `[A-Za-z0-9_-]` in discovery `node_id`/`object_id` segments.
+
+  **Breaking change / migration:** any topic segment derived from a device or entity name that contained characters outside `[A-Za-z0-9_]` will now have a different name (e.g. `Living-Room` becomes `Living-20Room`). Home Assistant will create new entities under the new topics. After upgrading, delete the now-orphaned MQTT devices/entities from Home Assistant (Settings → Devices & services → MQTT) so the stale duplicates are removed.
+
+### Minor Changes
+
+- [#211](https://github.com/bourquep/mysa2mqtt/pull/211) [`5dc3270`](https://github.com/bourquep/mysa2mqtt/commit/5dc32709beee8fa7caf487f422c0ed97ebc7c4a2) Thanks [@bourquep](https://github.com/bourquep)! - Add in-floor heating thermostat (INF-V1-0) support ([#94](https://github.com/bourquep/mysa2mqtt/issues/94)).
+
+  - Publish a **Floor temperature** sensor for in-floor thermostats, reflecting the floor-probe reading. The ambient air temperature remains the climate's current temperature.
+  - Estimate power draw for in-floor thermostats from the `--heater-watts` rating (they report a heating-relay state rather than a current draw), gating the **Current power** sensor on that configuration just like V2 thermostats.
+
+- [#208](https://github.com/bourquep/mysa2mqtt/pull/208) [`ebde3d2`](https://github.com/bourquep/mysa2mqtt/commit/ebde3d2319a906f7a933096c655de537e1faf0fe) Thanks [@bourquep](https://github.com/bourquep)! - Poll device state over REST periodically so Home Assistant stays current even when the real-time AWS IoT connection cannot be established (e.g. all-Lite fleets, whose WebSocket handshake fails with `AWS_ERROR_HTTP_WEBSOCKET_UPGRADE_FAILURE`) or is chronically unstable (e.g. INF-V1). Previously these fleets only ever received the single state snapshot taken at startup, then froze.
+
+  A single account-wide poll refreshes every thermostat, so the request cost does not grow with fleet size. Configure the cadence with `--poll-interval-seconds` (`M2M_POLL_INTERVAL_SECONDS`), which defaults to 60 seconds; set it to 0 to disable, or to at least 30.
+
+- [#212](https://github.com/bourquep/mysa2mqtt/pull/212) [`a1000a7`](https://github.com/bourquep/mysa2mqtt/commit/a1000a7475c4487931edddab678ace6558a1d0e7) Thanks [@bourquep](https://github.com/bourquep)! - Add a `mysa2mqtt-capture` tool (and the underlying `MysaApiClient.startRawTopicCapture()` SDK method) to record the raw AWS IoT Device Shadow traffic of unsupported thermostats, most notably the central-HVAC ST-V1.
+
+  Unlike the real-time path, `startRawTopicCapture()` subscribes to arbitrary MQTT topic filters and relays every message verbatim (full topic + decoded payload) with no parsing, re-subscribing across reconnects. The `mysa2mqtt-capture` command uses it to dump a device's REST metadata and passively record every shadow message to a file, providing the raw material needed to implement support for a new device family. Run `npm run capture -w mysa2mqtt -- --help` for usage.
+
+### Patch Changes
+
+- Updated dependencies [[`b5bf8f9`](https://github.com/bourquep/mysa2mqtt/commit/b5bf8f922c90a2342466e9ea1ba7e398ff0cd5d6), [`3229264`](https://github.com/bourquep/mysa2mqtt/commit/32292646a27ea8d58a43864bb9255553114df4b7), [`49fb518`](https://github.com/bourquep/mysa2mqtt/commit/49fb5186e383fb112240a87c6bdeb0fd23712a63), [`5dc3270`](https://github.com/bourquep/mysa2mqtt/commit/5dc32709beee8fa7caf487f422c0ed97ebc7c4a2), [`49d3017`](https://github.com/bourquep/mysa2mqtt/commit/49d3017fd301c1b79560d1a6403927a7c15de3be), [`a1000a7`](https://github.com/bourquep/mysa2mqtt/commit/a1000a7475c4487931edddab678ace6558a1d0e7)]:
+  - mysa-js-sdk@3.1.0
+  - mqtt2ha@5.0.0
+
 ## 2.0.0
 
 ### Major Changes
