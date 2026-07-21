@@ -43,6 +43,17 @@ const MysaApiBaseUrl = 'https://app-prod.mysa.cloud';
 const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
 const PublishAckTimeout = dayjs.duration(30, 'seconds');
 
+/** Rolling window over which MQTT interrupts are counted for storm detection. */
+const MqttInterruptWindow = dayjs.duration(30, 'seconds');
+/** Number of interrupts within {@link MqttInterruptWindow} that triggers a forced connection reset. */
+const MqttInterruptThreshold = 3;
+/** Base delay for exponential backoff between consecutive forced MQTT resets. */
+const MqttResetBaseDelay = dayjs.duration(1, 'second');
+/** Maximum delay between consecutive forced MQTT resets. */
+const MqttResetMaxDelay = dayjs.duration(30, 'seconds');
+/** How long a connection must stay interrupt-free before the consecutive-reset counter is cleared. */
+const MqttStabilityWindow = dayjs.duration(60, 'seconds');
+
 /**
  * Main client for interacting with the Mysa API and real-time device communication.
  *
@@ -100,6 +111,18 @@ export class MysaApiClient {
 
   /** Whether a forced MQTT reset is currently in progress (guards against re-entrancy). */
   private _mqttResetInProgress = false;
+
+  /** Monotonic id of the current MQTT connection; used to ignore events from discarded connections. */
+  private _mqttGeneration = 0;
+
+  /** Consecutive forced resets without an intervening stable period; drives reset backoff. */
+  private _mqttConsecutiveResets = 0;
+
+  /** Timestamp (ms) of the most recent successful MQTT (re)connect, for interrupt dwell-time diagnostics. */
+  private _mqttLastConnectionSuccessAt?: number;
+
+  /** Timer that clears the consecutive-reset counter once a connection stays healthy. */
+  private _mqttStabilityTimer?: NodeJS.Timeout;
 
   /** The device IDs that are currently being updated in real-time, mapped to their respective timeouts. */
   private _realtimeDeviceIds: Map<string, NodeJS.Timeout> = new Map();
@@ -163,6 +186,7 @@ export class MysaApiClient {
     this._cognitoUserSession = undefined;
     this._mqttClientId = undefined;
     this._mqttInterrupts = [];
+    this._mqttConsecutiveResets = 0;
 
     const { username, password } = this._credentials;
 
@@ -810,11 +834,19 @@ export class MysaApiClient {
       .with_credentials(AwsRegion, credentials.accessKeyId, credentials.secretAccessKey, credentials.sessionToken)
       .with_endpoint(MqttEndpoint)
       .with_client_id(this._mqttClientId)
-      .with_clean_session(false)
+      // Clean sessions: the broker never persists our subscriptions or queues QoS1 messages while we
+      // are disconnected. This makes every (re)connect re-subscribe deterministically (see the
+      // `resume` handler) and — crucially — prevents the broker from dumping a backlog of queued
+      // messages on reconnect, which during an interrupt storm compounded into the ~1000x message /
+      // DB-growth reports. It also stops each forced reset from leaving an orphaned broker session.
+      .with_clean_session(true)
       .with_keep_alive_seconds(30)
       .with_ping_timeout_ms(3000)
       .with_protocol_operation_timeout_ms(60000)
-      .with_reconnect_min_sec(1)
+      // A less-aggressive minimum backoff keeps the native reconnect loop from hammering the broker
+      // during a storm (a likely contributor to the self-collision hangups); the stable connection
+      // only pings every 30s, so nothing depends on 1s reconnects.
+      .with_reconnect_min_sec(3)
       .with_reconnect_max_sec(30);
 
     const config = builder.build();
@@ -868,104 +900,77 @@ export class MysaApiClient {
     const client = new mqtt.MqttClient();
     const connection = client.new_connection(config);
 
-    connection.on('connect', () => {
-      this._logger.debug(`MQTT connect (clientId=${this._mqttClientId})`);
+    // Tag this connection with a generation. Events from a discarded connection (e.g. one we
+    // disconnected during a forced reset, or whose native reconnect loop is still winding down)
+    // are ignored, so a dying connection can never mutate current state or trigger a second reset.
+    const generation = ++this._mqttGeneration;
+
+    connection.on('connect', (sessionPresent) => {
+      if (generation !== this._mqttGeneration) return;
+      this._logger.debug(`MQTT connect (clientId=${this._mqttClientId}, sessionPresent=${sessionPresent})`);
     });
 
-    connection.on('connection_success', () => {
-      this._logger.debug(`MQTT connection_success (clientId=${this._mqttClientId})`);
+    connection.on('connection_success', (result) => {
+      if (generation !== this._mqttGeneration) return;
+      this._mqttLastConnectionSuccessAt = Date.now();
+      this._logger.debug(
+        `MQTT connection_success (clientId=${this._mqttClientId}, sessionPresent=${result?.session_present}, ` +
+          `reasonCode=${result?.reason_code})`
+      );
+      // A connection that stays up long enough is considered recovered; arm the timer that clears
+      // the reset backoff counter.
+      this._armMqttStabilityTimer(generation);
     });
 
     connection.on('connection_failure', (e) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.error(`MQTT connection_failure (clientId=${this._mqttClientId})`, e);
     });
 
-    connection.on('interrupt', async (e) => {
-      this._logger.warn(`MQTT interrupt (clientId=${this._mqttClientId})`, e);
+    connection.on('interrupt', (e) => {
+      if (generation !== this._mqttGeneration) return;
 
-      // Track recent interrupts
+      // Dwell time since the last successful connect. A tiny value (tens of ms) is the signature of
+      // an immediate server-side close (the storm) rather than a genuine network drop — logged to
+      // help pin down the still-undiagnosed server-side trigger from live runs.
+      const dwellMs =
+        this._mqttLastConnectionSuccessAt !== undefined ? Date.now() - this._mqttLastConnectionSuccessAt : undefined;
+      this._logger.warn(
+        `MQTT interrupt (clientId=${this._mqttClientId}, dwellMs=${dwellMs ?? 'n/a'}, generation=${generation})`,
+        e
+      );
+
+      // A storm keeps interrupting; don't let the stability timer clear the backoff counter mid-storm.
+      this._clearMqttStabilityTimer();
+
       const now = Date.now();
-
-      // Keep only last 60s
-      this._mqttInterrupts = this._mqttInterrupts.filter((t) => now - t < 60000);
+      this._mqttInterrupts = this._mqttInterrupts.filter((t) => now - t < MqttInterruptWindow.asMilliseconds());
       this._mqttInterrupts.push(now);
 
       const areCredentialsExpired = !(this._mqttCredentialsExpiration?.isAfter(dayjs()) ?? false);
+      const isStorm = this._mqttInterrupts.length >= MqttInterruptThreshold;
 
-      if ((this._mqttInterrupts.length > 5 || areCredentialsExpired) && !this._mqttResetInProgress) {
-        this._mqttResetInProgress = true;
-
-        if (this._mqttInterrupts.length > 5) {
-          this._logger.warn(
-            `High interrupt rate (${this._mqttInterrupts.length}/60s). Possible clientId collision. Regenerating clientId and resetting connection...`
-          );
-        } else {
-          this._logger.warn(`Credentials expired. Regenerating clientId and resetting connection...`);
-        }
-
-        // Force new client id to escape collision; close current connection
-        this._mqttClientId = undefined;
-
-        this._mqttCredentialsExpiration = undefined;
-
-        // Clear interrupts
-        this._mqttInterrupts = [];
-
-        // Explicitly clear promise first to prevent reuse while disconnecting
-        // (publishers calling _getMqttConnection() will create a new one)
-        this._mqttConnectionPromise = undefined;
-
-        try {
-          // Strip listeners before disconnect. Without this, the 6 event-
-          // handler closures registered above (`connect`,
-          // `connection_success`, `connection_failure`, `interrupt`,
-          // `resume`, `error`, `closed`) remain attached to the discarded
-          // connection object. Each closure captures `this` and `_logger`,
-          // and aws-crt's native binding retains the JS object via its
-          // internal callback refs — the dead connection never gets GC'd.
-          // After enough interrupt-storms the process heap grows until OOM.
-          connection.removeAllListeners();
-          await connection.disconnect();
-
-          try {
-            this._logger.debug('Old MQTT connection disconnected; establishing new connection...');
-            const newConnection = await this._getMqttConnection();
-
-            for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
-              const topic = `/v1/dev/${deviceId}/out`;
-              this._logger.debug(`Re-subscribing to ${topic}`);
-              await newConnection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
-                this._processMqttMessage(payload);
-              });
-            }
-
-            this._logger.info('MQTT connection rebuilt successfully after interrupt storm or credentials expiration');
-          } catch (err) {
-            this._logger.error('Failed to re-subscribe after interrupt storm or credentials expiration', err);
-          }
-        } catch (error) {
-          this._logger.error('Error during MQTT reset', error);
-        } finally {
-          this._mqttResetInProgress = false;
-        }
+      if (isStorm || areCredentialsExpired) {
+        const reason = isStorm
+          ? `High interrupt rate (${this._mqttInterrupts.length} in ${MqttInterruptWindow.asSeconds()}s)`
+          : 'Credentials expired';
+        // Fire-and-forget: _resetMqttConnection is fully self-contained and never rejects, so an
+        // unhandled rejection can't escape this event handler and crash the process.
+        void this._resetMqttConnection(reason);
       }
     });
 
     connection.on('resume', async (returnCode, sessionPresent) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.info(
         `MQTT resume returnCode=${returnCode} sessionPresent=${sessionPresent} clientId=${this._mqttClientId}`
       );
 
+      // With clean sessions the broker never restores our subscriptions, so re-subscribe on every
+      // resume. (sessionPresent is expected to always be false now; the guard is kept for safety.)
       if (!sessionPresent) {
-        this._logger.info('No session present, re-subscribing each device');
         try {
-          for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
-            const topic = `/v1/dev/${deviceId}/out`;
-            this._logger.debug(`Re-subscribing to ${topic}`);
-            await connection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
-              this._processMqttMessage(payload);
-            });
-          }
+          await this._resubscribeAll(connection);
         } catch (err) {
           this._logger.error('Failed to re-subscribe after resume', err);
         }
@@ -973,11 +978,14 @@ export class MysaApiClient {
     });
 
     connection.on('error', (e) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.error(`MQTT error (clientId=${this._mqttClientId})`, e);
     });
 
     connection.on('closed', () => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.info('MQTT connection closed');
+      this._clearMqttStabilityTimer();
       this._mqttConnectionPromise = undefined;
       this._mqttCredentialsExpiration = undefined;
     });
@@ -985,6 +993,122 @@ export class MysaApiClient {
     await connection.connect();
 
     return connection;
+  }
+
+  /**
+   * Re-subscribes every device currently receiving real-time updates on the given connection.
+   *
+   * Safe to call on every (re)connect: aws-crt replaces the per-topic callback on a duplicate subscribe, so this never
+   * registers a message handler more than once.
+   *
+   * @param connection - The connection to (re-)establish subscriptions on.
+   */
+  private async _resubscribeAll(connection: mqtt.MqttClientConnection): Promise<void> {
+    for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
+      const topic = `/v1/dev/${deviceId}/out`;
+      this._logger.debug(`Re-subscribing to ${topic}`);
+      await connection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
+        this._processMqttMessage(payload);
+      });
+    }
+  }
+
+  /**
+   * Arms (or re-arms) the stability timer. When a connection stays interrupt-free for {@link MqttStabilityWindow}, the
+   * consecutive-reset backoff counter is cleared so a future isolated storm still gets a fast first reset.
+   *
+   * @param generation - The connection generation that armed the timer; the callback is a no-op if the connection has
+   *   since been replaced.
+   */
+  private _armMqttStabilityTimer(generation: number): void {
+    this._clearMqttStabilityTimer();
+    this._mqttStabilityTimer = setTimeout(() => {
+      if (generation !== this._mqttGeneration) return;
+      if (this._mqttConsecutiveResets > 0) {
+        this._logger.debug('MQTT connection stable; clearing consecutive-reset counter');
+        this._mqttConsecutiveResets = 0;
+      }
+    }, MqttStabilityWindow.asMilliseconds());
+    // Don't keep the event loop alive solely for this bookkeeping timer.
+    this._mqttStabilityTimer.unref?.();
+  }
+
+  /** Clears the stability timer, if armed. */
+  private _clearMqttStabilityTimer(): void {
+    if (this._mqttStabilityTimer) {
+      clearTimeout(this._mqttStabilityTimer);
+      this._mqttStabilityTimer = undefined;
+    }
+  }
+
+  /**
+   * Forcefully tears down the current MQTT connection and rebuilds it with a fresh client id and fresh credentials,
+   * escaping interrupt storms that a plain native reconnect cannot.
+   *
+   * Repeatable and self-contained: only one reset runs at a time, consecutive resets without an intervening stable
+   * period back off exponentially (up to {@link MqttResetMaxDelay}), and it never rejects — so it is safe to invoke
+   * fire-and-forget from an event handler.
+   *
+   * @param reason - Human-readable reason for the reset, used in logs.
+   */
+  private async _resetMqttConnection(reason: string): Promise<void> {
+    if (this._mqttResetInProgress) {
+      return;
+    }
+    this._mqttResetInProgress = true;
+
+    // Capture the connection to tear down before we clear the cached promise below.
+    const connectionToClose = this._mqttConnectionPromise;
+
+    try {
+      this._mqttConsecutiveResets++;
+
+      const delayMs = Math.min(
+        MqttResetBaseDelay.asMilliseconds() * Math.pow(2, this._mqttConsecutiveResets - 1),
+        MqttResetMaxDelay.asMilliseconds()
+      );
+
+      this._logger.warn(
+        `${reason}. Forcing MQTT reset #${this._mqttConsecutiveResets} ` +
+          `(new clientId, fresh credentials) after ${Math.round(delayMs)}ms...`
+      );
+
+      // Invalidate the current client id, credentials and interrupt history before rebuilding.
+      this._mqttClientId = undefined;
+      this._mqttCredentialsExpiration = undefined;
+      this._mqttInterrupts = [];
+      this._clearMqttStabilityTimer();
+
+      // Clear the cached promise first so publishers calling _getMqttConnection() build a new
+      // connection instead of reusing the one we're about to destroy.
+      this._mqttConnectionPromise = undefined;
+
+      // Tear down the old connection. Strip listeners so its native binding can be GC'd and so no
+      // late event from it mutates current state (belt-and-suspenders with the generation guard).
+      // Any in-flight publish rejecting with AWS_ERROR_MQTT_CONNECTION_DESTROYED is swallowed here.
+      if (connectionToClose) {
+        try {
+          const connection = await connectionToClose;
+          connection.removeAllListeners();
+          await connection.disconnect();
+        } catch (err) {
+          this._logger.debug('Error tearing down old MQTT connection during reset (ignored)', err);
+        }
+      }
+
+      if (delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+
+      const newConnection = await this._getMqttConnection();
+      await this._resubscribeAll(newConnection);
+
+      this._logger.info(`MQTT connection rebuilt successfully after reset #${this._mqttConsecutiveResets} (${reason})`);
+    } catch (err) {
+      this._logger.error('Failed to rebuild MQTT connection after reset', err);
+    } finally {
+      this._mqttResetInProgress = false;
+    }
   }
 
   /**
