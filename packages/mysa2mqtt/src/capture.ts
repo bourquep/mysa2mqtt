@@ -41,7 +41,7 @@ SOFTWARE.
  * MQTT broker and only reads from Mysa.
  */
 
-import { Command, Option } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
 import { createWriteStream, WriteStream } from 'fs';
 import { DeviceBase, MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
@@ -82,7 +82,15 @@ const options = new Command('mysa2mqtt-capture')
   )
   .addOption(
     new Option('--duration <seconds>', 'stop automatically after this many seconds (default: run until Ctrl+C)')
-      .argParser((v) => parseInt(v, 10))
+      .argParser((v) => {
+        const parsed = parseInt(v, 10);
+        // parseInt tolerates 'abc' (NaN), '1.5' (1) and '5foo' (5); reject anything that is not a
+        // whole, non-negative number so a bad value is reported instead of silently disabling the timer.
+        if (String(parsed) !== v.trim() || parsed < 0) {
+          throw new InvalidArgumentError('Must be a whole number of seconds (0 to run until Ctrl+C).');
+        }
+        return parsed;
+      })
       .default(0)
   )
   .addOption(
@@ -165,7 +173,14 @@ function selectDevices(devices: Record<string, DeviceBase>): string[] {
 /** Main entry-point. */
 async function main() {
   if (options.output) {
-    outputStream = createWriteStream(options.output, { flags: 'w' });
+    // 0o600: the dump can contain account identifiers (see the file header), so don't create it
+    // world-readable. Only applies when the file is created; an existing file keeps its own mode.
+    outputStream = createWriteStream(options.output, { flags: 'w', mode: 0o600 });
+    // Without an error handler, an async stream failure (bad path, missing directory, permissions)
+    // is emitted as an unhandled 'error' event and crashes the process.
+    outputStream.on('error', (error) => {
+      logger.error(error, `Failed to write to output file '${options.output}'`);
+    });
     logger.info(`Writing metadata and captured messages to '${options.output}'`);
   }
 
@@ -264,7 +279,15 @@ async function main() {
   emit('  Pause a few seconds between actions. Press Ctrl+C when done.');
   emit('==================================================================');
 
+  let stopping = false;
   const stop = (reason: string) => {
+    // process.exit(0) runs from the stream's end() callback (async), so a second SIGINT/SIGTERM
+    // arriving during the flush would otherwise re-run this and double-log / end() an ended stream.
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+
     logger.info(`Stopping capture (${reason}). Captured ${messageCount} message(s) across ${seenTopics.size} topic(s).`);
     if (seenTopics.size === 0) {
       logger.warn(
@@ -293,6 +316,11 @@ async function main() {
 
 main().catch((error) => {
   logger.error(error, 'Capture failed');
-  outputStream?.end();
-  process.exit(1);
+  // Wait for the output file to finish flushing before exiting, so a failure mid-capture doesn't
+  // truncate whatever was already recorded (mirrors stop()'s callback-based shutdown).
+  if (outputStream) {
+    outputStream.end(() => process.exit(1));
+  } else {
+    process.exit(1);
+  }
 });

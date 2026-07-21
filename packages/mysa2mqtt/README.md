@@ -438,9 +438,10 @@ Run it from a clone of the repository (no build step needed):
 git clone https://github.com/bourquep/mysa2mqtt
 cd mysa2mqtt
 npm ci
+# Pass the password via the environment so it stays out of your shell history and the process list.
+export M2M_MYSA_PASSWORD='your-password'
 npm run capture -w mysa2mqtt -- \
   --mysa-username you@example.com \
-  --mysa-password 'your-password' \
   --output mysa-capture.txt
 ```
 

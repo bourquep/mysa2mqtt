@@ -1131,9 +1131,14 @@ export class MysaApiClient {
     const decoder = new TextDecoder('utf-8');
     for (const [filter, handler] of Array.from(this._rawTopicCaptures.entries())) {
       this._logger.debug(`Re-subscribing to raw topic filter '${filter}'`);
-      await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
-        handler(topic, decoder.decode(payload));
-      });
+      try {
+        await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
+          handler(topic, decoder.decode(payload));
+        });
+      } catch (error) {
+        // One rejected filter must not abort the remaining resubscriptions (matches startRawTopicCapture).
+        this._logger.warn(`Failed to re-subscribe to raw topic filter '${filter}'`, error);
+      }
     }
   }
 
