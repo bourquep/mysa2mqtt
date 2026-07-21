@@ -1,5 +1,23 @@
 # mqtt2ha
 
+## 5.0.0
+
+### Major Changes
+
+- [#206](https://github.com/bourquep/mysa2mqtt/pull/206) [`49fb518`](https://github.com/bourquep/mysa2mqtt/commit/49fb5186e383fb112240a87c6bdeb0fd23712a63) Thanks [@bourquep](https://github.com/bourquep)! - Fix colliding MQTT discovery topics produced by `cleanString` ([#153](https://github.com/bourquep/mysa2mqtt/issues/153)).
+
+  Previously every unsupported character was replaced with a single hyphen, so distinct inputs collided (`cleanString('a/b') === cleanString('a b')`). Two entities whose names differed only in punctuation received the **same** discovery topic and silently overwrote each other in Home Assistant.
+
+  `cleanString` now uses a reversible, collision-free percent-style encoding: alphanumerics and underscores pass through unchanged, while every other character (including a literal hyphen) is escaped as `-XX`, where `XX` is the uppercase hex value of each UTF-8 byte. A hyphen is used as the escape sigil instead of `%` because Home Assistant only accepts `[A-Za-z0-9_-]` in discovery `node_id`/`object_id` segments.
+
+  **Breaking change / migration:** any topic segment derived from a device or entity name that contained characters outside `[A-Za-z0-9_]` will now have a different name (e.g. `Living-Room` becomes `Living-20Room`). Home Assistant will create new entities under the new topics. After upgrading, delete the now-orphaned MQTT devices/entities from Home Assistant (Settings → Devices & services → MQTT) so the stale duplicates are removed.
+
+### Patch Changes
+
+- [#210](https://github.com/bourquep/mysa2mqtt/pull/210) [`3229264`](https://github.com/bourquep/mysa2mqtt/commit/32292646a27ea8d58a43864bb9255553114df4b7) Thanks [@bourquep](https://github.com/bourquep)! - Stop publishing a meaningless `state_topic` for buttons ([#157](https://github.com/bourquep/mysa2mqtt/issues/157)).
+
+  A button is command-only in the Home Assistant MQTT spec, but `Button` was passing a placeholder `state_topic` to satisfy the `Subscriber`/`Discoverable` base classes, which added a retained topic per button. `Subscriber` now supports command-only entities with no state topics (a subscriber is already interactive through its command topics), and `Button` no longer declares a state topic. Stateful subscribers (`Switch`, `Climate`) are unchanged.
+
 ## 4.2.0
 
 ### Minor Changes

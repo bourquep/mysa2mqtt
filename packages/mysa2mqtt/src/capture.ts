@@ -62,7 +62,9 @@ const options = new Command('mysa2mqtt-capture')
       .makeOptionMandatory()
   )
   .addOption(
-    new Option('-p, --mysa-password <mysaPassword>', 'Mysa account password').env('M2M_MYSA_PASSWORD').makeOptionMandatory()
+    new Option('-p, --mysa-password <mysaPassword>', 'Mysa account password')
+      .env('M2M_MYSA_PASSWORD')
+      .makeOptionMandatory()
   )
   .addOption(
     new Option(
@@ -77,9 +79,7 @@ const options = new Command('mysa2mqtt-capture')
       'additional raw MQTT topic filter(s) to subscribe to, on top of the per-device shadow topics. Repeatable'
     )
   )
-  .addOption(
-    new Option('-o, --output <file>', 'also write the metadata dump and every captured message to this file')
-  )
+  .addOption(new Option('-o, --output <file>', 'also write the metadata dump and every captured message to this file'))
   .addOption(
     new Option('--duration <seconds>', 'stop automatically after this many seconds (default: run until Ctrl+C)')
       .argParser((v) => {
@@ -157,7 +157,8 @@ function selectDevices(devices: Record<string, DeviceBase>): string[] {
   if (options.device && options.device.length > 0) {
     const wanted = options.device.map((d: string) => d.toLowerCase());
     const matched = entries.filter(
-      ([id, dev]) => wanted.includes(id.toLowerCase()) || (dev.Name !== undefined && wanted.includes(dev.Name.toLowerCase()))
+      ([id, dev]) =>
+        wanted.includes(id.toLowerCase()) || (dev.Name !== undefined && wanted.includes(dev.Name.toLowerCase()))
     );
     return matched.map(([id]) => id);
   }
@@ -294,7 +295,9 @@ async function main() {
     }
     stopping = true;
 
-    logger.info(`Stopping capture (${reason}). Captured ${messageCount} message(s) across ${seenTopics.size} topic(s).`);
+    logger.info(
+      `Stopping capture (${reason}). Captured ${messageCount} message(s) across ${seenTopics.size} topic(s).`
+    );
     if (seenTopics.size === 0) {
       logger.warn(
         'No shadow messages were captured. Either the thermostat was not touched during the capture, or the ' +
