@@ -74,6 +74,11 @@ function parseRequiredInt(value: string) {
  */
 function parsePollInterval(value: string): number {
   const parsedValue = parseRequiredInt(value);
+  // parseInt tolerates decimals and trailing characters ('0.5' and '0foo' both yield 0), which would
+  // silently disable polling. Require the input to be exactly an integer before the range check.
+  if (String(parsedValue) !== value.trim()) {
+    throw new InvalidArgumentError('Must be a whole number of seconds.');
+  }
   if (parsedValue !== 0 && parsedValue < 30) {
     throw new InvalidArgumentError('Must be 0 (disabled) or at least 30 seconds.');
   }

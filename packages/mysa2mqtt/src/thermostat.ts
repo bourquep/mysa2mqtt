@@ -292,7 +292,11 @@ export class Thermostat {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
       const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
 
-      await this.publishRestState(state);
+      // The device may be absent from the account-wide response; still register the entities so the
+      // realtime stream and REST poll can populate them later, but skip the state that would deref it.
+      if (state != null) {
+        await this.publishRestState(state);
+      }
 
       await this.mqttClimate.writeConfig();
       await this.mqttTemperature.writeConfig();

@@ -201,7 +201,17 @@ function startStatePolling(client: MysaApiClient, thermostats: Thermostat[]): vo
 
   rootLogger.info(`Polling device state over REST every ${intervalSeconds}s`);
 
+  // Guard against overlapping polls: a slow getDeviceStates() must not let successive ticks stack up
+  // concurrent account-wide requests. Skip a tick while the previous poll is still pending.
+  let pollInFlight = false;
+
   setInterval(() => {
+    if (pollInFlight) {
+      rootLogger.debug('Skipping REST state poll; previous poll still in flight');
+      return;
+    }
+
+    pollInFlight = true;
     void (async () => {
       try {
         const deviceStates = await client.getDeviceStates();
@@ -212,6 +222,8 @@ function startStatePolling(client: MysaApiClient, thermostats: Thermostat[]): vo
         );
       } catch (error) {
         rootLogger.warn(error, 'Periodic REST state poll failed');
+      } finally {
+        pollInFlight = false;
       }
     })();
   }, intervalSeconds * 1000);
