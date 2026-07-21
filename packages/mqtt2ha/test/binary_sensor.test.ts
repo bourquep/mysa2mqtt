@@ -41,11 +41,20 @@ describe('BinarySensor', () => {
     expect(client.lastPayload(STATE)).toBe('OFF');
   });
 
+  it('reflects the new state in isOn synchronously, before the publish resolves', () => {
+    const { sensor } = makeSensor({}, false);
+    const pending = sensor.on();
+    expect(sensor.isOn).toBe(true);
+    return pending;
+  });
+
   it('toggles based on current state', async () => {
     const { sensor, client } = makeSensor({}, false);
     await sensor.toggle();
+    expect(sensor.isOn).toBe(true);
     expect(client.lastPayload(STATE)).toBe('ON');
     await sensor.toggle();
+    expect(sensor.isOn).toBe(false);
     expect(client.lastPayload(STATE)).toBe('OFF');
   });
 
