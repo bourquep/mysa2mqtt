@@ -57,6 +57,27 @@ export class UnknownDeviceError extends Error {
   }
 }
 
+/** Error thrown when a requested fan speed is not supported by the target device. */
+export class UnsupportedFanSpeedError extends Error {
+  /**
+   * Creates a new UnsupportedFanSpeedError instance.
+   *
+   * @param deviceId - The id of the device the command was aimed at.
+   * @param fanSpeed - The requested fan speed that the device does not support.
+   * @param supportedFanSpeeds - The fan speeds the device does support.
+   */
+  constructor(
+    public readonly deviceId: string,
+    public readonly fanSpeed: string,
+    public readonly supportedFanSpeeds: string[]
+  ) {
+    super(
+      `Device '${deviceId}' does not support the '${fanSpeed}' fan speed. Supported fan speeds: ${supportedFanSpeeds.join(', ') || '(none)'}.`
+    );
+    this.name = 'UnsupportedFanSpeedError';
+  }
+}
+
 /** Error thrown when an MQTT publish ultimately fails after retry attempts. */
 export class MqttPublishError extends Error {
   /**

@@ -6,7 +6,7 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
+import { DeviceBase, Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserSession } from 'amazon-cognito-identity-js';
@@ -15,7 +15,13 @@ import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import { customAlphabet } from 'nanoid';
-import { MqttPublishError, MysaApiError, UnauthenticatedError, UnknownDeviceError } from './Errors';
+import {
+  MqttPublishError,
+  MysaApiError,
+  UnauthenticatedError,
+  UnknownDeviceError,
+  UnsupportedFanSpeedError
+} from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
@@ -53,6 +59,52 @@ const MqttResetBaseDelay = dayjs.duration(1, 'second');
 const MqttResetMaxDelay = dayjs.duration(30, 'seconds');
 /** How long a connection must stay interrupt-free before the consecutive-reset counter is cleared. */
 const MqttStabilityWindow = dayjs.duration(60, 'seconds');
+
+/** Canonical fan-speed order, matching the positional layout of a device's `SupportedCaps.fanSpeeds`. */
+const CanonicalFanSpeedOrder: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'high', 'max'];
+
+/** Universal fan-speed `fn` mapping used when a device does not report its own `SupportedCaps.fanSpeeds`. */
+const LegacyFanSpeedSendMap: Record<MysaFanSpeedMode, number> = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
+
+/**
+ * Receive-side `fn`-to-fan-speed mapping. Includes both the legacy universal values (3/5/7) and the AC-V1-X
+ * CodeNum=1117 canonical values (2/4/6); the latter are unused by legacy devices, so there is no conflict.
+ */
+const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
+  1: 'auto',
+  2: 'low', // CodeNum=1117 canonical low
+  3: 'low', // legacy
+  4: 'medium', // CodeNum=1117 canonical medium
+  5: 'medium', // legacy
+  6: 'high', // CodeNum=1117 canonical high
+  7: 'high', // legacy
+  8: 'max'
+};
+
+/**
+ * Builds the send-side fan-speed `fn` mapping for a device.
+ *
+ * When the device reports `SupportedCaps.fanSpeeds`, its values are zipped positionally with
+ * {@link CanonicalFanSpeedOrder} (e.g. `[1, 2, 4, 6]` → `{ auto: 1, low: 2, medium: 4, high: 6 }`). Otherwise the
+ * {@link LegacyFanSpeedSendMap} is used, preserving backward compatibility.
+ *
+ * @param device - The device to build the mapping for.
+ * @returns A partial map from fan-speed mode to the device-specific `fn` value.
+ */
+function buildFanSpeedSendMap(device: DeviceBase): Partial<Record<MysaFanSpeedMode, number>> {
+  const fanSpeeds = device.SupportedCaps?.fanSpeeds;
+  if (!fanSpeeds || fanSpeeds.length === 0) {
+    return LegacyFanSpeedSendMap;
+  }
+
+  const map: Partial<Record<MysaFanSpeedMode, number>> = {};
+  CanonicalFanSpeedOrder.forEach((name, index) => {
+    if (index < fanSpeeds.length) {
+      map[name] = fanSpeeds[index];
+    }
+  });
+  return map;
+}
 
 /**
  * Main client for interacting with the Mysa API and real-time device communication.
@@ -408,6 +460,7 @@ export class MysaApiClient {
    *   unchanged).
    * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
+   * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
@@ -437,7 +490,13 @@ export class MysaApiClient {
 
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
     const modeMap = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
-    const fanSpeedMap = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
+    const fanSpeedMap = buildFanSpeedSendMap(device);
+
+    // Reject an unsupported fan speed (e.g. 'max' on a device whose SupportedCaps.fanSpeeds only covers auto/low/
+    // medium/high) rather than silently publishing fn: undefined, which the caller would perceive as a no-op.
+    if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
+      throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
+    }
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
@@ -1168,19 +1227,12 @@ export class MysaApiClient {
               5: 'fan_only',
               6: 'dry'
             };
-            const fanSpeedMap: Record<number, MysaFanSpeedMode> = {
-              1: 'auto',
-              3: 'low',
-              5: 'medium',
-              7: 'high',
-              8: 'max'
-            };
-
             this.emitter.emit('stateChanged', {
               deviceId: parsedPayload.src.ref,
               mode: parsedPayload.body.state.md ? modeMap[parsedPayload.body.state.md] : undefined,
               setPoint: parsedPayload.body.state.sp,
-              fanSpeed: parsedPayload.body.state.fn !== undefined ? fanSpeedMap[parsedPayload.body.state.fn] : undefined
+              fanSpeed:
+                parsedPayload.body.state.fn !== undefined ? FanSpeedReceiveMap[parsedPayload.body.state.fn] : undefined
             });
             break;
           }
