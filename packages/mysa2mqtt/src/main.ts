@@ -176,6 +176,57 @@ async function main() {
   for (const thermostat of failedThermostats) {
     scheduleThermostatStartRetry(thermostat);
   }
+
+  startStatePolling(client, thermostats);
+}
+
+/**
+ * Starts the periodic REST state poll that keeps Home Assistant current independently of the real-time MQTT path.
+ *
+ * The real-time AWS IoT connection never establishes for some fleets (e.g. all-Lite accounts) and is chronically
+ * unstable for others; without this, their entities would freeze on the single snapshot taken at startup. One poll
+ * fetches the whole account's state and fans it out to every thermostat, so the request cost is independent of fleet
+ * size. Disabled when the interval is 0.
+ *
+ * @param client - Authenticated Mysa API client.
+ * @param thermostats - The thermostats to refresh.
+ */
+function startStatePolling(client: MysaApiClient, thermostats: Thermostat[]): void {
+  const intervalSeconds = options.pollIntervalSeconds;
+  if (intervalSeconds <= 0 || thermostats.length === 0) {
+    return;
+  }
+
+  const thermostatsById = new Map(thermostats.map((thermostat) => [thermostat.mysaDevice.Id, thermostat]));
+
+  rootLogger.info(`Polling device state over REST every ${intervalSeconds}s`);
+
+  // Guard against overlapping polls: a slow getDeviceStates() must not let successive ticks stack up
+  // concurrent account-wide requests. Skip a tick while the previous poll is still pending.
+  let pollInFlight = false;
+
+  setInterval(() => {
+    if (pollInFlight) {
+      rootLogger.debug('Skipping REST state poll; previous poll still in flight');
+      return;
+    }
+
+    pollInFlight = true;
+    void (async () => {
+      try {
+        const deviceStates = await client.getDeviceStates();
+        await Promise.all(
+          Array.from(thermostatsById, ([deviceId, thermostat]) =>
+            thermostat.refreshFromRest(deviceStates.DeviceStatesObj[deviceId])
+          )
+        );
+      } catch (error) {
+        rootLogger.warn(error, 'Periodic REST state poll failed');
+      } finally {
+        pollInFlight = false;
+      }
+    })();
+  }, intervalSeconds * 1000);
 }
 
 /** Cognito error code returned when the user pool rejects the supplied password. */

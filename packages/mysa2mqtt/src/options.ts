@@ -64,6 +64,28 @@ function parseRequiredInt(value: string) {
 }
 
 /**
+ * Parses the REST poll interval, in seconds.
+ *
+ * A value of `0` disables polling. Any other value must be at least 30 seconds: the poll hits the account-wide state
+ * endpoint once per interval for the whole fleet, and a tighter cadence would hammer Mysa for no practical benefit.
+ *
+ * @param value - The value to parse.
+ * @returns The parsed interval in seconds.
+ */
+function parsePollInterval(value: string): number {
+  const parsedValue = parseRequiredInt(value);
+  // parseInt tolerates decimals and trailing characters ('0.5' and '0foo' both yield 0), which would
+  // silently disable polling. Require the input to be exactly an integer before the range check.
+  if (String(parsedValue) !== value.trim()) {
+    throw new InvalidArgumentError('Must be a whole number of seconds.');
+  }
+  if (parsedValue !== 0 && parsedValue < 30) {
+    throw new InvalidArgumentError('Must be 0 (disabled) or at least 30 seconds.');
+  }
+  return parsedValue;
+}
+
+/**
  * Parses a comma-separated list of `<device>=<watts>` pairs.
  *
  * @param value - The value to parse.
@@ -187,6 +209,17 @@ export const options = new Command('mysa2mqtt')
     )
       .env('M2M_HEATER_WATTS')
       .argParser(parseHeaterWatts)
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option(
+      '--poll-interval-seconds <pollIntervalSeconds>',
+      'how often, in seconds, to refresh device state from the Mysa REST API. This keeps Home Assistant current even ' +
+        'when the real-time connection cannot be established or is unstable. Set to 0 to disable, or to at least 30'
+    )
+      .env('M2M_POLL_INTERVAL_SECONDS')
+      .argParser(parsePollInterval)
+      .default(60)
       .helpGroup('Configuration')
   )
   .addOption(
