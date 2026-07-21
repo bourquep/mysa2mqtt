@@ -23,7 +23,7 @@ home automation platforms.
 | `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                   |
 | `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                       |
 | `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not measure power, but can report an estimate (see [Power reporting](#power-reporting)) |
-| `unknown`    | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Should work but not tested                                           |
+| `INF-V1-0`   | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Partially working, in progress; controls and a floor-temperature sensor are supported, and power can be estimated (see [Power reporting](#power-reporting)) |
 | `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions |
 
 ## Disclaimer
@@ -163,9 +163,10 @@ take precedence over command-line defaults.
 V1 baseboard thermostats measure their own current draw, so their **Current power** sensor works with no extra
 configuration.
 
-**V2 thermostats (including V2 Lite) have no current sensor.** They only report the duty cycle of their heating relay,
-so power can only be estimated as `duty cycle × the rated wattage of the attached heaters`. Because that rating is a
-property of your heaters and not of the thermostat, you have to supply it:
+**V2 thermostats (including V2 Lite) and in-floor thermostats (`INF-V1-0`) have no current sensor.** They only report
+the state of their heating relay — V2 as a fractional duty cycle, in-floor as a binary on/off flag — so power can only
+be estimated as `relay state × the rated wattage of the attached heaters`. Because that rating is a property of your
+heaters and not of the thermostat, you have to supply it:
 
 ```bash
 M2M_HEATER_WATTS="Kitchen=1500,<device-id>=750"
@@ -176,8 +177,8 @@ thermostat controls. You can find both in the logs at startup.
 
 A few things to be aware of:
 
-- The **Current power** sensor is only created for devices that can actually report power. V2 thermostats you have not
-  configured, and AC devices (which report neither current nor duty cycle), get no power entity at all.
+- The **Current power** sensor is only created for devices that can actually report power. V2 and in-floor thermostats
+  you have not configured, and AC devices (which report neither current nor relay state), get no power entity at all.
 - The reported value is an estimate. The duty cycle reflects whether the relay is energized right now, so the sensor
   swings between 0 W and the full rated wattage rather than easing between them. Over time it still integrates to a
   reasonable energy total in Home Assistant, but instantaneous readings are coarse.

@@ -77,6 +77,8 @@ export class Thermostat {
   private readonly mqttOrigin: OriginConfiguration;
   private readonly mqttClimate: Climate;
   private readonly mqttTemperature: Sensor;
+  /** Floor-probe temperature, published only for in-floor heating thermostats (INF-V1-0). */
+  private readonly mqttFloorTemperature: Sensor | undefined;
   private readonly mqttHumidity: Sensor;
   private readonly mqttPower: Sensor | undefined;
   /** Set instead of {@link mqttPower} when this device cannot report power, to retire a previously published entity. */
@@ -125,12 +127,15 @@ export class Thermostat {
     const isAC = mysaDevice.Model.startsWith('AC');
     this.deviceType = isAC ? 'AC' : 'BB';
 
-    // V2 hardware has no current sensor: its status messages carry a duty cycle but never a
-    // `Current` reading, so power can only be derived from a user-supplied heater rating. AC
-    // devices report neither. Testing for V2 rather than allowlisting V1 keeps the sensor for
-    // unrecognized models, which report `Current` natively today.
+    // V2 and in-floor hardware have no current sensor: their status messages carry a duty cycle
+    // (in-floor reports a binary `heatStat` relay flag instead) but never a `Current` reading, so
+    // power can only be derived from a user-supplied heater rating. AC devices report neither.
+    // Testing for these families rather than allowlisting V1 keeps the sensor for unrecognized
+    // models, which report `Current` natively today.
     const isV2 = /-v2-/i.test(mysaDevice.Model);
-    const canReportPower = !isAC && (!isV2 || heaterWatts != null);
+    const isInFloor = /^INF-/i.test(mysaDevice.Model);
+    const needsHeaterWatts = isV2 || isInFloor;
+    const canReportPower = !isAC && (!needsHeaterWatts || heaterWatts != null);
 
     this.mqttClimate = new Climate(
       {
@@ -239,6 +244,27 @@ export class Thermostat {
       }
     });
 
+    // In-floor thermostats report a floor-probe temperature alongside the ambient air reading. The
+    // ambient reading remains the climate's current temperature; the floor probe gets its own sensor.
+    this.mqttFloorTemperature = isInFloor
+      ? new Sensor({
+          mqtt: this.mqttSettings,
+          logger: this.logger,
+          component: {
+            component: 'sensor',
+            device: this.mqttDevice,
+            origin: this.mqttOrigin,
+            unique_id: `mysa_${mysaDevice.Id}_floor_temperature`,
+            name: 'Floor temperature',
+            device_class: 'temperature',
+            state_class: 'measurement',
+            unit_of_measurement: '°C',
+            suggested_display_precision: is_celsius ? 0.1 : 0.0,
+            force_update: true
+          }
+        })
+      : undefined;
+
     this.mqttHumidity = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
@@ -300,6 +326,7 @@ export class Thermostat {
 
       await this.mqttClimate.writeConfig();
       await this.mqttTemperature.writeConfig();
+      await this.mqttFloorTemperature?.writeConfig();
       await this.mqttHumidity.writeConfig();
 
       // Neither REST field is usable as an initial power state: `state.Current.v` always has a
@@ -391,6 +418,7 @@ export class Thermostat {
 
     await this.mqttPower?.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
+    await this.mqttFloorTemperature?.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
   }
 
@@ -477,6 +505,9 @@ export class Thermostat {
     }
 
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
+    if (status.floorTemperature != null) {
+      await this.mqttFloorTemperature?.setState('state_topic', status.floorTemperature.toFixed(2));
+    }
     await this.mqttHumidity.setState('state_topic', status.humidity.toFixed(2));
   }
 
