@@ -44,12 +44,20 @@ SOFTWARE.
  * @returns A cleaned string containing only alphanumeric characters, underscores, and hyphens
  */
 export function cleanString(raw: string): string {
-  return raw.replace(/[^A-Za-z0-9_]/g, (char) => {
-    const bytes = new TextEncoder().encode(char);
-    let escaped = '';
-    for (let i = 0; i < bytes.length; i++) {
-      escaped += `-${bytes[i].toString(16).toUpperCase().padStart(2, '0')}`;
-    }
-    return escaped;
-  });
+  // Encode the whole string to UTF-8 up front so surrogate pairs (astral code
+  // points such as emoji) resolve correctly before escaping; matching per
+  // UTF-16 code unit would split them and collapse every astral character to
+  // the same replacement-byte sequence, reintroducing collisions.
+  const bytes = new TextEncoder().encode(raw);
+  let result = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    const isSafe =
+      (byte >= 0x30 && byte <= 0x39) || // 0-9
+      (byte >= 0x41 && byte <= 0x5a) || // A-Z
+      (byte >= 0x61 && byte <= 0x7a) || // a-z
+      byte === 0x5f; // _
+    result += isSafe ? String.fromCharCode(byte) : `-${byte.toString(16).toUpperCase().padStart(2, '0')}`;
+  }
+  return result;
 }
