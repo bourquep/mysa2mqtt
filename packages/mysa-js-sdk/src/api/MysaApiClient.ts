@@ -658,12 +658,12 @@ export class MysaApiClient {
   /**
    * Subscribes to raw MQTT topic filters and relays every message verbatim.
    *
-   * Unlike {@link startRealtimeUpdates}, this performs no parsing, emits no typed events and sends no "start
-   * publishing" request to the device — it simply forwards the full message topic and the decoded UTF-8 payload of
-   * everything that arrives on the given filters. It exists to reverse-engineer device families the SDK does not model
-   * yet, most notably the AWS IoT Device Shadow protocol used by the central-HVAC ST-V1 thermostats, where both the
-   * topic (which shadow, and `accepted`/`rejected`/`delta`/`documents`) and the raw JSON body carry the information a
-   * new implementation needs.
+   * Unlike {@link startRealtimeUpdates}, this performs no parsing, emits no typed events and sends no "start publishing"
+   * request to the device — it simply forwards the full message topic and the decoded UTF-8 payload of everything that
+   * arrives on the given filters. It exists to reverse-engineer device families the SDK does not model yet, most
+   * notably the AWS IoT Device Shadow protocol used by the central-HVAC ST-V1 thermostats, where both the topic (which
+   * shadow, and `accepted`/`rejected`/`delta`/`documents`) and the raw JSON body carry the information a new
+   * implementation needs.
    *
    * The capture is passive: the device only publishes to its shadow topics when something drives a change (the Mysa
    * mobile app, a schedule, or the device itself), so exercise the thermostat while a capture is running.
@@ -676,10 +676,7 @@ export class MysaApiClient {
    * @param handler - Invoked with the full message topic and the decoded UTF-8 payload for every message received.
    * @throws {@link Error} When the MQTT connection cannot be established.
    */
-  async startRawTopicCapture(
-    topicFilters: string[],
-    handler: (topic: string, payload: string) => void
-  ): Promise<void> {
+  async startRawTopicCapture(topicFilters: string[], handler: (topic: string, payload: string) => void): Promise<void> {
     this._logger.info(`Starting raw topic capture for ${topicFilters.length} filter(s)`);
 
     const connection = await this._getMqttConnection();
