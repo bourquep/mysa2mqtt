@@ -36,11 +36,11 @@ describe('WaterHeater', () => {
     expect(client.lastPayload(MODE)).toBe('off');
   });
 
-  it('applies a temperature command and ignores a non-numeric one', () => {
+  it('applies a temperature command and rejects one with trailing garbage', () => {
     const { heater, client } = makeWaterHeater();
     client.deliver(stateTopic('water_heater', 'wh1', 'temperature_command'), '48.5');
     expect(heater.targetTemperature).toBe(48.5);
-    client.deliver(stateTopic('water_heater', 'wh1', 'temperature_command'), 'warm');
+    client.deliver(stateTopic('water_heater', 'wh1', 'temperature_command'), '48.5C');
     expect(heater.targetTemperature).toBe(48.5);
   });
 });

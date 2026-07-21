@@ -3,12 +3,14 @@ import { Image } from '../src/components/image';
 import { lastClient, mqttSettings, stateTopic } from './helpers';
 
 describe('Image', () => {
-  it('publishes image bytes on the image topic by default', async () => {
+  it('publishes raw image bytes on the image topic by default', async () => {
     const image = new Image({ mqtt: mqttSettings, component: { component: 'image', unique_id: 'img1' } });
     const client = lastClient();
-    await image.publishImage(Buffer.from('bytes'));
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47]); // PNG magic
+    await image.publishImage(bytes);
     const publish = client.publishesFor(stateTopic('image', 'img1', 'image')).at(-1);
-    expect(publish?.payload).toBe('bytes');
+    expect(Buffer.isBuffer(publish?.payload)).toBe(true);
+    expect(publish?.payload).toEqual(bytes);
     expect(publish?.opts).toMatchObject({ retain: true });
   });
 

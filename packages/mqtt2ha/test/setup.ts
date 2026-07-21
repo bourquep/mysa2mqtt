@@ -1,20 +1,10 @@
 import { beforeEach, vi } from 'vitest';
 
-/** A single MQTT publish captured by the fake client. */
+/** A single MQTT publish captured by the fake client. The payload is stored exactly as the client received it. */
 export interface Published {
   topic: string;
-  payload: string;
+  payload: string | Buffer;
   opts?: Record<string, unknown>;
-}
-
-function toStringPayload(payload: unknown): string {
-  if (typeof payload === 'string') {
-    return payload;
-  }
-  if (Buffer.isBuffer(payload)) {
-    return payload.toString();
-  }
-  return JSON.stringify(payload);
 }
 
 /**
@@ -23,8 +13,8 @@ function toStringPayload(payload: unknown): string {
  */
 export class FakeMqttClient {
   readonly options: Record<string, unknown>;
-  readonly published: Published[] = [];
-  readonly publishedSync: Published[] = [];
+  /** Every publish (async and sync) in one chronological history. */
+  readonly publishes: Published[] = [];
   readonly subscriptions: string[] = [];
   private readonly handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
 
@@ -37,12 +27,12 @@ export class FakeMqttClient {
     return this;
   }
 
-  async publishAsync(topic: string, payload: unknown, opts?: Record<string, unknown>) {
-    this.published.push({ topic, payload: toStringPayload(payload), opts });
+  async publishAsync(topic: string, payload: string | Buffer, opts?: Record<string, unknown>) {
+    this.publishes.push({ topic, payload, opts });
   }
 
-  publish(topic: string, payload: unknown, opts?: Record<string, unknown>) {
-    this.publishedSync.push({ topic, payload: toStringPayload(payload), opts });
+  publish(topic: string, payload: string | Buffer, opts?: Record<string, unknown>) {
+    this.publishes.push({ topic, payload, opts });
     return this;
   }
 
@@ -65,14 +55,15 @@ export class FakeMqttClient {
     this.emit('message', topic, Buffer.from(message));
   }
 
-  /** Every publish (async and sync) that targeted `topic`, oldest first. */
+  /** Every publish that targeted `topic`, oldest first, with payloads preserved as received. */
   publishesFor(topic: string): Published[] {
-    return [...this.published, ...this.publishedSync].filter((p) => p.topic === topic);
+    return this.publishes.filter((p) => p.topic === topic);
   }
 
-  /** The most recent payload published to `topic`, or `undefined` if none. */
+  /** The most recent payload published to `topic` as text, or `undefined` if none. */
   lastPayload(topic: string): string | undefined {
-    return this.publishesFor(topic).at(-1)?.payload;
+    const payload = this.publishesFor(topic).at(-1)?.payload;
+    return payload === undefined ? undefined : payload.toString();
   }
 }
 

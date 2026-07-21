@@ -42,9 +42,9 @@ describe('Cover', () => {
     expect(client.lastPayload(POSITION)).toBe('35');
   });
 
-  it('ignores a non-numeric position command', () => {
+  it('rejects a position command with trailing garbage', () => {
     const { cover, client } = makeCover();
-    client.deliver(stateTopic('cover', 'cv1', 'set_position'), 'nope');
+    client.deliver(stateTopic('cover', 'cv1', 'set_position'), '35cm');
     expect(cover.position).toBeUndefined();
     expect(client.publishesFor(POSITION)).toHaveLength(0);
   });

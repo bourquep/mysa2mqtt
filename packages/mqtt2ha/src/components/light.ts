@@ -214,8 +214,8 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
         break;
 
       case 'brightness_command_topic': {
-        const brightness = parseInt(message, 10);
-        if (Number.isNaN(brightness)) {
+        const brightness = Number(message);
+        if (!Number.isFinite(brightness)) {
           this.logger.warn("Received a non-numeric payload on the 'brightness_command_topic':", message);
           break;
         }
@@ -224,8 +224,8 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
       }
 
       case 'color_temp_command_topic': {
-        const colorTemp = parseInt(message, 10);
-        if (Number.isNaN(colorTemp)) {
+        const colorTemp = Number(message);
+        if (!Number.isFinite(colorTemp)) {
           this.logger.warn("Received a non-numeric payload on the 'color_temp_command_topic':", message);
           break;
         }
@@ -234,8 +234,9 @@ export class Light extends Subscriber<LightInfo, StateTopicMap, CommandTopicMap>
       }
 
       case 'rgb_command_topic': {
-        const parts = message.split(',').map((v) => parseInt(v, 10));
-        if (parts.length !== 3 || parts.some((v) => Number.isNaN(v))) {
+        const raw = message.split(',');
+        const parts = raw.map((v) => (v.trim() === '' ? NaN : Number(v)));
+        if (parts.length !== 3 || parts.some((v) => !Number.isFinite(v))) {
           this.logger.warn("Received an invalid RGB payload on the 'rgb_command_topic':", message);
           break;
         }

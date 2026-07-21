@@ -49,5 +49,9 @@ export function discoveryConfig(
   if (payload === undefined) {
     throw new Error('No discovery configuration was published.');
   }
-  return JSON.parse(payload) as Record<string, unknown>;
+  const parsed: unknown = JSON.parse(payload);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Discovery configuration is not a JSON object: ${payload}`);
+  }
+  return parsed as Record<string, unknown>;
 }

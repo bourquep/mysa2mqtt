@@ -51,9 +51,9 @@ describe('Light', () => {
     expect(client.publishesFor(RGB)).toHaveLength(0);
   });
 
-  it('ignores a non-numeric brightness command', () => {
+  it('rejects a brightness command with trailing garbage', () => {
     const { light, client } = makeLight();
-    client.deliver(stateTopic('light', 'l1', 'brightness_command'), 'bright');
+    client.deliver(stateTopic('light', 'l1', 'brightness_command'), '200watts');
     expect(light.brightness).toBeUndefined();
     expect(client.publishesFor(BRIGHTNESS)).toHaveLength(0);
   });

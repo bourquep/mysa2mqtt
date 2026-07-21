@@ -149,8 +149,8 @@ export class Valve extends Subscriber<ValveInfo, StateTopicMap, CommandTopicMap>
         break;
 
       case 'set_position_topic': {
-        const position = parseFloat(message);
-        if (Number.isNaN(position)) {
+        const position = Number(message);
+        if (!Number.isFinite(position)) {
           this.logger.warn("Received a non-numeric payload on the 'set_position_topic':", message);
           break;
         }

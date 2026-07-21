@@ -42,9 +42,9 @@ describe('Humidifier', () => {
     expect(humidifier.targetHumidity).toBe(48);
   });
 
-  it('ignores a non-numeric target humidity command', () => {
+  it('rejects a target humidity command with trailing garbage', () => {
     const { humidifier, client } = makeHumidifier();
-    client.deliver(stateTopic('humidifier', 'h1', 'target_humidity_command'), 'high');
+    client.deliver(stateTopic('humidifier', 'h1', 'target_humidity_command'), '48pct');
     expect(humidifier.targetHumidity).toBeUndefined();
     expect(client.publishesFor(TARGET)).toHaveLength(0);
   });

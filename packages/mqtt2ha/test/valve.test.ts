@@ -29,11 +29,11 @@ describe('Valve', () => {
     expect(client.lastPayload(STATE)).toBe('opening');
   });
 
-  it('applies a set-position command and ignores a non-numeric one', () => {
+  it('applies a set-position command and rejects one with trailing garbage', () => {
     const { valve, client } = makeValve();
     client.deliver(stateTopic('valve', 'vv1', 'set_position'), '80');
     expect(valve.position).toBe(80);
-    client.deliver(stateTopic('valve', 'vv1', 'set_position'), 'open');
+    client.deliver(stateTopic('valve', 'vv1', 'set_position'), '80percent');
     expect(valve.position).toBe(80);
   });
 });

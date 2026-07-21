@@ -46,9 +46,9 @@ describe('Fan', () => {
     expect(fan.percentage).toBe(55);
   });
 
-  it('ignores a non-numeric percentage command', () => {
+  it('rejects a percentage command with trailing garbage', () => {
     const { fan, client } = makeFan();
-    client.deliver(stateTopic('fan', 'f1', 'percentage_command'), 'fast');
+    client.deliver(stateTopic('fan', 'f1', 'percentage_command'), '55percent');
     expect(fan.percentage).toBeUndefined();
     expect(client.publishesFor(PERCENTAGE)).toHaveLength(0);
   });

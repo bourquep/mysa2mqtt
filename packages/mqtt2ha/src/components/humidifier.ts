@@ -204,8 +204,8 @@ export class Humidifier extends Subscriber<HumidifierInfo, StateTopicMap, Comman
         break;
 
       case 'target_humidity_command_topic': {
-        const humidity = parseFloat(message);
-        if (Number.isNaN(humidity)) {
+        const humidity = Number(message);
+        if (!Number.isFinite(humidity)) {
           this.logger.warn("Received a non-numeric payload on the 'target_humidity_command_topic':", message);
           break;
         }

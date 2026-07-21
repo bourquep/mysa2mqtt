@@ -211,8 +211,8 @@ export class Fan extends Subscriber<FanInfo, StateTopicMap, CommandTopicMap> {
         break;
 
       case 'percentage_command_topic': {
-        const percentage = parseInt(message, 10);
-        if (Number.isNaN(percentage)) {
+        const percentage = Number(message);
+        if (!Number.isFinite(percentage)) {
           this.logger.warn("Received a non-numeric payload on the 'percentage_command_topic':", message);
           break;
         }

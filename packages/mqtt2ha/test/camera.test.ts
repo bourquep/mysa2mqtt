@@ -14,12 +14,15 @@ describe('Camera', () => {
     expect(config.topic).toBe(TOPIC);
   });
 
-  it('publishes raw image bytes retained', async () => {
+  it('publishes raw image bytes retained without stringifying them', async () => {
     const camera = new Camera({ mqtt: mqttSettings, component: { component: 'camera', unique_id: 'cam1' } });
     const client = lastClient();
-    await camera.publishImage(Buffer.from('image-bytes'));
+    // Non-UTF-8 bytes (a JPEG SOI marker + a lone 0xC0) would be corrupted if stringified.
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xc0]);
+    await camera.publishImage(bytes);
     const publish = client.publishesFor(TOPIC).at(-1);
-    expect(publish?.payload).toBe('image-bytes');
+    expect(Buffer.isBuffer(publish?.payload)).toBe(true);
+    expect(publish?.payload).toEqual(bytes);
     expect(publish?.opts).toMatchObject({ retain: true });
   });
 
