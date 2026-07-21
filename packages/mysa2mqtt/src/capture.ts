@@ -43,7 +43,7 @@ SOFTWARE.
 
 import { Command, InvalidArgumentError, Option } from 'commander';
 import { configDotenv } from 'dotenv';
-import { createWriteStream, WriteStream } from 'fs';
+import { chmodSync, createWriteStream, existsSync, WriteStream } from 'fs';
 import { DeviceBase, MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
 import { pino } from 'pino';
 import { PinoLogger } from './logger';
@@ -173,8 +173,14 @@ function selectDevices(devices: Record<string, DeviceBase>): string[] {
 /** Main entry-point. */
 async function main() {
   if (options.output) {
-    // 0o600: the dump can contain account identifiers (see the file header), so don't create it
-    // world-readable. Only applies when the file is created; an existing file keeps its own mode.
+    // The dump can contain account identifiers (see the file header), so keep the file private to the
+    // current user. `mode` only applies when createWriteStream creates the file, so an existing
+    // destination — whose mode `flags: 'w'` would otherwise preserve across the truncate — is tightened
+    // explicitly first. A chmod failure (not owned, etc.) surfaces via main()'s catch rather than
+    // silently leaving the dump world-readable.
+    if (existsSync(options.output)) {
+      chmodSync(options.output, 0o600);
+    }
     outputStream = createWriteStream(options.output, { flags: 'w', mode: 0o600 });
     // Without an error handler, an async stream failure (bad path, missing directory, permissions)
     // is emitted as an unhandled 'error' event and crashes the process.
