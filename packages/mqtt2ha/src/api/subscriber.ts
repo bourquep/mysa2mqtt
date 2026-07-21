@@ -76,7 +76,7 @@ export class Subscriber<
    * Creates a new subscribable entity
    *
    * @param settings - The component settings including MQTT configuration
-   * @param stateTopicNames - Array of state topic names
+   * @param stateTopicNames - Array of state topic names. May be empty for a command-only entity (such as a button).
    * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
@@ -96,13 +96,22 @@ export class Subscriber<
     // rejection escaping these async callbacks becomes an unhandled promise
     // rejection and terminates the process under Node's default policy.
     // Catch and log instead.
-    super(settings, stateTopicNames, onStateChange, async () => {
-      try {
-        await this.subscribeToCommandTopics();
-      } catch (error) {
-        this.logger.error(`Failed to subscribe to command topics for ${this.identifier}`, error);
-      }
-    });
+    //
+    // A subscriber is interactive through its command topics, so it does not
+    // need any state topic — command-only entities pass an empty stateTopicNames.
+    super(
+      settings,
+      stateTopicNames,
+      onStateChange,
+      async () => {
+        try {
+          await this.subscribeToCommandTopics();
+        } catch (error) {
+          this.logger.error(`Failed to subscribe to command topics for ${this.identifier}`, error);
+        }
+      },
+      { allowNoStateTopics: true }
+    );
 
     this.commandCallback = commandCallback;
 
