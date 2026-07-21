@@ -33,13 +33,16 @@ interface CommandTopicConfiguration {
 /**
  * A callback type for handling commands received via MQTT.
  *
- * @typeParam TCommandMap - A mapping of command topic names to their respective message types
+ * MQTT command payloads are always strings, so the values of `TCommandMap` are constrained to `string`. Components that
+ * receive a JSON-encoded payload on a command topic are responsible for decoding it inside their handler.
+ *
+ * @typeParam TCommandMap - A mapping of command topic names to their (always string) message payloads
  */
-export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
+export type CommandCallback<TCommandMap extends Record<string, string>> = <
   TTopicName extends keyof TCommandMap & string
 >(
   topicName: TTopicName,
-  message: TCommandMap[TTopicName]
+  message: string
 ) => Promise<void>;
 
 /**
@@ -53,7 +56,7 @@ export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
 export class Subscriber<
   TComponentConfiguration extends BaseComponentConfiguration,
   TStateMap extends Record<string, unknown>,
-  TCommandMap extends Record<string, unknown>
+  TCommandMap extends Record<string, string>
 > extends Discoverable<TComponentConfiguration, TStateMap> {
   /** List of MQTT topics for entity commands. */
   protected commandTopics: CommandTopicConfiguration[] = [];
@@ -144,15 +147,9 @@ export class Subscriber<
       const stringMessage = message.toString();
       this.logger.debug(`Received command message for ${this.identifier} on topic ${topic}: ${stringMessage}`);
 
-      let parsedMessage: unknown;
-
-      try {
-        parsedMessage = JSON.parse(stringMessage);
-      } catch {
-        parsedMessage = stringMessage;
-      }
-
-      await this.commandCallback(commandTopic.name, parsedMessage as TCommandMap[(typeof commandTopic)['name']]);
+      // MQTT command payloads are always strings. Pass the raw string through unchanged; any component that carries a
+      // JSON-encoded payload on a command topic decodes it inside its own handler.
+      await this.commandCallback(commandTopic.name, stringMessage);
     }
   }
 }
