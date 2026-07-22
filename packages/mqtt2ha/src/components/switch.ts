@@ -61,14 +61,33 @@ export class Switch extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMa
       async () => {},
       ['command_topic'],
       async (topicName: string, message: string) => {
-        if (message === (this.component.payload_on || 'ON')) {
-          await this.on();
-        } else if (message === (this.component.payload_off || 'OFF')) {
-          await this.off();
+        // In optimistic mode the new state is assumed and published before
+        // the device command runs. Otherwise the state is only published
+        // once the callback has succeeded, so a failed device command never
+        // leaves Home Assistant showing a state the device never reached.
+        if (this.component.optimistic) {
+          await this.applyCommandedState(message);
+          await commandCallback(topicName, message);
+        } else {
+          await commandCallback(topicName, message);
+          await this.applyCommandedState(message);
         }
-        await commandCallback(topicName, message);
       }
     );
+  }
+
+  /**
+   * Publishes the switch state matching a received command payload. Payloads matching neither the on nor the off
+   * payload are ignored.
+   *
+   * @param message - The received command payload
+   */
+  private async applyCommandedState(message: string) {
+    if (message === (this.component.payload_on || 'ON')) {
+      await this.on();
+    } else if (message === (this.component.payload_off || 'OFF')) {
+      await this.off();
+    }
   }
 
   /** Turns the switch on Publishes the configured ON payload or "ON" if not configured */
