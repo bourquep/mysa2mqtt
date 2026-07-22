@@ -21,6 +21,10 @@ merged.
 Layering rule: `mysa2mqtt` may depend on both libraries; the libraries must not depend on each other or on the CLI. Do
 not introduce Mysa-specific concepts into `mqtt2ha`.
 
+## Worktree Setup
+
+After creating a worktree, run `npm ci` from the repository root to install dependencies.
+
 ## Commands
 
 Always run from the repository root:
@@ -31,26 +35,34 @@ npm run build       # mqtt2ha → mysa-js-sdk → mysa2mqtt, in that order
 npm run typecheck   # Builds first, then typechecks
 npm run lint
 npm run style-lint  # Prettier check; `npm run style-fix` to write
+npm test            # Runs each package's `test` script (vitest) via --if-present
 npm run build:docs
 npm run build -w mysa-js-sdk   # Single package
 ```
 
-Before declaring work complete, run: `npm run style-lint && npm run lint && npm run build && npm run typecheck`. All
-four must pass.
+Before declaring work complete, run:
+`npm run style-lint && npm run lint && npm run build && npm run typecheck && npm test`. All five must pass.
 
-## There are no tests
+## Tests
 
-No test framework is configured in any package — no vitest, no jest, no test files, no `test` script. Do not run
-`npm test`, do not report test results, and do not claim a change is "tested" because the build passed.
+`mqtt2ha` has a [vitest](https://vitest.dev) suite under `packages/mqtt2ha/test/`; the other packages have none yet
+(`npm test` uses `--workspaces --if-present`, so it only runs where a `test` script exists). CI runs `npm test` after
+the build.
 
-If you want to verify behaviour, build and exercise the CLI directly:
+- Run the whole suite from the root with `npm test`, or a single package's with `npm test -w mqtt2ha`. Watch mode:
+  `npm run test:watch -w mqtt2ha`.
+- The `mqtt2ha` tests mock the `mqtt` module with an in-memory fake client (`test/setup.ts`) — no broker is required.
+  Shared settings and topic builders live in `test/helpers.ts`.
+- Tests live outside `src/`, so they are prettier-checked but excluded from the package build, ESLint, and `tsc` scopes.
+
+When you change or add a component, update or add its `*.test.ts`. If you touch behaviour with no coverage, add a test
+rather than only building.
+
+To exercise the CLI end to end instead, build and run it directly:
 
 ```bash
 node packages/mysa2mqtt/dist/main.js --help
 ```
-
-Adding a test framework is a reasonable proposal, but it is a project decision — raise it, don't do it unprompted as
-part of an unrelated change.
 
 ## Traps specific to this repository
 
@@ -125,8 +137,8 @@ never delete them.
 ## Safety
 
 - **Never commit or log credentials.** Mysa account credentials, tokens, and session data are involved throughout.
-  `.env`, `.env.local` and `session.json` are gitignored — keep it that way, and never paste their contents into code,
-  commits, issues, or pull requests.
+  `.env` and `.env.local` are gitignored — keep it that way, and never paste their contents into code, commits, issues,
+  or pull requests.
 - When adding logging, assume the output will be pasted into a public issue. Redact tokens, passwords, email addresses
   and device identifiers.
 - This project uses undocumented Mysa APIs. Be conservative about adding new endpoint calls or increasing request

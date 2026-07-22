@@ -1,4 +1,4 @@
-import { MysaSession } from '@/api/MysaSession';
+import { MysaCredentials } from '@/api/MysaCredentials';
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
 import { isMsgOutPayload, isMsgTypeOutPayload } from '@/lib/PayloadTypeGuards';
@@ -6,24 +6,22 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
+import { DeviceBase, Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
-import {
-  AuthenticationDetails,
-  CognitoAccessToken,
-  CognitoIdToken,
-  CognitoRefreshToken,
-  CognitoUser,
-  CognitoUserPool,
-  CognitoUserSession
-} from 'amazon-cognito-identity-js';
+import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserSession } from 'amazon-cognito-identity-js';
 import { auth, iot, mqtt } from 'aws-iot-device-sdk-v2';
 import { hash } from 'crypto';
 import dayjs, { Dayjs } from 'dayjs';
 import duration from 'dayjs/plugin/duration.js';
 import { customAlphabet } from 'nanoid';
-import { MqttPublishError, MysaApiError, UnauthenticatedError } from './Errors';
+import {
+  MqttPublishError,
+  MysaApiError,
+  UnauthenticatedError,
+  UnknownDeviceError,
+  UnsupportedFanSpeedError
+} from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
@@ -49,6 +47,64 @@ const CognitoLoginKey = `cognito-idp.${AwsRegion}.amazonaws.com/${CognitoUserPoo
 const MqttEndpoint = 'a3q27gia9qg3zy-ats.iot.us-east-1.amazonaws.com';
 const MysaApiBaseUrl = 'https://app-prod.mysa.cloud';
 const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
+const PublishAckTimeout = dayjs.duration(30, 'seconds');
+
+/** Rolling window over which MQTT interrupts are counted for storm detection. */
+const MqttInterruptWindow = dayjs.duration(30, 'seconds');
+/** Number of interrupts within {@link MqttInterruptWindow} that triggers a forced connection reset. */
+const MqttInterruptThreshold = 3;
+/** Base delay for exponential backoff between consecutive forced MQTT resets. */
+const MqttResetBaseDelay = dayjs.duration(1, 'second');
+/** Maximum delay between consecutive forced MQTT resets. */
+const MqttResetMaxDelay = dayjs.duration(30, 'seconds');
+/** How long a connection must stay interrupt-free before the consecutive-reset counter is cleared. */
+const MqttStabilityWindow = dayjs.duration(60, 'seconds');
+
+/** Canonical fan-speed order, matching the positional layout of a device's `SupportedCaps.fanSpeeds`. */
+const CanonicalFanSpeedOrder: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'high', 'max'];
+
+/** Universal fan-speed `fn` mapping used when a device does not report its own `SupportedCaps.fanSpeeds`. */
+const LegacyFanSpeedSendMap: Record<MysaFanSpeedMode, number> = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
+
+/**
+ * Receive-side `fn`-to-fan-speed mapping. Includes both the legacy universal values (3/5/7) and the AC-V1-X
+ * CodeNum=1117 canonical values (2/4/6); the latter are unused by legacy devices, so there is no conflict.
+ */
+const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
+  1: 'auto',
+  2: 'low', // CodeNum=1117 canonical low
+  3: 'low', // legacy
+  4: 'medium', // CodeNum=1117 canonical medium
+  5: 'medium', // legacy
+  6: 'high', // CodeNum=1117 canonical high
+  7: 'high', // legacy
+  8: 'max'
+};
+
+/**
+ * Builds the send-side fan-speed `fn` mapping for a device.
+ *
+ * When the device reports `SupportedCaps.fanSpeeds`, its values are zipped positionally with
+ * {@link CanonicalFanSpeedOrder} (e.g. `[1, 2, 4, 6]` → `{ auto: 1, low: 2, medium: 4, high: 6 }`). Otherwise the
+ * {@link LegacyFanSpeedSendMap} is used, preserving backward compatibility.
+ *
+ * @param device - The device to build the mapping for.
+ * @returns A partial map from fan-speed mode to the device-specific `fn` value.
+ */
+function buildFanSpeedSendMap(device: DeviceBase): Partial<Record<MysaFanSpeedMode, number>> {
+  const fanSpeeds = device.SupportedCaps?.fanSpeeds;
+  if (!fanSpeeds || fanSpeeds.length === 0) {
+    return LegacyFanSpeedSendMap;
+  }
+
+  const map: Partial<Record<MysaFanSpeedMode, number>> = {};
+  CanonicalFanSpeedOrder.forEach((name, index) => {
+    if (index < fanSpeeds.length) {
+      map[name] = fanSpeeds[index];
+    }
+  });
+  return map;
+}
 
 /**
  * Main client for interacting with the Mysa API and real-time device communication.
@@ -60,9 +116,9 @@ const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
  * @example
  *
  * ```typescript
- * const client = new MysaApiClient();
+ * const client = new MysaApiClient({ username: 'user@example.com', password: 'password' });
  *
- * await client.login('user@example.com', 'password');
+ * await client.login();
  * const devices = await client.getDevices();
  *
  * client.emitter.on('statusChanged', (status) => {
@@ -75,11 +131,17 @@ const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
  * ```
  */
 export class MysaApiClient {
+  /** The credentials of the Mysa account this client authenticates as. */
+  private _credentials: MysaCredentials;
+
   /** The current session object, if any. */
   private _cognitoUserSession?: CognitoUserSession;
 
   /** The current user object, if any. */
   private _cognitoUser?: CognitoUser;
+
+  /** The in-flight session acquisition, if any, so that concurrent callers share a single refresh or login. */
+  private _freshSessionPromise?: Promise<CognitoUserSession>;
 
   /** The logger instance used by the client. */
   private _logger: Logger;
@@ -102,8 +164,26 @@ export class MysaApiClient {
   /** Whether a forced MQTT reset is currently in progress (guards against re-entrancy). */
   private _mqttResetInProgress = false;
 
+  /** Monotonic id of the current MQTT connection; used to ignore events from discarded connections. */
+  private _mqttGeneration = 0;
+
+  /** Consecutive forced resets without an intervening stable period; drives reset backoff. */
+  private _mqttConsecutiveResets = 0;
+
+  /** Timestamp (ms) of the most recent successful MQTT (re)connect, for interrupt dwell-time diagnostics. */
+  private _mqttLastConnectionSuccessAt?: number;
+
+  /** Timer that clears the consecutive-reset counter once a connection stays healthy. */
+  private _mqttStabilityTimer?: NodeJS.Timeout;
+
   /** The device IDs that are currently being updated in real-time, mapped to their respective timeouts. */
   private _realtimeDeviceIds: Map<string, NodeJS.Timeout> = new Map();
+
+  /**
+   * Raw topic filters registered via {@link startRawTopicCapture}, mapped to their message handlers. Re-subscribed on
+   * every reconnect so a debug capture survives connection resets.
+   */
+  private _rawTopicCaptures: Map<string, (topic: string, payload: string) => void> = new Map();
 
   /** The cached devices object, if any. */
   private _cachedDevices?: Devices;
@@ -116,97 +196,70 @@ export class MysaApiClient {
   readonly emitter = new EventEmitter<MysaApiClientEventTypes>();
 
   /**
-   * Gets the persistable session object.
-   *
-   * @returns The current persistable session object, if any.
-   */
-  get session(): MysaSession | undefined {
-    if (!this._cognitoUserSession || !this._cognitoUser) {
-      return undefined;
-    }
-
-    return {
-      username: this._cognitoUser.getUsername(),
-      idToken: this._cognitoUserSession.getIdToken().getJwtToken(),
-      accessToken: this._cognitoUserSession.getAccessToken().getJwtToken(),
-      refreshToken: this._cognitoUserSession.getRefreshToken().getToken()
-    };
-  }
-
-  /**
-   * Returns whether the client currently has an active session.
-   *
-   * @returns True if the client has an active session, false otherwise.
-   */
-  get isAuthenticated(): boolean {
-    return !!this.session;
-  }
-
-  /**
    * Constructs a new instance of the MysaApiClient.
    *
-   * @param session - The persistable session object, if any.
+   * @param credentials - The credentials of the Mysa account to authenticate as.
    * @param options - The options for the client.
    */
-  constructor(session?: MysaSession, options?: MysaApiClientOptions) {
+  constructor(credentials: MysaCredentials, options?: MysaApiClientOptions) {
+    this._credentials = credentials;
     this._logger = options?.logger || new VoidLogger();
     this._fetcher = options?.fetcher || fetch;
-
-    if (session) {
-      this._cognitoUser = new CognitoUser({
-        Username: session.username,
-        Pool: new CognitoUserPool({ UserPoolId: CognitoUserPoolId, ClientId: CognitoClientId })
-      });
-      this._cognitoUserSession = new CognitoUserSession({
-        IdToken: new CognitoIdToken({ IdToken: session.idToken }),
-        AccessToken: new CognitoAccessToken({ AccessToken: session.accessToken }),
-        RefreshToken: new CognitoRefreshToken({ RefreshToken: session.refreshToken })
-      });
-    }
   }
 
   /**
-   * Logs in the user with the given email address and password.
+   * Ensures the client has a usable session, logging in with the credentials it was constructed with if needed.
    *
-   * This method authenticates the user with Mysa's Cognito user pool and establishes a session that can be used for
-   * subsequent API calls. Upon successful login, a 'sessionChanged' event is emitted.
+   * Calling this method is optional: the client authenticates on demand before its first API call, and re-authenticates
+   * on its own whenever its session can no longer be refreshed. Call it explicitly at startup to fail fast on invalid
+   * credentials instead of on the first API call. It is a no-op when the current session is still usable.
    *
    * @example
    *
    * ```typescript
    * try {
-   *   await client.login('user@example.com', 'password123');
+   *   await client.login();
    *   console.log('Login successful!');
    * } catch (error) {
    *   console.error('Login failed:', error.message);
    * }
    * ```
    *
-   * @param emailAddress - The email address of the user.
-   * @param password - The password of the user.
+   * @throws {@link UnauthenticatedError} When authentication fails due to invalid credentials or network issues.
+   */
+  async login(): Promise<void> {
+    // Goes through _getFreshSession so that an explicit login shares any acquisition already in flight instead of
+    // racing a concurrent API call into a second Cognito login.
+    await this._getFreshSession();
+  }
+
+  /**
+   * Authenticates with Mysa's Cognito user pool and replaces the current session, if any.
+   *
+   * @returns A promise that resolves to the newly established session.
    * @throws {@link Error} When authentication fails due to invalid credentials or network issues.
    */
-  async login(emailAddress: string, password: string): Promise<void> {
+  private _login(): Promise<CognitoUserSession> {
     this._cognitoUser = undefined;
     this._cognitoUserSession = undefined;
     this._mqttClientId = undefined;
     this._mqttInterrupts = [];
+    this._mqttConsecutiveResets = 0;
 
-    this.emitter.emit('sessionChanged', this.session);
+    const { username, password } = this._credentials;
 
     return new Promise((resolve, reject) => {
       const user = new CognitoUser({
-        Username: emailAddress,
+        Username: username,
         Pool: new CognitoUserPool({ UserPoolId: CognitoUserPoolId, ClientId: CognitoClientId })
       });
 
-      user.authenticateUser(new AuthenticationDetails({ Username: emailAddress, Password: password }), {
+      user.authenticateUser(new AuthenticationDetails({ Username: username, Password: password }), {
         onSuccess: (session) => {
           this._cognitoUser = user;
           this._cognitoUserSession = session;
-          this.emitter.emit('sessionChanged', this.session);
 
-          resolve();
+          resolve(session);
         },
         onFailure: (err) => {
           reject(err);
@@ -232,7 +285,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the list of devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDevices(): Promise<Devices> {
     this._logger.debug(`Fetching devices...`);
@@ -271,7 +324,7 @@ export class MysaApiClient {
    *
    * @param deviceId - The ID of the device to get the serial number for.
    * @returns A promise that resolves to the serial number, or undefined if not found.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceSerialNumber(deviceId: string): Promise<string | undefined> {
     this._logger.debug(`Fetching serial number for device ${deviceId}...`);
@@ -314,7 +367,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the firmware information for all devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceFirmwares(): Promise<Firmwares> {
     this._logger.debug(`Fetching device firmwares...`);
@@ -339,7 +392,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the current state of all devices.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getDeviceStates(): Promise<DeviceStates> {
     this._logger.debug(`Fetching device states...`);
@@ -364,7 +417,7 @@ export class MysaApiClient {
    *
    * @returns A promise that resolves to the homes information.
    * @throws {@link MysaApiError} When the API request fails.
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    */
   async getHomes(): Promise<Homes> {
     this._logger.debug(`Fetching homes...`);
@@ -411,7 +464,9 @@ export class MysaApiClient {
    * @param mode - The operating mode to set (one of MysaDeviceMode values, or undefined to leave unchanged).
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
-   * @throws {@link UnauthenticatedError} When the user is not authenticated.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
+   * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
+   * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
@@ -421,7 +476,18 @@ export class MysaApiClient {
       this._cachedDevices = await this.getDevices();
     }
 
+    // Own-property check: an inherited key such as 'constructor' would otherwise pass the guard below and fail later
+    // with a TypeError on device.Model instead of UnknownDeviceError.
+    if (!Object.prototype.hasOwnProperty.call(this._cachedDevices.DevicesObj, deviceId)) {
+      throw new UnknownDeviceError(deviceId);
+    }
+
     const device = this._cachedDevices.DevicesObj[deviceId];
+
+    // Validate the session before reaching for a possibly cached MQTT connection. _getMqttConnection reuses
+    // _mqttConnectionPromise without checking auth, so without this a command could be published on a still-open
+    // connection after the session died — with no source ref to attribute it to.
+    await this._getFreshSession();
 
     this._logger.debug(`Initializing MQTT connection...`);
     const mqttConnection = await this._getMqttConnection();
@@ -430,7 +496,13 @@ export class MysaApiClient {
 
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
     const modeMap = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
-    const fanSpeedMap = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
+    const fanSpeedMap = buildFanSpeedSendMap(device);
+
+    // Reject an unsupported fan speed (e.g. 'max' on a device whose SupportedCaps.fanSpeeds only covers auto/low/
+    // medium/high) rather than silently publishing fn: undefined, which the caller would perceive as a no-op.
+    if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
+      throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
+    }
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
@@ -438,7 +510,7 @@ export class MysaApiClient {
       time: now.unix(),
       ver: '1.0',
       src: {
-        ref: this.session?.username ?? '',
+        ref: this._cognitoUser!.getUsername(),
         type: 100
       },
       dest: {
@@ -453,11 +525,13 @@ export class MysaApiClient {
             ? 1
             : device.Model.startsWith('AC-V1')
               ? 2
-              : device.Model.startsWith('BB-V2')
-                ? device.Model.endsWith('-L')
-                  ? 5
-                  : 4
-                : 0,
+              : device.Model.startsWith('INF-V1')
+                ? 3
+                : device.Model.startsWith('BB-V2')
+                  ? device.Model.endsWith('-L')
+                    ? 5
+                    : 4
+                  : 0,
         cmd: [
           {
             tm: -1,
@@ -522,19 +596,32 @@ export class MysaApiClient {
       Timestamp: dayjs().unix(),
       Timeout: RealtimeKeepAliveInterval.asSeconds()
     });
-    await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+
+    // A failed publish request must not abort startup (or, in the keep-alive
+    // below, crash the process via an unhandled rejection): the subscription
+    // above still delivers the device's autonomous periodic status reports
+    // even when the request-driven status stream is unavailable.
+    try {
+      await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+    } catch (error) {
+      this._logger.warn(`Failed to request status publishing for '${deviceId}'; relying on periodic reports`, error);
+    }
 
     const timer = setInterval(async () => {
       this._logger.debug(`Sending request to keep-alive publishing device status for '${deviceId}'...`);
 
-      const connection = await this._getMqttConnection();
-      const payload = serializeMqttPayload<StartPublishingDeviceStatus>({
-        Device: deviceId,
-        MsgType: InMessageType.START_PUBLISHING_DEVICE_STATUS,
-        Timestamp: dayjs().unix(),
-        Timeout: RealtimeKeepAliveInterval.asSeconds()
-      });
-      await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+      try {
+        const connection = await this._getMqttConnection();
+        const payload = serializeMqttPayload<StartPublishingDeviceStatus>({
+          Device: deviceId,
+          MsgType: InMessageType.START_PUBLISHING_DEVICE_STATUS,
+          Timestamp: dayjs().unix(),
+          Timeout: RealtimeKeepAliveInterval.asSeconds()
+        });
+        await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+      } catch (error) {
+        this._logger.warn(`Failed to keep-alive status publishing for '${deviceId}'`, error);
+      }
     }, RealtimeKeepAliveInterval.subtract(10, 'seconds').asMilliseconds());
 
     this._realtimeDeviceIds.set(deviceId, timer);
@@ -569,41 +656,116 @@ export class MysaApiClient {
   }
 
   /**
+   * Subscribes to raw MQTT topic filters and relays every message verbatim.
+   *
+   * Unlike {@link startRealtimeUpdates}, this performs no parsing, emits no typed events and sends no "start publishing"
+   * request to the device — it simply forwards the full message topic and the decoded UTF-8 payload of everything that
+   * arrives on the given filters. It exists to reverse-engineer device families the SDK does not model yet, most
+   * notably the AWS IoT Device Shadow protocol used by the central-HVAC ST-V1 thermostats, where both the topic (which
+   * shadow, and `accepted`/`rejected`/`delta`/`documents`) and the raw JSON body carry the information a new
+   * implementation needs.
+   *
+   * The capture is passive: the device only publishes to its shadow topics when something drives a change (the Mysa
+   * mobile app, a schedule, or the device itself), so exercise the thermostat while a capture is running.
+   *
+   * Registered filters are re-subscribed automatically after a reconnect.
+   *
+   * @param topicFilters - MQTT topic filters to subscribe to. Wildcards (`+`, `#`) are allowed, subject to the AWS IoT
+   *   policy attached to the account's Cognito identity — a filter the policy forbids resolves with a non-zero
+   *   `error_code`, which is logged rather than thrown so the remaining filters still subscribe.
+   * @param handler - Invoked with the full message topic and the decoded UTF-8 payload for every message received.
+   * @throws {@link Error} When the MQTT connection cannot be established.
+   */
+  async startRawTopicCapture(topicFilters: string[], handler: (topic: string, payload: string) => void): Promise<void> {
+    this._logger.info(`Starting raw topic capture for ${topicFilters.length} filter(s)`);
+
+    const connection = await this._getMqttConnection();
+    const decoder = new TextDecoder('utf-8');
+
+    for (const filter of topicFilters) {
+      this._rawTopicCaptures.set(filter, handler);
+      this._logger.debug(`Subscribing to raw topic filter '${filter}'...`);
+      try {
+        const result = await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
+          handler(topic, decoder.decode(payload));
+        });
+        this._logger.debug(
+          `Raw subscribe to '${filter}' granted (topic='${result.topic}', qos=${result.qos}, ` +
+            `error_code=${result.error_code ?? 0})`
+        );
+      } catch (error) {
+        // A rejected filter (e.g. denied by the IoT policy) must not abort the whole capture: keep the
+        // registration so a reconnect retries it, and let the remaining filters subscribe.
+        this._logger.warn(`Failed to subscribe to raw topic filter '${filter}'`, error);
+      }
+    }
+  }
+
+  /**
    * Ensures a valid, non-expired session is available.
    *
    * This method checks if the current session is valid and not expired. If the session is expired, it automatically
-   * refreshes it using the refresh token.
+   * refreshes it using the refresh token. If there is no session yet, or if the refresh token has itself expired or
+   * been revoked, the client logs back in with its credentials.
+   *
+   * Concurrent callers share a single in-flight acquisition, so a burst of API calls never triggers more than one
+   * refresh or login.
    *
    * @returns A promise that resolves to a valid CognitoUserSession.
-   * @throws {@link UnauthenticatedError} When no session exists or refresh fails.
+   * @throws {@link UnauthenticatedError} When neither refreshing nor logging back in succeeds.
    */
   private async _getFreshSession(): Promise<CognitoUserSession> {
-    if (!this._cognitoUser || !this._cognitoUserSession) {
-      throw new UnauthenticatedError('An attempt was made to access a resource without a valid session.');
-    }
-
     if (
-      this._cognitoUserSession.isValid() &&
+      this._cognitoUser &&
+      this._cognitoUserSession?.isValid() &&
       dayjs.unix(this._cognitoUserSession.getIdToken().getExpiration()).isAfter()
     ) {
       this._logger.debug('Session is valid, no need to refresh');
-      return Promise.resolve(this._cognitoUserSession);
+      return this._cognitoUserSession;
     }
 
-    this._logger.debug('Session is not valid or expired, refreshing...');
-    return new Promise<CognitoUserSession>((resolve, reject) => {
-      this._cognitoUser!.refreshSession(this._cognitoUserSession!.getRefreshToken(), (error, session) => {
-        if (error) {
-          this._logger.error('Failed to refresh session:', error);
-          reject(new UnauthenticatedError('Unable to refresh the authentication session.'));
-        } else {
-          this._logger.debug('Session refreshed successfully');
-          this._cognitoUserSession = session;
-          this.emitter.emit('sessionChanged', this.session);
-          resolve(session);
-        }
-      });
+    this._freshSessionPromise ??= this._acquireFreshSession().finally(() => {
+      this._freshSessionPromise = undefined;
     });
+
+    return this._freshSessionPromise;
+  }
+
+  /**
+   * Refreshes the current session, falling back to a full login when it cannot be refreshed.
+   *
+   * @returns A promise that resolves to a valid CognitoUserSession.
+   * @throws {@link UnauthenticatedError} When logging back in fails.
+   */
+  private async _acquireFreshSession(): Promise<CognitoUserSession> {
+    if (this._cognitoUser && this._cognitoUserSession) {
+      this._logger.debug('Session is not valid or expired, refreshing...');
+
+      try {
+        return await new Promise<CognitoUserSession>((resolve, reject) => {
+          this._cognitoUser!.refreshSession(this._cognitoUserSession!.getRefreshToken(), (error, session) => {
+            if (error) {
+              reject(error);
+            } else {
+              this._logger.debug('Session refreshed successfully');
+              this._cognitoUserSession = session;
+              resolve(session);
+            }
+          });
+        });
+      } catch (error) {
+        // The refresh token itself expired, was revoked, or was rotated away. Fall through to a full login.
+        this._logger.warn('Failed to refresh session, logging back in:', error);
+      }
+    }
+
+    try {
+      this._logger.info('Logging in...');
+      return await this._login();
+    } catch (error) {
+      this._logger.error('Failed to log in:', error);
+      throw new UnauthenticatedError('Unable to establish an authentication session.', error);
+    }
   }
 
   /**
@@ -696,7 +858,27 @@ export class MysaApiClient {
     while (true) {
       attempt++;
       try {
-        await connection.publish(topic, payload, qos);
+        // Guard against publishes that never settle: a QoS1 publish the
+        // broker silently ignores (e.g. an unauthorized topic) produces no
+        // PUBACK and, in practice, no protocol-timeout rejection either —
+        // the pending await would otherwise hang this call chain forever.
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () =>
+              reject(new Error(`MQTT publish timeout: no acknowledgement within ${PublishAckTimeout.asSeconds()}s`)),
+            PublishAckTimeout.asMilliseconds()
+          );
+          connection.publish(topic, payload, qos).then(
+            () => {
+              clearTimeout(timer);
+              resolve();
+            },
+            (err) => {
+              clearTimeout(timer);
+              reject(err);
+            }
+          );
+        });
         return;
       } catch (err) {
         const isTransient = this._isTransientMqttError(err);
@@ -756,7 +938,7 @@ export class MysaApiClient {
 
     // Per-process stable client id. Random suffix avoids collisions with other running processes.
     if (!this._mqttClientId) {
-      const username = this.session?.username ?? 'anon';
+      const username = this._cognitoUser?.getUsername() ?? 'anon';
       const usernameHash = hash('sha1', username);
       this._mqttClientId = `mysa-js-sdk-${usernameHash}-${process.pid}-${getRandomClientId()}`;
     }
@@ -765,11 +947,19 @@ export class MysaApiClient {
       .with_credentials(AwsRegion, credentials.accessKeyId, credentials.secretAccessKey, credentials.sessionToken)
       .with_endpoint(MqttEndpoint)
       .with_client_id(this._mqttClientId)
-      .with_clean_session(false)
+      // Clean sessions: the broker never persists our subscriptions or queues QoS1 messages while we
+      // are disconnected. This makes every (re)connect re-subscribe deterministically (see the
+      // `resume` handler) and — crucially — prevents the broker from dumping a backlog of queued
+      // messages on reconnect, which during an interrupt storm compounded into the ~1000x message /
+      // DB-growth reports. It also stops each forced reset from leaving an orphaned broker session.
+      .with_clean_session(true)
       .with_keep_alive_seconds(30)
       .with_ping_timeout_ms(3000)
       .with_protocol_operation_timeout_ms(60000)
-      .with_reconnect_min_sec(1)
+      // A less-aggressive minimum backoff keeps the native reconnect loop from hammering the broker
+      // during a storm (a likely contributor to the self-collision hangups); the stable connection
+      // only pings every 30s, so nothing depends on 1s reconnects.
+      .with_reconnect_min_sec(3)
       .with_reconnect_max_sec(30);
 
     const config = builder.build();
@@ -823,104 +1013,77 @@ export class MysaApiClient {
     const client = new mqtt.MqttClient();
     const connection = client.new_connection(config);
 
-    connection.on('connect', () => {
-      this._logger.debug(`MQTT connect (clientId=${this._mqttClientId})`);
+    // Tag this connection with a generation. Events from a discarded connection (e.g. one we
+    // disconnected during a forced reset, or whose native reconnect loop is still winding down)
+    // are ignored, so a dying connection can never mutate current state or trigger a second reset.
+    const generation = ++this._mqttGeneration;
+
+    connection.on('connect', (sessionPresent) => {
+      if (generation !== this._mqttGeneration) return;
+      this._logger.debug(`MQTT connect (clientId=${this._mqttClientId}, sessionPresent=${sessionPresent})`);
     });
 
-    connection.on('connection_success', () => {
-      this._logger.debug(`MQTT connection_success (clientId=${this._mqttClientId})`);
+    connection.on('connection_success', (result) => {
+      if (generation !== this._mqttGeneration) return;
+      this._mqttLastConnectionSuccessAt = Date.now();
+      this._logger.debug(
+        `MQTT connection_success (clientId=${this._mqttClientId}, sessionPresent=${result?.session_present}, ` +
+          `reasonCode=${result?.reason_code})`
+      );
+      // A connection that stays up long enough is considered recovered; arm the timer that clears
+      // the reset backoff counter.
+      this._armMqttStabilityTimer(generation);
     });
 
     connection.on('connection_failure', (e) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.error(`MQTT connection_failure (clientId=${this._mqttClientId})`, e);
     });
 
-    connection.on('interrupt', async (e) => {
-      this._logger.warn(`MQTT interrupt (clientId=${this._mqttClientId})`, e);
+    connection.on('interrupt', (e) => {
+      if (generation !== this._mqttGeneration) return;
 
-      // Track recent interrupts
+      // Dwell time since the last successful connect. A tiny value (tens of ms) is the signature of
+      // an immediate server-side close (the storm) rather than a genuine network drop — logged to
+      // help pin down the still-undiagnosed server-side trigger from live runs.
+      const dwellMs =
+        this._mqttLastConnectionSuccessAt !== undefined ? Date.now() - this._mqttLastConnectionSuccessAt : undefined;
+      this._logger.warn(
+        `MQTT interrupt (clientId=${this._mqttClientId}, dwellMs=${dwellMs ?? 'n/a'}, generation=${generation})`,
+        e
+      );
+
+      // A storm keeps interrupting; don't let the stability timer clear the backoff counter mid-storm.
+      this._clearMqttStabilityTimer();
+
       const now = Date.now();
-
-      // Keep only last 60s
-      this._mqttInterrupts = this._mqttInterrupts.filter((t) => now - t < 60000);
+      this._mqttInterrupts = this._mqttInterrupts.filter((t) => now - t < MqttInterruptWindow.asMilliseconds());
       this._mqttInterrupts.push(now);
 
       const areCredentialsExpired = !(this._mqttCredentialsExpiration?.isAfter(dayjs()) ?? false);
+      const isStorm = this._mqttInterrupts.length >= MqttInterruptThreshold;
 
-      if ((this._mqttInterrupts.length > 5 || areCredentialsExpired) && !this._mqttResetInProgress) {
-        this._mqttResetInProgress = true;
-
-        if (this._mqttInterrupts.length > 5) {
-          this._logger.warn(
-            `High interrupt rate (${this._mqttInterrupts.length}/60s). Possible clientId collision. Regenerating clientId and resetting connection...`
-          );
-        } else {
-          this._logger.warn(`Credentials expired. Regenerating clientId and resetting connection...`);
-        }
-
-        // Force new client id to escape collision; close current connection
-        this._mqttClientId = undefined;
-
-        this._mqttCredentialsExpiration = undefined;
-
-        // Clear interrupts
-        this._mqttInterrupts = [];
-
-        // Explicitly clear promise first to prevent reuse while disconnecting
-        // (publishers calling _getMqttConnection() will create a new one)
-        this._mqttConnectionPromise = undefined;
-
-        try {
-          // Strip listeners before disconnect. Without this, the 6 event-
-          // handler closures registered above (`connect`,
-          // `connection_success`, `connection_failure`, `interrupt`,
-          // `resume`, `error`, `closed`) remain attached to the discarded
-          // connection object. Each closure captures `this` and `_logger`,
-          // and aws-crt's native binding retains the JS object via its
-          // internal callback refs — the dead connection never gets GC'd.
-          // After enough interrupt-storms the process heap grows until OOM.
-          connection.removeAllListeners();
-          await connection.disconnect();
-
-          try {
-            this._logger.debug('Old MQTT connection disconnected; establishing new connection...');
-            const newConnection = await this._getMqttConnection();
-
-            for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
-              const topic = `/v1/dev/${deviceId}/out`;
-              this._logger.debug(`Re-subscribing to ${topic}`);
-              await newConnection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
-                this._processMqttMessage(payload);
-              });
-            }
-
-            this._logger.info('MQTT connection rebuilt successfully after interrupt storm or credentials expiration');
-          } catch (err) {
-            this._logger.error('Failed to re-subscribe after interrupt storm or credentials expiration', err);
-          }
-        } catch (error) {
-          this._logger.error('Error during MQTT reset', error);
-        } finally {
-          this._mqttResetInProgress = false;
-        }
+      if (isStorm || areCredentialsExpired) {
+        const reason = isStorm
+          ? `High interrupt rate (${this._mqttInterrupts.length} in ${MqttInterruptWindow.asSeconds()}s)`
+          : 'Credentials expired';
+        // Fire-and-forget: _resetMqttConnection is fully self-contained and never rejects, so an
+        // unhandled rejection can't escape this event handler and crash the process.
+        void this._resetMqttConnection(reason);
       }
     });
 
     connection.on('resume', async (returnCode, sessionPresent) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.info(
         `MQTT resume returnCode=${returnCode} sessionPresent=${sessionPresent} clientId=${this._mqttClientId}`
       );
 
+      // With clean sessions the broker never restores our subscriptions, so re-subscribe on every
+      // resume. (sessionPresent is expected to always be false now; the guard is kept for safety.)
       if (!sessionPresent) {
-        this._logger.info('No session present, re-subscribing each device');
         try {
-          for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
-            const topic = `/v1/dev/${deviceId}/out`;
-            this._logger.debug(`Re-subscribing to ${topic}`);
-            await connection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
-              this._processMqttMessage(payload);
-            });
-          }
+          await this._resubscribeAll(connection);
         } catch (err) {
           this._logger.error('Failed to re-subscribe after resume', err);
         }
@@ -928,11 +1091,14 @@ export class MysaApiClient {
     });
 
     connection.on('error', (e) => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.error(`MQTT error (clientId=${this._mqttClientId})`, e);
     });
 
     connection.on('closed', () => {
+      if (generation !== this._mqttGeneration) return;
       this._logger.info('MQTT connection closed');
+      this._clearMqttStabilityTimer();
       this._mqttConnectionPromise = undefined;
       this._mqttCredentialsExpiration = undefined;
     });
@@ -940,6 +1106,137 @@ export class MysaApiClient {
     await connection.connect();
 
     return connection;
+  }
+
+  /**
+   * Re-subscribes every device currently receiving real-time updates on the given connection.
+   *
+   * Safe to call on every (re)connect: aws-crt replaces the per-topic callback on a duplicate subscribe, so this never
+   * registers a message handler more than once.
+   *
+   * @param connection - The connection to (re-)establish subscriptions on.
+   */
+  private async _resubscribeAll(connection: mqtt.MqttClientConnection): Promise<void> {
+    for (const deviceId of Array.from(this._realtimeDeviceIds.keys())) {
+      const topic = `/v1/dev/${deviceId}/out`;
+      this._logger.debug(`Re-subscribing to ${topic}`);
+      await connection.subscribe(topic, mqtt.QoS.AtLeastOnce, (_topic, payload) => {
+        this._processMqttMessage(payload);
+      });
+    }
+
+    // Restore any raw debug-capture subscriptions (see startRawTopicCapture) so a capture keeps
+    // flowing across reconnects.
+    const decoder = new TextDecoder('utf-8');
+    for (const [filter, handler] of Array.from(this._rawTopicCaptures.entries())) {
+      this._logger.debug(`Re-subscribing to raw topic filter '${filter}'`);
+      try {
+        await connection.subscribe(filter, mqtt.QoS.AtLeastOnce, (topic, payload) => {
+          handler(topic, decoder.decode(payload));
+        });
+      } catch (error) {
+        // One rejected filter must not abort the remaining resubscriptions (matches startRawTopicCapture).
+        this._logger.warn(`Failed to re-subscribe to raw topic filter '${filter}'`, error);
+      }
+    }
+  }
+
+  /**
+   * Arms (or re-arms) the stability timer. When a connection stays interrupt-free for {@link MqttStabilityWindow}, the
+   * consecutive-reset backoff counter is cleared so a future isolated storm still gets a fast first reset.
+   *
+   * @param generation - The connection generation that armed the timer; the callback is a no-op if the connection has
+   *   since been replaced.
+   */
+  private _armMqttStabilityTimer(generation: number): void {
+    this._clearMqttStabilityTimer();
+    this._mqttStabilityTimer = setTimeout(() => {
+      if (generation !== this._mqttGeneration) return;
+      if (this._mqttConsecutiveResets > 0) {
+        this._logger.debug('MQTT connection stable; clearing consecutive-reset counter');
+        this._mqttConsecutiveResets = 0;
+      }
+    }, MqttStabilityWindow.asMilliseconds());
+    // Don't keep the event loop alive solely for this bookkeeping timer.
+    this._mqttStabilityTimer.unref?.();
+  }
+
+  /** Clears the stability timer, if armed. */
+  private _clearMqttStabilityTimer(): void {
+    if (this._mqttStabilityTimer) {
+      clearTimeout(this._mqttStabilityTimer);
+      this._mqttStabilityTimer = undefined;
+    }
+  }
+
+  /**
+   * Forcefully tears down the current MQTT connection and rebuilds it with a fresh client id and fresh credentials,
+   * escaping interrupt storms that a plain native reconnect cannot.
+   *
+   * Repeatable and self-contained: only one reset runs at a time, consecutive resets without an intervening stable
+   * period back off exponentially (up to {@link MqttResetMaxDelay}), and it never rejects — so it is safe to invoke
+   * fire-and-forget from an event handler.
+   *
+   * @param reason - Human-readable reason for the reset, used in logs.
+   */
+  private async _resetMqttConnection(reason: string): Promise<void> {
+    if (this._mqttResetInProgress) {
+      return;
+    }
+    this._mqttResetInProgress = true;
+
+    // Capture the connection to tear down before we clear the cached promise below.
+    const connectionToClose = this._mqttConnectionPromise;
+
+    try {
+      this._mqttConsecutiveResets++;
+
+      const delayMs = Math.min(
+        MqttResetBaseDelay.asMilliseconds() * Math.pow(2, this._mqttConsecutiveResets - 1),
+        MqttResetMaxDelay.asMilliseconds()
+      );
+
+      this._logger.warn(
+        `${reason}. Forcing MQTT reset #${this._mqttConsecutiveResets} ` +
+          `(new clientId, fresh credentials) after ${Math.round(delayMs)}ms...`
+      );
+
+      // Invalidate the current client id, credentials and interrupt history before rebuilding.
+      this._mqttClientId = undefined;
+      this._mqttCredentialsExpiration = undefined;
+      this._mqttInterrupts = [];
+      this._clearMqttStabilityTimer();
+
+      // Clear the cached promise first so publishers calling _getMqttConnection() build a new
+      // connection instead of reusing the one we're about to destroy.
+      this._mqttConnectionPromise = undefined;
+
+      // Tear down the old connection. Strip listeners so its native binding can be GC'd and so no
+      // late event from it mutates current state (belt-and-suspenders with the generation guard).
+      // Any in-flight publish rejecting with AWS_ERROR_MQTT_CONNECTION_DESTROYED is swallowed here.
+      if (connectionToClose) {
+        try {
+          const connection = await connectionToClose;
+          connection.removeAllListeners();
+          await connection.disconnect();
+        } catch (err) {
+          this._logger.debug('Error tearing down old MQTT connection during reset (ignored)', err);
+        }
+      }
+
+      if (delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+
+      const newConnection = await this._getMqttConnection();
+      await this._resubscribeAll(newConnection);
+
+      this._logger.info(`MQTT connection rebuilt successfully after reset #${this._mqttConsecutiveResets} (${reason})`);
+    } catch (err) {
+      this._logger.error('Failed to rebuild MQTT connection after reset', err);
+    } finally {
+      this._mqttResetInProgress = false;
+    }
   }
 
   /**
@@ -980,13 +1277,26 @@ export class MysaApiClient {
       } else if (isMsgOutPayload(parsedPayload)) {
         switch (parsedPayload.msg) {
           case OutMessageType.DEVICE_AC_STATUS:
-          case OutMessageType.DEVICE_V2_STATUS:
             this.emitter.emit('statusChanged', {
               deviceId: parsedPayload.src.ref,
               temperature: parsedPayload.body.ambTemp,
               humidity: parsedPayload.body.hum,
               setPoint: parsedPayload.body.stpt,
               dutyCycle: parsedPayload.body.dtyCycle
+            });
+            break;
+
+          case OutMessageType.DEVICE_V2_STATUS:
+            // In-floor heating thermostats (INF-V1-0) share this message type but report a binary heating-relay state
+            // (`heatStat`) instead of a fractional `dtyCycle`, plus a floor-probe temperature. `heatStat` (0 or 1) is a
+            // valid 0.0-1.0 duty fraction, so it maps straight onto `dutyCycle`.
+            this.emitter.emit('statusChanged', {
+              deviceId: parsedPayload.src.ref,
+              temperature: parsedPayload.body.ambTemp,
+              humidity: parsedPayload.body.hum,
+              setPoint: parsedPayload.body.stpt,
+              dutyCycle: parsedPayload.body.dtyCycle ?? parsedPayload.body.heatStat,
+              floorTemperature: parsedPayload.body.flrSnsrTemp
             });
             break;
 
@@ -999,19 +1309,12 @@ export class MysaApiClient {
               5: 'fan_only',
               6: 'dry'
             };
-            const fanSpeedMap: Record<number, MysaFanSpeedMode> = {
-              1: 'auto',
-              3: 'low',
-              5: 'medium',
-              7: 'high',
-              8: 'max'
-            };
-
             this.emitter.emit('stateChanged', {
               deviceId: parsedPayload.src.ref,
               mode: parsedPayload.body.state.md ? modeMap[parsedPayload.body.state.md] : undefined,
               setPoint: parsedPayload.body.state.sp,
-              fanSpeed: parsedPayload.body.state.fn !== undefined ? fanSpeedMap[parsedPayload.body.state.fn] : undefined
+              fanSpeed:
+                parsedPayload.body.state.fn !== undefined ? FanSpeedReceiveMap[parsedPayload.body.state.fn] : undefined
             });
             break;
           }

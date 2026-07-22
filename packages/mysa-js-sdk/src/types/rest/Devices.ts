@@ -33,12 +33,16 @@ export interface SupportedCaps {
       fanSpeeds?: number[];
     };
   };
-  /** Array of supported raw fan speed (fn) values (present at runtime for CodeNum=1117 AC devices) */
-  fanSpeeds?: number[];
   /** Version string of the capability definition */
   version: string;
   /** Array of supported remote control key codes */
   keys: number[];
+  /**
+   * Optional device-specific fan-speed `fn` values, ordered by canonical fan speed (`[auto, low, medium, high, max]`).
+   * E.g. `[1, 2, 4, 6]` for CodeNum=1117 devices means auto=1, low=2, medium=4, high=6. When absent, a legacy universal
+   * mapping is assumed.
+   */
+  fanSpeeds?: number[];
 }
 
 /**

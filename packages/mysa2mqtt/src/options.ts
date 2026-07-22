@@ -63,6 +63,64 @@ function parseRequiredInt(value: string) {
   return parsedValue;
 }
 
+/**
+ * Parses the REST poll interval, in seconds.
+ *
+ * A value of `0` disables polling. Any other value must be at least 30 seconds: the poll hits the account-wide state
+ * endpoint once per interval for the whole fleet, and a tighter cadence would hammer Mysa for no practical benefit.
+ *
+ * @param value - The value to parse.
+ * @returns The parsed interval in seconds.
+ */
+function parsePollInterval(value: string): number {
+  const parsedValue = parseRequiredInt(value);
+  // parseInt tolerates decimals and trailing characters ('0.5' and '0foo' both yield 0), which would
+  // silently disable polling. Require the input to be exactly an integer before the range check.
+  if (String(parsedValue) !== value.trim()) {
+    throw new InvalidArgumentError('Must be a whole number of seconds.');
+  }
+  if (parsedValue !== 0 && parsedValue < 30) {
+    throw new InvalidArgumentError('Must be 0 (disabled) or at least 30 seconds.');
+  }
+  return parsedValue;
+}
+
+/**
+ * Parses a comma-separated list of `<device>=<watts>` pairs.
+ *
+ * @param value - The value to parse.
+ * @returns A map of lowercased device id or name to rated wattage.
+ */
+function parseHeaterWatts(value: string): Map<string, number> {
+  const mapping = new Map<string, number>();
+
+  for (const pair of value.split(',')) {
+    const trimmedPair = pair.trim();
+    if (trimmedPair.length === 0) {
+      continue;
+    }
+
+    const separatorIndex = trimmedPair.lastIndexOf('=');
+    if (separatorIndex < 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' is not a <device>=<watts> pair.`);
+    }
+
+    const device = trimmedPair.slice(0, separatorIndex).trim();
+    const watts = Number(trimmedPair.slice(separatorIndex + 1).trim());
+
+    if (device.length === 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' is missing a device id or name.`);
+    }
+    if (!Number.isFinite(watts) || watts <= 0) {
+      throw new InvalidArgumentError(`'${trimmedPair}' must specify a wattage greater than zero.`);
+    }
+
+    mapping.set(device.toLowerCase(), watts);
+  }
+
+  return mapping;
+}
+
 export const version = getPackageVersion();
 
 const extraHelpText = `
@@ -126,12 +184,6 @@ export const options = new Command('mysa2mqtt')
       .helpGroup('Mysa')
   )
   .addOption(
-    new Option('-s, --mysa-session-file <mysaSessionFile>', 'Mysa session file')
-      .env('M2M_MYSA_SESSION_FILE')
-      .default('session.json')
-      .helpGroup('Configuration')
-  )
-  .addOption(
     new Option('-N, --mqtt-client-name <mqttClientName>', 'name of the MQTT client')
       .env('M2M_MQTT_CLIENT_NAME')
       .default('mysa2mqtt')
@@ -148,6 +200,34 @@ export const options = new Command('mysa2mqtt')
       .env('M2M_TEMPERATURE_UNIT')
       .choices(['C', 'F'])
       .default('C')
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option(
+      '--heater-watts <heaterWatts>',
+      'rated wattage of the heaters controlled by each thermostat, as a comma-separated list of <device>=<watts> pairs, where <device> is a device id or name (e.g. "Kitchen=1500,<device-id>=750"). Required for V2 thermostats to report power, as they do not measure current themselves'
+    )
+      .env('M2M_HEATER_WATTS')
+      .argParser(parseHeaterWatts)
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option(
+      '--poll-interval-seconds <pollIntervalSeconds>',
+      'how often, in seconds, to refresh device state from the Mysa REST API. This keeps Home Assistant current even ' +
+        'when the real-time connection cannot be established or is unstable. Set to 0 to disable, or to at least 30'
+    )
+      .env('M2M_POLL_INTERVAL_SECONDS')
+      .argParser(parsePollInterval)
+      .default(60)
+      .helpGroup('Configuration')
+  )
+  .addOption(
+    new Option(
+      '--heartbeat-file <heartbeatFile>',
+      'file touched on every message received from the Mysa cloud, for external liveness checks'
+    )
+      .env('M2M_HEARTBEAT_FILE')
       .helpGroup('Configuration')
   )
   .parse()

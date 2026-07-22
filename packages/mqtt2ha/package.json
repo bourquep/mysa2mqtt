@@ -1,6 +1,6 @@
 {
   "name": "mqtt2ha",
-  "version": "4.1.4",
+  "version": "5.1.0",
   "license": "MIT",
   "private": false,
   "description": "Javascript library to create MQTT entities that are automatically discovered by Home Assistant.",
@@ -47,6 +47,8 @@
     "example": "tsx --watch ./test-environment/example.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "build": "tsup",
     "build:docs": "typedoc"
   },

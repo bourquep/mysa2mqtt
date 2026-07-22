@@ -33,13 +33,16 @@ interface CommandTopicConfiguration {
 /**
  * A callback type for handling commands received via MQTT.
  *
- * @typeParam TCommandMap - A mapping of command topic names to their respective message types
+ * MQTT command payloads are always strings, so the values of `TCommandMap` are constrained to `string`. Components that
+ * receive a JSON-encoded payload on a command topic are responsible for decoding it inside their handler.
+ *
+ * @typeParam TCommandMap - A mapping of command topic names to their (always string) message payloads
  */
-export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
+export type CommandCallback<TCommandMap extends Record<string, string>> = <
   TTopicName extends keyof TCommandMap & string
 >(
   topicName: TTopicName,
-  message: TCommandMap[TTopicName]
+  message: string
 ) => Promise<void>;
 
 /**
@@ -53,7 +56,7 @@ export type CommandCallback<TCommandMap extends Record<string, unknown>> = <
 export class Subscriber<
   TComponentConfiguration extends BaseComponentConfiguration,
   TStateMap extends Record<string, unknown>,
-  TCommandMap extends Record<string, unknown>
+  TCommandMap extends Record<string, string>
 > extends Discoverable<TComponentConfiguration, TStateMap> {
   /** List of MQTT topics for entity commands. */
   protected commandTopics: CommandTopicConfiguration[] = [];
@@ -76,7 +79,7 @@ export class Subscriber<
    * Creates a new subscribable entity
    *
    * @param settings - The component settings including MQTT configuration
-   * @param stateTopicNames - Array of state topic names
+   * @param stateTopicNames - Array of state topic names. May be empty for a command-only entity (such as a button).
    * @param onStateChange - Callback function to handle state changes
    * @param commandTopicNames - Array of command topic names
    * @param commandCallback - Callback function to handle received commands
@@ -92,9 +95,26 @@ export class Subscriber<
       throw new Error('No command topics provided');
     }
 
-    super(settings, stateTopicNames, onStateChange, async () => {
-      await this.subscribeToCommandTopics();
-    });
+    // The MQTT client does not await or observe its listeners, so any
+    // rejection escaping these async callbacks becomes an unhandled promise
+    // rejection and terminates the process under Node's default policy.
+    // Catch and log instead.
+    //
+    // A subscriber is interactive through its command topics, so it does not
+    // need any state topic — command-only entities pass an empty stateTopicNames.
+    super(
+      settings,
+      stateTopicNames,
+      onStateChange,
+      async () => {
+        try {
+          await this.subscribeToCommandTopics();
+        } catch (error) {
+          this.logger.error(`Failed to subscribe to command topics for ${this.identifier}`, error);
+        }
+      },
+      { allowNoStateTopics: true }
+    );
 
     this.commandCallback = commandCallback;
 
@@ -104,7 +124,11 @@ export class Subscriber<
     }));
 
     this.mqttClient.on('message', async (topic, message) => {
-      await this.handleCommandMessage(topic, message);
+      try {
+        await this.handleCommandMessage(topic, message);
+      } catch (error) {
+        this.logger.error(`Failed to handle command message for ${this.identifier} on topic ${topic}`, error);
+      }
     });
   }
 
@@ -123,15 +147,9 @@ export class Subscriber<
       const stringMessage = message.toString();
       this.logger.debug(`Received command message for ${this.identifier} on topic ${topic}: ${stringMessage}`);
 
-      let parsedMessage: unknown;
-
-      try {
-        parsedMessage = JSON.parse(stringMessage);
-      } catch {
-        parsedMessage = stringMessage;
-      }
-
-      await this.commandCallback(commandTopic.name, parsedMessage as TCommandMap[(typeof commandTopic)['name']]);
+      // MQTT command payloads are always strings. Pass the raw string through unchanged; any component that carries a
+      // JSON-encoded payload on a command topic decodes it inside its own handler.
+      await this.commandCallback(commandTopic.name, stringMessage);
     }
   }
 }

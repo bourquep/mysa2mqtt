@@ -1,13 +1,24 @@
 /** Error thrown when attempting to access the Mysa API without proper authentication. */
 export class UnauthenticatedError extends Error {
   /**
+   * The underlying failure that prevented authentication.
+   *
+   * Callers need it to tell a credential rejection apart from a transport or service failure, since both surface as
+   * this error. Declared explicitly rather than passed to `super` so the SDK keeps compiling against its current lib,
+   * which predates the two-argument `Error` constructor.
+   */
+  readonly cause?: unknown;
+
+  /**
    * Creates a new UnauthenticatedError instance.
    *
    * @param message - The error message
+   * @param cause - The underlying failure that prevented authentication, if any.
    */
-  constructor(message: string) {
+  constructor(message: string, cause?: unknown) {
     super(message);
     this.name = 'UnauthenticatedError';
+    this.cause = cause;
   }
 }
 
@@ -30,6 +41,40 @@ export class MysaApiError extends Error {
     this.name = 'MysaApiError';
     this.status = apiResponse.status;
     this.statusText = apiResponse.statusText;
+  }
+}
+
+/** Error thrown when a device id does not match any device on the account. */
+export class UnknownDeviceError extends Error {
+  /**
+   * Creates a new UnknownDeviceError instance.
+   *
+   * @param deviceId - The device id that could not be resolved
+   */
+  constructor(public readonly deviceId: string) {
+    super(`Unknown device id '${deviceId}': no such device on this account.`);
+    this.name = 'UnknownDeviceError';
+  }
+}
+
+/** Error thrown when a requested fan speed is not supported by the target device. */
+export class UnsupportedFanSpeedError extends Error {
+  /**
+   * Creates a new UnsupportedFanSpeedError instance.
+   *
+   * @param deviceId - The id of the device the command was aimed at.
+   * @param fanSpeed - The requested fan speed that the device does not support.
+   * @param supportedFanSpeeds - The fan speeds the device does support.
+   */
+  constructor(
+    public readonly deviceId: string,
+    public readonly fanSpeed: string,
+    public readonly supportedFanSpeeds: string[]
+  ) {
+    super(
+      `Device '${deviceId}' does not support the '${fanSpeed}' fan speed. Supported fan speeds: ${supportedFanSpeeds.join(', ') || '(none)'}.`
+    );
+    this.name = 'UnsupportedFanSpeedError';
   }
 }
 

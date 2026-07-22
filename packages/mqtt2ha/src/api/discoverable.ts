@@ -21,6 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+import { readFileSync } from 'fs';
 import { connect, MqttClient } from 'mqtt';
 import { BaseComponentConfiguration, ResolvedComponentConfiguration } from '../configuration/component_configuration';
 import { Logger, VoidLogger } from '../lib/logger';
@@ -42,6 +43,15 @@ export type StateChangedHandler<TStateMap extends Record<string, unknown>> = <
 interface StateTopicConfiguration {
   name: string;
   topic: string;
+}
+
+/** Optional behavioural flags for a {@link Discoverable} entity. */
+export interface DiscoverableOptions {
+  /**
+   * Permit an entity with no state topics (a command-only entity such as a button). By default at least one state topic
+   * is required.
+   */
+  allowNoStateTopics?: boolean;
 }
 
 /**
@@ -103,14 +113,16 @@ export class Discoverable<
    * @param stateTopicNames - Array of state topic names
    * @param onStateChange - Callback to be called when state changes
    * @param onConnect - Optional callback to be called when MQTT connection is established
+   * @param options - Optional behavioural flags. See {@link DiscoverableOptions}.
    */
   constructor(
     settings: ComponentSettings<TComponentConfiguration>,
     stateTopicNames: Extract<keyof TStateMap, string>[],
     onStateChange: StateChangedHandler<TStateMap>,
-    onConnect?: () => void
+    onConnect?: () => void,
+    options?: DiscoverableOptions
   ) {
-    if (stateTopicNames.length === 0) {
+    if (stateTopicNames.length === 0 && !options?.allowNoStateTopics) {
       throw new Error('No state topics provided');
     }
 
@@ -144,6 +156,18 @@ export class Discoverable<
     }));
 
     this.logger.debug(`Creating MQTT client for ${identifier}...`);
+    // The TLS settings hold file paths while mqtt.js expects the key and
+    // certificate contents, so they are read here at client creation. A
+    // missing or unreadable file throws immediately: silently connecting
+    // without the configured certificates is the one behaviour a security
+    // setting must never have.
+    const tlsOptions = settings.mqtt.use_tls
+      ? {
+          key: settings.mqtt.tls_key ? readFileSync(settings.mqtt.tls_key) : undefined,
+          cert: settings.mqtt.tls_certfile ? readFileSync(settings.mqtt.tls_certfile) : undefined,
+          ca: settings.mqtt.tls_ca_cert ? readFileSync(settings.mqtt.tls_ca_cert) : undefined
+        }
+      : undefined;
     const client = connect({
       host: settings.mqtt.host,
       port: settings.mqtt.port,
@@ -151,6 +175,7 @@ export class Discoverable<
       password: settings.mqtt.password,
       clientId: `${settings.mqtt.client_name}-${identifier}`,
       protocol: settings.mqtt.use_tls ? 'mqtts' : 'mqtt',
+      ...tlsOptions,
       will: !this.settings.manual_availability
         ? {
             topic: this.availabilityTopic,
@@ -197,6 +222,18 @@ export class Discoverable<
     if (!this.settings.manual_availability) {
       await this.setAvailability(true);
     }
+  }
+
+  /**
+   * Clears the entity's retained discovery configuration, causing Home Assistant to remove the entity.
+   *
+   * Use this when an entity that may have been published by a previous run should no longer exist. Because
+   * {@link writeConfig} retains its payload, simply not calling it leaves the entity in place indefinitely.
+   */
+  async removeConfig() {
+    this.logger.debug(`Removing configuration for ${this.identifier}...`);
+    await this.mqttClient.publishAsync(this.configTopic, '', { retain: true });
+    this.wroteConfiguration = false;
   }
 
   /**
