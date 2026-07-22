@@ -38,7 +38,8 @@ import {
   MysaDeviceMode,
   MysaFanSpeedMode,
   StateChange,
-  Status
+  Status,
+  SupportedCaps
 } from 'mysa-js-sdk';
 import { version } from './options';
 
@@ -58,15 +59,69 @@ const MYSA_RAW_MODE_TO_DEVICE_MODE: Partial<Record<number, MysaDeviceMode>> = {
 const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
 const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
-  3: 'low',
-  5: 'medium',
-  7: 'high',
+  2: 'low', // AC-V1-X CodeNum=1117 canonical low (also echoed for any non-auto on older firmware)
+  3: 'low', // SDK legacy value for low
+  4: 'medium', // AC-V1-X CodeNum=1117 canonical medium
+  5: 'medium', // SDK legacy value for medium
+  6: 'high', // AC-V1-X CodeNum=1117 canonical high
+  7: 'high', // SDK legacy value for high
   8: 'max'
 };
 
 const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
 const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
+
+/**
+ * Build the fan_modes list from the device's SupportedCaps. Takes the union of fanSpeeds across all modes, preserving
+ * canonical order.
+ *
+ * @param supportedCaps - The device's supported capabilities, if reported.
+ * @returns The supported fan speed modes, falling back to {@link FAN_SPEED_MODES} when none are reported.
+ *
+ *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
+ *   - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto' (device's AC brand not configured or IR code
+ *       set doesn't support multi-speed; e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual
+ *       speed)
+ *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
+ */
+function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
+  if (!supportedCaps?.modes) {
+    return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
+  }
+
+  const allSpeeds = new Set<number>();
+
+  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
+  if (supportedCaps.fanSpeeds) {
+    for (const speed of supportedCaps.fanSpeeds) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  // Also check per-mode fanSpeeds (future-proofing)
+  for (const modeCaps of Object.values(supportedCaps.modes)) {
+    for (const speed of modeCaps.fanSpeeds ?? []) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  if (allSpeeds.size === 0) {
+    // SupportedCaps exists but has no fan speeds → device doesn't support multi-speed control
+    // (typically Brand=None / generic IR code set). Only expose 'auto'.
+    return ['auto'];
+  }
+
+  // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE, deduplicating
+  // modes that map from both legacy and canonical raw values (e.g. 2 and 3 both → 'low').
+  return Array.from(
+    new Set(
+      Object.entries(MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE)
+        .filter(([rawSpeed]) => allSpeeds.has(Number(rawSpeed)))
+        .map(([, name]) => name as MysaFanSpeedMode)
+    )
+  );
+}
 
 export class Thermostat {
   private isStarted = false;
@@ -150,7 +205,7 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: isAC ? HA_AC_MODES : HA_HEAT_ONLY_MODES,
-          fan_modes: isAC ? FAN_SPEED_MODES : undefined,
+          fan_modes: isAC ? buildFanModes(mysaDevice.SupportedCaps) : undefined,
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
           temperature_unit: 'C',
@@ -219,8 +274,17 @@ export class Thermostat {
 
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
-            const mode = FAN_SPEED_MODES.includes(messageAsMode) ? messageAsMode : undefined;
-            await this.setDeviceState(undefined, undefined, mode);
+            const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
+            if (!supportedModes.includes(messageAsMode)) {
+              // Ignore unsupported fan modes entirely; forwarding them would omit fanSpeed but
+              // still reapply the current temperature/mode, which is not a no-op.
+              break;
+            }
+            await this.setDeviceState(
+              this.mqttClimate.targetTemperature,
+              this.mqttClimate.currentMode as MysaDeviceMode,
+              messageAsMode
+            );
             break;
           }
         }
@@ -532,14 +596,22 @@ export class Thermostat {
           this.mqttClimate.currentAction = this.computeCurrentAction();
         }
         this.mqttClimate.targetTemperature = state.setPoint;
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
 
       case 'dry':
       case 'fan_only':
         this.mqttClimate.currentMode = state.mode;
         this.mqttClimate.currentAction = this.computeCurrentAction();
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
 
       default:

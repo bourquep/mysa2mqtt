@@ -29,6 +29,8 @@ export interface SupportedCaps {
     [modeId: string]: {
       /** Array of available temperature setpoints for this mode */
       temperatures: number[];
+      /** Array of supported raw fan speed (fn) values for this mode, if any */
+      fanSpeeds?: number[];
     };
   };
   /** Version string of the capability definition */
