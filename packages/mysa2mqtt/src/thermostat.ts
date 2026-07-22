@@ -91,19 +91,16 @@ function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMo
 
   const allSpeeds = new Set<number>();
 
-  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices;
-  // not declared in the SDK TypeScript type but present at runtime)
-  const topLevelSpeeds = (supportedCaps as unknown as { fanSpeeds?: number[] }).fanSpeeds;
-  if (topLevelSpeeds) {
-    for (const speed of topLevelSpeeds) {
+  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
+  if (supportedCaps.fanSpeeds) {
+    for (const speed of supportedCaps.fanSpeeds) {
       allSpeeds.add(speed);
     }
   }
 
   // Also check per-mode fanSpeeds (future-proofing)
   for (const modeCaps of Object.values(supportedCaps.modes)) {
-    const fanSpeeds = (modeCaps as unknown as { fanSpeeds?: number[] }).fanSpeeds ?? [];
-    for (const speed of fanSpeeds) {
+    for (const speed of modeCaps.fanSpeeds ?? []) {
       allSpeeds.add(speed);
     }
   }
@@ -114,10 +111,15 @@ function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMo
     return ['auto'];
   }
 
-  // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE
-  return Object.entries(MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE)
-    .filter(([rawSpeed]) => allSpeeds.has(Number(rawSpeed)))
-    .map(([, name]) => name as MysaFanSpeedMode);
+  // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE, deduplicating
+  // modes that map from both legacy and canonical raw values (e.g. 2 and 3 both → 'low').
+  return Array.from(
+    new Set(
+      Object.entries(MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE)
+        .filter(([rawSpeed]) => allSpeeds.has(Number(rawSpeed)))
+        .map(([, name]) => name as MysaFanSpeedMode)
+    )
+  );
 }
 
 export class Thermostat {
@@ -257,11 +259,15 @@ export class Thermostat {
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
             const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
-            const mode = supportedModes.includes(messageAsMode) ? messageAsMode : undefined;
+            if (!supportedModes.includes(messageAsMode)) {
+              // Ignore unsupported fan modes entirely; forwarding them would omit fanSpeed but
+              // still reapply the current temperature/mode, which is not a no-op.
+              break;
+            }
             await this.setDeviceState(
               this.mqttClimate.targetTemperature,
               this.mqttClimate.currentMode as MysaDeviceMode,
-              mode
+              messageAsMode
             );
             break;
           }

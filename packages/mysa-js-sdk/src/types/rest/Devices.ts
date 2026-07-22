@@ -29,8 +29,12 @@ export interface SupportedCaps {
     [modeId: string]: {
       /** Array of available temperature setpoints for this mode */
       temperatures: number[];
+      /** Array of supported raw fan speed (fn) values for this mode, if any */
+      fanSpeeds?: number[];
     };
   };
+  /** Array of supported raw fan speed (fn) values (present at runtime for CodeNum=1117 AC devices) */
+  fanSpeeds?: number[];
   /** Version string of the capability definition */
   version: string;
   /** Array of supported remote control key codes */
