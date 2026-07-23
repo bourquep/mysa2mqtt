@@ -1,5 +1,11 @@
 # mqtt2ha
 
+## 5.1.1
+
+### Patch Changes
+
+- [#217](https://github.com/bourquep/mysa2mqtt/pull/217) [`0da4a1d`](https://github.com/bourquep/mysa2mqtt/commit/0da4a1d4e95dddf9638ec00747895008a10f7ba8) Thanks [@bourquep](https://github.com/bourquep)! - Updated dependencies to latest versions
+
 ## 5.1.0
 
 ### Minor Changes
