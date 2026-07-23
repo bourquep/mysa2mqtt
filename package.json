@@ -22,7 +22,8 @@
   "overrides": {
     "aws-iot-device-sdk-v2": {
       "uuid": "^11.1.1"
-    }
+    },
+    "esbuild": "0.28.1"
   },
   "scripts": {
     "build": "npm run build -w mqtt2ha && npm run build -w mysa-js-sdk && npm run build -w mysa2mqtt",
