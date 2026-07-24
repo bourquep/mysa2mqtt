@@ -354,7 +354,59 @@ async function retryThermostatStart(thermostat: Thermostat, retryAttempt: number
   }
 }
 
-main().catch((error) => {
-  rootLogger.fatal(error, 'Unexpected error');
-  process.exit(1);
-});
+/**
+ * Determine whether an error thrown during bootstrap is a transient network/DNS issue worth retrying, vs. a
+ * configuration or programming error that should surface immediately.
+ *
+ * Mysa's auth path goes through AWS Cognito, which occasionally returns generic "Network error" failures from
+ * amazon-cognito-identity-js when DNS resolution, TCP connect, or TLS handshake hiccups. Without retry, the process
+ * fatally exits and the container/orchestrator restarts the whole thing — noisy and easily mistaken for a real outage.
+ *
+ * @param error - The thrown value caught from `main()`
+ * @returns `true` if the error is one of the network/DNS error shapes we should retry
+ */
+function isTransientNetworkError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  const message = String((error as { message?: string })?.message ?? error ?? '');
+
+  const transientCodes = new Set(['NetworkError', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN']);
+  if (code && transientCodes.has(code)) return true;
+
+  // Network-specific message shapes always retry.
+  if (/Network error|getaddrinfo|socket hang up/i.test(message)) return true;
+
+  // A "timeout" is only transient when it names a network operation. A bare "timeout" can come from
+  // configuration or programming errors (e.g. a promise/test timeout), which must surface immediately.
+  const networkContext = /connect|connection|socket|network|request|handshake|tls|dns|host/i;
+  return /time(?:d\s*)?out|ETIMEDOUT/i.test(message) && networkContext.test(message);
+}
+
+/** Bootstrap wrapper that retries `main()` on transient network errors with exponential backoff. */
+async function mainWithRetry(): Promise<void> {
+  const MAX_RETRIES = 10;
+  const MAX_DELAY_MS = 60_000;
+  let delayMs = 5_000;
+
+  // One initial attempt plus up to MAX_RETRIES retries on transient network errors.
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await main();
+      return;
+    } catch (error) {
+      const transient = isTransientNetworkError(error);
+      if (!transient || attempt === MAX_RETRIES) {
+        rootLogger.fatal(error, 'Unexpected error');
+        process.exit(1);
+      }
+      const retry = attempt + 1;
+      rootLogger.warn(
+        { err: error, retry, maxRetries: MAX_RETRIES, retryInMs: delayMs },
+        `Transient error during startup (retry ${retry}/${MAX_RETRIES}); retrying in ${delayMs}ms`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      delayMs = Math.min(delayMs * 2, MAX_DELAY_MS);
+    }
+  }
+}
+
+mainWithRetry();
