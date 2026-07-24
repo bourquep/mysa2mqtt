@@ -283,7 +283,18 @@ export class Discoverable<
       retain: true
     });
 
-    this.stateChangedHandler(topicName, state);
+    // The synchronous API cannot await the handler, but its failure must not
+    // go unobserved (an unhandled rejection terminates the process under
+    // Node's default policy). The try/catch covers a handler that throws
+    // synchronously before returning a promise — Promise.resolve only
+    // captures rejections, not the synchronous throw itself.
+    try {
+      Promise.resolve(this.stateChangedHandler(topicName, state)).catch((error: unknown) => {
+        this.logger.error(`State-changed handler failed for ${this.identifier} on topic ${topicName}`, error);
+      });
+    } catch (error) {
+      this.logger.error(`State-changed handler failed for ${this.identifier} on topic ${topicName}`, error);
+    }
   }
 
   /**
@@ -309,6 +320,7 @@ export class Discoverable<
       { retain: true }
     );
 
-    this.stateChangedHandler(topicName, state);
+    // Awaited so callers of setState observe handler completion and failures.
+    await this.stateChangedHandler(topicName, state);
   }
 }
