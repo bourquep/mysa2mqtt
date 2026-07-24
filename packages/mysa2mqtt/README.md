@@ -13,18 +13,19 @@ home automation platforms.
 - **MQTT Integration**: Exposes Mysa thermostats as MQTT devices compatible with Home Assistant's auto-discovery
 - **Real-time Updates**: Live temperature, humidity, and power consumption monitoring
 - **Full Control**: Set temperature, change modes (heat/off), and monitor thermostat status
-- **Self-healing Authentication**: Re-authenticates automatically when the Mysa session expires, with no state to persist
+- **Self-healing Authentication**: Re-authenticates automatically when the Mysa session expires, with no state to
+  persist
 - **Configurable Logging**: Support for JSON and pretty-printed log formats with adjustable levels
 
 ## Supported hardware
 
-| Model Number | Description                                               | Supported                                                               |
-| ------------ | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                   |
-| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                       |
-| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not measure power, but can report an estimate (see [Power reporting](#power-reporting)) |
+| Model Number | Description                                               | Supported                                                                                                                                                      |
+| ------------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BB-V1-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V1   | ✅ Tested and working                                                                                                                                          |
+| `BB-V2-X`    | Mysa Smart Thermostat for Electric Baseboard Heaters V2   | ⚠️ Partially working, in progress                                                                                                                              |
+| `BB-V2-X-L`  | Mysa Smart Thermostat LITE for Electric Baseboard Heaters | ⚠️ Partially working, in progress; does not measure power, but can report an estimate (see [Power reporting](#power-reporting))                                |
 | `INF-V1-0`   | Mysa Smart Thermostat for Electric In-Floor Heating       | ⚠️ Partially working, in progress; controls and a floor-temperature sensor are supported, and power can be estimated (see [Power reporting](#power-reporting)) |
-| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions |
+| `AC-V1-X`    | Mysa Smart Thermostat for Mini-Split Heat Pumps & AC      | ⚠️ Partially working, in progress; missing swing and position functions                                                                                        |
 
 ## Disclaimer
 
@@ -59,8 +60,8 @@ npx mysa2mqtt --help
 
 ### Option 3: Home Assistant App (Addon)
 
-@itsamenathan made an [app/addon](https://github.com/itsamenathan/mysa2mqtt-hass-addon) for
-Home Assistant that wraps this tool.
+@itsamenathan made an [app/addon](https://github.com/itsamenathan/mysa2mqtt-hass-addon) for Home Assistant that wraps
+this tool.
 
 ### Option 4: Development Setup
 
@@ -123,10 +124,9 @@ For development or custom modifications:
 The application can be configured using either command-line arguments or environment variables. Environment variables
 take precedence over command-line defaults.
 
-> [!IMPORTANT]
-> The `M2M_TEMPERATURE_UNIT` option must match Home Assistant's unit system (Settings → General → Unit System)
-> so setpoints and readings are interpreted correctly. If mismatched, climate entities will show incorrect values (e.g.
-> 21°C treated as 21°F) and commands may result in unexpected temperatures.
+> [!IMPORTANT] The `M2M_TEMPERATURE_UNIT` option must match Home Assistant's unit system (Settings → General → Unit
+> System) so setpoints and readings are interpreted correctly. If mismatched, climate entities will show incorrect
+> values (e.g. 21°C treated as 21°F) and commands may result in unexpected temperatures.
 
 ### Required Configuration
 
@@ -150,13 +150,13 @@ take precedence over command-line defaults.
 
 #### Application Settings
 
-| CLI Option                | Environment Variable    | Default        | Description                                                             |
-| ------------------------- | ----------------------- | -------------- | ----------------------------------------------------------------------- |
-| `-l, --log-level`         | `M2M_LOG_LEVEL`         | `info`         | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace` |
-| `-f, --log-format`        | `M2M_LOG_FORMAT`        | `pretty`       | Log format: `pretty`, `json`                                            |
-| `-t, --temperature-unit`  | `M2M_TEMPERATURE_UNIT`  | `C`            | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                      |
-| `--heater-watts`          | `M2M_HEATER_WATTS`      | -              | Rated wattage of the heaters controlled by each thermostat, as a comma-separated list of `<device>=<watts>` pairs (see [Power reporting](#power-reporting)) |
-| `--heartbeat-file`        | `M2M_HEARTBEAT_FILE`    | -              | File touched on every message received from the Mysa cloud, for external liveness checks (e.g. a container liveness probe on its mtime) |
+| CLI Option               | Environment Variable   | Default  | Description                                                                                                                                                 |
+| ------------------------ | ---------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-l, --log-level`        | `M2M_LOG_LEVEL`        | `info`   | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace`                                                                                     |
+| `-f, --log-format`       | `M2M_LOG_FORMAT`       | `pretty` | Log format: `pretty`, `json`                                                                                                                                |
+| `-t, --temperature-unit` | `M2M_TEMPERATURE_UNIT` | `C`      | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                                                                                                          |
+| `--heater-watts`         | `M2M_HEATER_WATTS`     | -        | Rated wattage of the heaters controlled by each thermostat, as a comma-separated list of `<device>=<watts>` pairs (see [Power reporting](#power-reporting)) |
+| `--heartbeat-file`       | `M2M_HEARTBEAT_FILE`   | -        | File touched on every message received from the Mysa cloud, for external liveness checks (e.g. a container liveness probe on its mtime)                     |
 
 ### Power reporting
 
@@ -278,12 +278,12 @@ process receives is not the value you typed:
 
 Taking `pa$w0rd` and `pa#w0rd` as example passwords:
 
-| Where the password is set                 | Gotcha                                                       | Write it as                   |
-| ----------------------------------------- | ------------------------------------------------------------ | ----------------------------- |
-| Shell (`export`, `docker run -e`, `-p …`) | `$` and backticks are expanded inside `"…"`                  | `-p 'pa$w0rd'` (single quotes) |
-| Docker Compose `environment:`             | `$` starts an interpolation (`$FOO`, `${FOO}`)               | `M2M_MYSA_PASSWORD=pa$$w0rd`  |
-| Docker Compose `env_file:`                | same `$` interpolation as `environment:`                     | `M2M_MYSA_PASSWORD=pa$$w0rd`  |
-| `.env` file (read by mysa2mqtt itself)    | `$` is safe, but a `#` anywhere in an unquoted value comments the rest out | `M2M_MYSA_PASSWORD="pa#w0rd"` |
+| Where the password is set                 | Gotcha                                                                     | Write it as                    |
+| ----------------------------------------- | -------------------------------------------------------------------------- | ------------------------------ |
+| Shell (`export`, `docker run -e`, `-p …`) | `$` and backticks are expanded inside `"…"`                                | `-p 'pa$w0rd'` (single quotes) |
+| Docker Compose `environment:`             | `$` starts an interpolation (`$FOO`, `${FOO}`)                             | `M2M_MYSA_PASSWORD=pa$$w0rd`   |
+| Docker Compose `env_file:`                | same `$` interpolation as `environment:`                                   | `M2M_MYSA_PASSWORD=pa$$w0rd`   |
+| `.env` file (read by mysa2mqtt itself)    | `$` is safe, but a `#` anywhere in an unquoted value comments the rest out | `M2M_MYSA_PASSWORD="pa#w0rd"`  |
 
 Docker Compose is the most common culprit, and note that `env_file:` does **not** avoid it: Compose interpolates `$` in
 those files too, so `pa$w0rd` silently becomes `pa` plus whatever `$w0rd` expands to (usually nothing). Doubling it to
@@ -429,8 +429,7 @@ The `mysa2mqtt-capture` tool gathers exactly that. It logs in to your Mysa accou
 target device(s), then **passively records every shadow message** to a file until you stop it. It needs no MQTT broker —
 it only reads from Mysa.
 
-> [!NOTE]
-> The capture is passive: a device only publishes to its shadow when something changes it. You must exercise the
+> [!NOTE] The capture is passive: a device only publishes to its shadow when something changes it. You must exercise the
 > thermostat from the Mysa mobile app while the capture runs, otherwise nothing is recorded.
 
 Run it from a clone of the repository (no build step needed):
@@ -462,9 +461,8 @@ While it runs, drive the thermostat from the Mysa app so every interaction is re
 Pause a few seconds between actions, then press **Ctrl+C**. Attach the resulting file to a
 [GitHub issue](https://github.com/bourquep/mysa2mqtt/issues).
 
-> [!IMPORTANT]
-> The metadata dump can contain account identifiers (`Owner`, `Home`, `AllowedUsers`, `Zone`). Review the file before
-> sharing it publicly. Authentication tokens and your password are **never** included.
+> [!IMPORTANT] The metadata dump can contain account identifiers (`Owner`, `Home`, `AllowedUsers`, `Zone`). Review the
+> file before sharing it publicly. Authentication tokens and your password are **never** included.
 
 ## Contributing
 
@@ -499,6 +497,6 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Contributors ✨
 
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
-specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
-repository README. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. See the
+[contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the repository README. Contributions of any
+kind welcome!

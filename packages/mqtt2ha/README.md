@@ -1,4 +1,5 @@
 # MQTT2HA
+
 [![NPM Version](https://img.shields.io/npm/v/mqtt2ha)](https://www.npmjs.com/package/mqtt2ha)
 [![CodeQL](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/bourquep/mysa2mqtt/actions/workflows/github-code-scanning/codeql)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -129,6 +130,6 @@ For general questions and discussions, join our [Discussion Forum](https://githu
 
 ## Contributors ✨
 
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
-specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
-repository README. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. See the
+[contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the repository README. Contributions of any
+kind welcome!
