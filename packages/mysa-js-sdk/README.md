@@ -203,8 +203,7 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Support
 
-For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mysa2mqtt/issues)
-page.
+For bug reports and feature requests, please use the [GitHub Issues](https://github.com/bourquep/mysa2mqtt/issues) page.
 
 For general questions and discussions, join our [Discussion Forum](https://github.com/bourquep/mysa2mqtt/discussions).
 
@@ -216,6 +215,6 @@ protocol which is being used by this library.
 
 ## Contributors ✨
 
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors)
-specification. See the [contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the
-repository README. Contributions of any kind welcome!
+This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. See the
+[contributor list](https://github.com/bourquep/mysa2mqtt#contributors-) in the repository README. Contributions of any
+kind welcome!

@@ -1,2 +1,3 @@
 .all-contributorsrc
-README.md
+.changeset/*.md
+.claude/worktrees/
