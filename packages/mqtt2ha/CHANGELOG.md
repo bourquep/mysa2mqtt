@@ -1,5 +1,19 @@
 # mqtt2ha
 
+## 5.1.1
+
+### Patch Changes
+
+- [#196](https://github.com/bourquep/mysa2mqtt/pull/196) [`169272d`](https://github.com/bourquep/mysa2mqtt/commit/169272d366dc76cb3d07831d752b83a7f9f57733) Thanks [@vavallee](https://github.com/vavallee)! - setState now awaits the state-changed handler, so callers that await setState observe handler completion and failures instead of racing it. setStateSync keeps its synchronous shape but attaches error logging to the handler promise, so a rejection is surfaced through the logger instead of escaping as an unhandled rejection that can terminate the process.
+
+- [#217](https://github.com/bourquep/mysa2mqtt/pull/217) [`0da4a1d`](https://github.com/bourquep/mysa2mqtt/commit/0da4a1d4e95dddf9638ec00747895008a10f7ba8) Thanks [@bourquep](https://github.com/bourquep)! - Updated dependencies to latest versions
+
+- [#197](https://github.com/bourquep/mysa2mqtt/pull/197) [`02ad499`](https://github.com/bourquep/mysa2mqtt/commit/02ad49990fd3f3b79f8c7d302fb461d29b5fb542) Thanks [@vavallee](https://github.com/vavallee)! - Climate and Switch no longer publish the commanded state before the command callback has run. Unless the component is configured as optimistic, the new state is now applied only after the callback succeeds, so a failed device command no longer leaves Home Assistant showing a state the device never reached. Optimistic components keep the previous assume-and-publish behaviour.
+
+  Command handling for Climate and Switch is now serialized per component, so overlapping commands complete in the order they arrived and a slower earlier command can no longer publish a stale confirmed state after a newer one.
+
+- [#194](https://github.com/bourquep/mysa2mqtt/pull/194) [`b89b238`](https://github.com/bourquep/mysa2mqtt/commit/b89b238741f94cd9557c2795929f0a7c7a60d341) Thanks [@vavallee](https://github.com/vavallee)! - Numeric climate command payloads (target temperature, humidity, high/low bounds) are now validated: a payload that does not parse to a finite number is logged and ignored instead of storing NaN in state and republishing it.
+
 ## 5.1.0
 
 ### Minor Changes
