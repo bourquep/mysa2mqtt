@@ -11,6 +11,9 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+    # Bump the version range in package.json and update the resolved versions in
+    # package-lock.json.
+    versioning-strategy: 'increase'
     labels:
       - 'dependencies'
     commit-message:
