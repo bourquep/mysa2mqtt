@@ -423,15 +423,28 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
     onCommand: CommandCallback<CommandTopicMap>
   ) {
     super(settings, stateTopicNames, onStateChange, commandTopicNames, async (topicName, message) => {
-      await this.handleCommand(topicName, message);
-      await onCommand(topicName, message);
+      // A rejected command (e.g. a non-numeric payload on a numeric topic) must
+      // not reach the downstream command handler either: it was never applied
+      // locally, so forwarding it would trigger device side effects for a
+      // payload this component just refused to store.
+      if (await this.handleCommand(topicName, message)) {
+        await onCommand(topicName, message);
+      }
     });
   }
 
+  /**
+   * Applies a command payload to the local state.
+   *
+   * @param topicName - The command topic the payload arrived on
+   * @param message - The raw command payload
+   * @returns Whether the command was accepted; rejected payloads (a non-numeric value on a numeric topic) are not
+   *   applied and must not be forwarded to the downstream command handler
+   */
   private async handleCommand<TTopicName extends keyof CommandTopicMap & string>(
     topicName: TTopicName,
     message: CommandTopicMap[TTopicName]
-  ) {
+  ): Promise<boolean> {
     switch (topicName) {
       case 'fan_mode_command_topic':
         this.currentFanMode = message;
@@ -463,24 +476,66 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
         this.currentSwingMode = message;
         break;
 
-      case 'target_humidity_command_topic':
-        this.targetHumidity = parseFloat(message);
+      case 'target_humidity_command_topic': {
+        const humidity = this.parseNumericCommand(topicName, message);
+        if (humidity === undefined) {
+          return false;
+        }
+        this.targetHumidity = humidity;
         break;
+      }
 
-      case 'temperature_command_topic':
-        this.targetTemperature = parseFloat(message);
+      case 'temperature_command_topic': {
+        const temperature = this.parseNumericCommand(topicName, message);
+        if (temperature === undefined) {
+          return false;
+        }
+        this.targetTemperature = temperature;
         break;
+      }
 
-      case 'temperature_high_command_topic':
-        this.temperatureHigh = parseFloat(message);
+      case 'temperature_high_command_topic': {
+        const temperatureHigh = this.parseNumericCommand(topicName, message);
+        if (temperatureHigh === undefined) {
+          return false;
+        }
+        this.temperatureHigh = temperatureHigh;
         break;
+      }
 
-      case 'temperature_low_command_topic':
-        this.temperatureLow = parseFloat(message);
+      case 'temperature_low_command_topic': {
+        const temperatureLow = this.parseNumericCommand(topicName, message);
+        if (temperatureLow === undefined) {
+          return false;
+        }
+        this.temperatureLow = temperatureLow;
         break;
+      }
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);
     }
+
+    return true;
+  }
+
+  /**
+   * Parses a numeric command payload, returning undefined for anything that does not represent a finite number so a
+   * malformed message is ignored instead of storing and republishing NaN. Number(...) is used rather than parseFloat so
+   * partial inputs such as '21abc' are rejected instead of silently truncated. The raw payload is deliberately not
+   * logged: it is externally supplied and could carry an accidentally published secret.
+   *
+   * @param topicName - The command topic the payload arrived on (for the warning log)
+   * @param message - The raw command payload
+   * @returns The parsed finite number, or undefined when the payload is not numeric
+   */
+  private parseNumericCommand(topicName: string, message: string): number | undefined {
+    const trimmed = message.trim();
+    const value = trimmed === '' ? NaN : Number(trimmed);
+    if (!Number.isFinite(value)) {
+      this.logger.warn(`Received a non-numeric payload on the '${topicName}'.`);
+      return undefined;
+    }
+    return value;
   }
 }
