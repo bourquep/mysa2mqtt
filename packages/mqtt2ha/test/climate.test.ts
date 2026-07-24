@@ -45,19 +45,69 @@ describe('Climate', () => {
     expect(client.lastPayload(stateTopic('climate', 'c1', 'action'))).toBe('heating');
   });
 
-  it('restores the last on-mode when powered on and off again', () => {
+  it('restores the last on-mode when powered on and off again', async () => {
     const { climate, client } = makeClimate();
     climate.currentMode = 'heat';
     client.deliver(stateTopic('climate', 'c1', 'power_command'), 'OFF');
-    expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBe('off');
+    await vi.waitFor(() => expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBe('off'));
     client.deliver(stateTopic('climate', 'c1', 'power_command'), 'ON');
-    expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBe('heat');
+    await vi.waitFor(() => expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBe('heat'));
   });
 
-  it('applies a temperature command', () => {
+  it('applies a temperature command', async () => {
     const { climate, client } = makeClimate();
     client.deliver(stateTopic('climate', 'c1', 'temperature_command'), '22.5');
+    await vi.waitFor(() => {
+      expect(climate.targetTemperature).toBe(22.5);
+      expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBe('22.5');
+    });
+  });
+
+  it('applies the commanded state only after the command callback succeeds when not optimistic', async () => {
+    const { climate, client, onCommand } = makeClimate();
+    let released: () => void = () => {};
+    const pending = new Promise<void>((resolve) => {
+      released = resolve;
+    });
+    onCommand.mockImplementationOnce(async () => {
+      await pending;
+    });
+
+    client.deliver(stateTopic('climate', 'c1', 'temperature_command'), '22.5');
+    await vi.waitFor(() => expect(onCommand).toHaveBeenCalledWith('temperature_command_topic', '22.5'));
+    // The callback is still in flight, so the state must not have been published yet.
+    expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBeUndefined();
+
+    released();
+    await vi.waitFor(() => expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBe('22.5'));
+  });
+
+  it('does not apply or forward a non-numeric temperature command', async () => {
+    const { client, onCommand } = makeClimate();
+    client.deliver(stateTopic('climate', 'c1', 'temperature_command'), 'not-a-number');
+    await Promise.resolve();
+    await vi.waitFor(() => expect(onCommand).not.toHaveBeenCalled());
+    expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBeUndefined();
+  });
+
+  it('does not forward an unrecognized power command payload to the callback', async () => {
+    const { client, onCommand } = makeClimate();
+    client.deliver(stateTopic('climate', 'c1', 'power_command'), 'MAYBE');
+    await Promise.resolve();
+    await vi.waitFor(() => expect(onCommand).not.toHaveBeenCalled());
+    expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBeUndefined();
+  });
+
+  it('publishes the commanded state before the callback runs when optimistic', async () => {
+    const { climate, client, onCommand } = makeClimate({ optimistic: true });
+    let sawStateBeforeCallback = false;
+    onCommand.mockImplementationOnce(async () => {
+      sawStateBeforeCallback = client.lastPayload(stateTopic('climate', 'c1', 'temperature_state')) === '22.5';
+    });
+
+    client.deliver(stateTopic('climate', 'c1', 'temperature_command'), '22.5');
+    await vi.waitFor(() => expect(onCommand).toHaveBeenCalled());
+    expect(sawStateBeforeCallback).toBe(true);
     expect(climate.targetTemperature).toBe(22.5);
-    expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBe('22.5');
   });
 });

@@ -25,6 +25,7 @@ import { StateChangedHandler } from '@/api/discoverable';
 import { ComponentSettings } from '@/api/settings';
 import { CommandCallback, Subscriber } from '@/api/subscriber';
 import { ComponentConfiguration } from '@/configuration/component_configuration';
+import { serializeAsync } from '@/lib/utils';
 
 export type ClimateAction = 'off' | 'heating' | 'cooling' | 'drying' | 'idle' | 'fan';
 
@@ -422,101 +423,137 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
     commandTopicNames: Extract<keyof CommandTopicMap, string>[],
     onCommand: CommandCallback<CommandTopicMap>
   ) {
-    super(settings, stateTopicNames, onStateChange, commandTopicNames, async (topicName, message) => {
-      // A rejected command (e.g. a non-numeric payload on a numeric topic) must
-      // not reach the downstream command handler either: it was never applied
-      // locally, so forwarding it would trigger device side effects for a
-      // payload this component just refused to store.
-      if (await this.handleCommand(topicName, message)) {
-        await onCommand(topicName, message);
-      }
-    });
+    super(
+      settings,
+      stateTopicNames,
+      onStateChange,
+      commandTopicNames,
+      // Serialize command handling so overlapping commands complete in arrival
+      // order and can never publish an older confirmed state after a newer one.
+      serializeAsync(async (topicName: keyof CommandTopicMap & string, message: string) => {
+        // Validate and prepare the state update before touching the device. A
+        // rejected payload (e.g. a non-numeric value on a numeric topic) is
+        // ignored entirely: it is neither applied locally nor forwarded to the
+        // command handler, so it triggers no device side effects.
+        const applyCommandedState = this.prepareCommand(topicName, message);
+        if (!applyCommandedState) {
+          return;
+        }
+
+        // In optimistic mode the commanded state is assumed and published
+        // before the device command runs. Otherwise it is only applied once
+        // onCommand has succeeded, so a failed device command never leaves
+        // Home Assistant showing a state the device never reached.
+        if (this.component.optimistic) {
+          applyCommandedState();
+          await onCommand(topicName, message);
+        } else {
+          await onCommand(topicName, message);
+          applyCommandedState();
+        }
+      })
+    );
   }
 
   /**
-   * Applies a command payload to the local state.
+   * Validates a command payload and returns a function that applies it to the local state, or `undefined` when the
+   * payload is rejected (a non-numeric value on a numeric topic, an unrecognized power payload, or an unknown command
+   * topic). Rejected payloads are neither applied nor forwarded to the downstream command handler. Returning the
+   * application as a callback lets the caller decide when the state is published: immediately in optimistic mode, or
+   * only after the device command has succeeded otherwise.
    *
    * @param topicName - The command topic the payload arrived on
    * @param message - The raw command payload
-   * @returns Whether the command was accepted; rejected payloads (a non-numeric value on a numeric topic) are not
-   *   applied and must not be forwarded to the downstream command handler
+   * @returns A callback that applies the commanded state, or `undefined` when the payload is rejected
    */
-  private async handleCommand<TTopicName extends keyof CommandTopicMap & string>(
+  private prepareCommand<TTopicName extends keyof CommandTopicMap & string>(
     topicName: TTopicName,
     message: CommandTopicMap[TTopicName]
-  ): Promise<boolean> {
+  ): (() => void) | undefined {
     switch (topicName) {
       case 'fan_mode_command_topic':
-        this.currentFanMode = message;
-        break;
+        return () => {
+          this.currentFanMode = message;
+        };
 
       case 'mode_command_topic':
-        this.currentMode = message;
-        break;
+        return () => {
+          this.currentMode = message;
+        };
 
       case 'power_command_topic':
         if (message === (this.component.payload_on ?? 'ON')) {
-          this.currentMode = this._lastOnMode;
+          return () => {
+            this.currentMode = this._lastOnMode;
+          };
         } else if (message === (this.component.payload_off ?? 'OFF')) {
-          this.currentMode = 'off';
+          return () => {
+            this.currentMode = 'off';
+          };
         } else {
           this.logger.warn("Received an unexpected payload on the 'power_command_topic':", message);
+          return undefined;
         }
-        break;
 
       case 'preset_mode_command_topic':
-        this.currentPresetMode = message;
-        break;
+        return () => {
+          this.currentPresetMode = message;
+        };
 
       case 'swing_horizontal_mode_command_topic':
-        this.currentSwingHorizontalMode = message;
-        break;
+        return () => {
+          this.currentSwingHorizontalMode = message;
+        };
 
       case 'swing_mode_command_topic':
-        this.currentSwingMode = message;
-        break;
+        return () => {
+          this.currentSwingMode = message;
+        };
 
       case 'target_humidity_command_topic': {
         const humidity = this.parseNumericCommand(topicName, message);
         if (humidity === undefined) {
-          return false;
+          return undefined;
         }
-        this.targetHumidity = humidity;
-        break;
+        return () => {
+          this.targetHumidity = humidity;
+        };
       }
 
       case 'temperature_command_topic': {
         const temperature = this.parseNumericCommand(topicName, message);
         if (temperature === undefined) {
-          return false;
+          return undefined;
         }
-        this.targetTemperature = temperature;
-        break;
+        return () => {
+          this.targetTemperature = temperature;
+        };
       }
 
       case 'temperature_high_command_topic': {
         const temperatureHigh = this.parseNumericCommand(topicName, message);
         if (temperatureHigh === undefined) {
-          return false;
+          return undefined;
         }
-        this.temperatureHigh = temperatureHigh;
-        break;
+        return () => {
+          this.temperatureHigh = temperatureHigh;
+        };
       }
 
       case 'temperature_low_command_topic': {
         const temperatureLow = this.parseNumericCommand(topicName, message);
         if (temperatureLow === undefined) {
-          return false;
+          return undefined;
         }
-        this.temperatureLow = temperatureLow;
-        break;
+        return () => {
+          this.temperatureLow = temperatureLow;
+        };
       }
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);
+        return undefined;
     }
-
-    return true;
   }
 
   /**

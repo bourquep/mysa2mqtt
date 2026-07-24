@@ -61,3 +61,29 @@ export function cleanString(raw: string): string {
   }
   return result;
 }
+
+/**
+ * Wraps an async function so that its invocations run one at a time, in call order. Each call waits for the previous
+ * one to settle before starting, turning overlapping calls into a serial queue.
+ *
+ * This is used to serialize command handling per component: a component that awaits a device command before publishing
+ * its confirmed state could otherwise let an older command publish after a newer one (a slow command completing last),
+ * leaving Home Assistant showing a stale state. Serializing guarantees each command is fully applied and published
+ * before the next one begins.
+ *
+ * A rejection from one call is isolated so it does not wedge the queue: the returned promise still rejects (so the
+ * caller can observe and log the failure), but the internal chain swallows it so later calls keep running.
+ *
+ * @param fn - The async function to serialize
+ * @returns A function with the same signature whose calls are queued and run sequentially
+ */
+export function serializeAsync<TArgs extends unknown[], TResult>(
+  fn: (...args: TArgs) => Promise<TResult>
+): (...args: TArgs) => Promise<TResult> {
+  let tail: Promise<unknown> = Promise.resolve();
+  return (...args: TArgs) => {
+    const run = tail.then(() => fn(...args));
+    tail = run.catch(() => undefined);
+    return run;
+  };
+}
