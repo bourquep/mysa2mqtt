@@ -457,9 +457,10 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
 
   /**
    * Validates a command payload and returns a function that applies it to the local state, or `undefined` when the
-   * payload is rejected (a non-numeric value on a numeric topic). Rejected payloads are neither applied nor forwarded
-   * to the downstream command handler. Returning the application as a callback lets the caller decide when the state is
-   * published: immediately in optimistic mode, or only after the device command has succeeded otherwise.
+   * payload is rejected (a non-numeric value on a numeric topic, an unrecognized power payload, or an unknown command
+   * topic). Rejected payloads are neither applied nor forwarded to the downstream command handler. Returning the
+   * application as a callback lets the caller decide when the state is published: immediately in optimistic mode, or
+   * only after the device command has succeeded otherwise.
    *
    * @param topicName - The command topic the payload arrived on
    * @param message - The raw command payload
@@ -491,7 +492,7 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
           };
         } else {
           this.logger.warn("Received an unexpected payload on the 'power_command_topic':", message);
-          return () => {};
+          return undefined;
         }
 
       case 'preset_mode_command_topic':
@@ -551,7 +552,7 @@ export class Climate extends Subscriber<ClimateInfo, StateTopicMap, CommandTopic
 
       default:
         this.logger.warn('Received an unexpected command topic:', topicName);
-        return () => {};
+        return undefined;
     }
   }
 

@@ -90,6 +90,14 @@ describe('Climate', () => {
     expect(client.lastPayload(stateTopic('climate', 'c1', 'temperature_state'))).toBeUndefined();
   });
 
+  it('does not forward an unrecognized power command payload to the callback', async () => {
+    const { client, onCommand } = makeClimate();
+    client.deliver(stateTopic('climate', 'c1', 'power_command'), 'MAYBE');
+    await Promise.resolve();
+    await vi.waitFor(() => expect(onCommand).not.toHaveBeenCalled());
+    expect(client.lastPayload(stateTopic('climate', 'c1', 'mode_state'))).toBeUndefined();
+  });
+
   it('publishes the commanded state before the callback runs when optimistic', async () => {
     const { climate, client, onCommand } = makeClimate({ optimistic: true });
     let sawStateBeforeCallback = false;
