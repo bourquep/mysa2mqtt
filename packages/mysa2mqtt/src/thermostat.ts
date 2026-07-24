@@ -32,12 +32,14 @@ import {
 } from 'mqtt2ha';
 import {
   DeviceBase,
+  DeviceState,
   FirmwareDevice,
   MysaApiClient,
   MysaDeviceMode,
   MysaFanSpeedMode,
   StateChange,
-  Status
+  Status,
+  SupportedCaps
 } from 'mysa-js-sdk';
 import { version } from './options';
 
@@ -57,15 +59,69 @@ const MYSA_RAW_MODE_TO_DEVICE_MODE: Partial<Record<number, MysaDeviceMode>> = {
 const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
 const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
-  3: 'low',
-  5: 'medium',
-  7: 'high',
+  2: 'low', // AC-V1-X CodeNum=1117 canonical low (also echoed for any non-auto on older firmware)
+  3: 'low', // SDK legacy value for low
+  4: 'medium', // AC-V1-X CodeNum=1117 canonical medium
+  5: 'medium', // SDK legacy value for medium
+  6: 'high', // AC-V1-X CodeNum=1117 canonical high
+  7: 'high', // SDK legacy value for high
   8: 'max'
 };
 
 const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
 const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
+
+/**
+ * Build the fan_modes list from the device's SupportedCaps. Takes the union of fanSpeeds across all modes, preserving
+ * canonical order.
+ *
+ * @param supportedCaps - The device's supported capabilities, if reported.
+ * @returns The supported fan speed modes, falling back to {@link FAN_SPEED_MODES} when none are reported.
+ *
+ *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
+ *   - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto' (device's AC brand not configured or IR code
+ *       set doesn't support multi-speed; e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual
+ *       speed)
+ *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
+ */
+function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
+  if (!supportedCaps?.modes) {
+    return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
+  }
+
+  const allSpeeds = new Set<number>();
+
+  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
+  if (supportedCaps.fanSpeeds) {
+    for (const speed of supportedCaps.fanSpeeds) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  // Also check per-mode fanSpeeds (future-proofing)
+  for (const modeCaps of Object.values(supportedCaps.modes)) {
+    for (const speed of modeCaps.fanSpeeds ?? []) {
+      allSpeeds.add(speed);
+    }
+  }
+
+  if (allSpeeds.size === 0) {
+    // SupportedCaps exists but has no fan speeds → device doesn't support multi-speed control
+    // (typically Brand=None / generic IR code set). Only expose 'auto'.
+    return ['auto'];
+  }
+
+  // Preserve canonical order by iterating MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE, deduplicating
+  // modes that map from both legacy and canonical raw values (e.g. 2 and 3 both → 'low').
+  return Array.from(
+    new Set(
+      Object.entries(MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE)
+        .filter(([rawSpeed]) => allSpeeds.has(Number(rawSpeed)))
+        .map(([, name]) => name as MysaFanSpeedMode)
+    )
+  );
+}
 
 export class Thermostat {
   private isStarted = false;
@@ -76,8 +132,12 @@ export class Thermostat {
   private readonly mqttOrigin: OriginConfiguration;
   private readonly mqttClimate: Climate;
   private readonly mqttTemperature: Sensor;
+  /** Floor-probe temperature, published only for in-floor heating thermostats (INF-V1-0). */
+  private readonly mqttFloorTemperature: Sensor | undefined;
   private readonly mqttHumidity: Sensor;
-  private readonly mqttPower: Sensor;
+  private readonly mqttPower: Sensor | undefined;
+  /** Set instead of {@link mqttPower} when this device cannot report power, to retire a previously published entity. */
+  private readonly mqttRetiredPower: Sensor | undefined;
 
   private readonly mysaStatusUpdateHandler = (status: Status) => {
     void this.handleMysaStatusUpdate(status).catch((error: unknown) => {
@@ -99,7 +159,8 @@ export class Thermostat {
     private readonly logger: Logger,
     public readonly mysaDeviceFirmware?: FirmwareDevice,
     public readonly mysaDeviceSerialNumber?: string,
-    public readonly temperatureUnit?: 'C' | 'F'
+    public readonly temperatureUnit?: 'C' | 'F',
+    public readonly heaterWatts?: number
   ) {
     const is_celsius = (temperatureUnit ?? 'C') === 'C';
 
@@ -121,6 +182,16 @@ export class Thermostat {
     const isAC = mysaDevice.Model.startsWith('AC');
     this.deviceType = isAC ? 'AC' : 'BB';
 
+    // V2 and in-floor hardware have no current sensor: their status messages carry a duty cycle
+    // (in-floor reports a binary `heatStat` relay flag instead) but never a `Current` reading, so
+    // power can only be derived from a user-supplied heater rating. AC devices report neither.
+    // Testing for these families rather than allowlisting V1 keeps the sensor for unrecognized
+    // models, which report `Current` natively today.
+    const isV2 = /-v2-/i.test(mysaDevice.Model);
+    const isInFloor = /^INF-/i.test(mysaDevice.Model);
+    const needsHeaterWatts = isV2 || isInFloor;
+    const canReportPower = !isAC && (!needsHeaterWatts || heaterWatts != null);
+
     this.mqttClimate = new Climate(
       {
         mqtt: this.mqttSettings,
@@ -134,7 +205,7 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: isAC ? HA_AC_MODES : HA_HEAT_ONLY_MODES,
-          fan_modes: isAC ? FAN_SPEED_MODES : undefined,
+          fan_modes: isAC ? buildFanModes(mysaDevice.SupportedCaps) : undefined,
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
           temperature_unit: 'C',
@@ -203,8 +274,17 @@ export class Thermostat {
 
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
-            const mode = FAN_SPEED_MODES.includes(messageAsMode) ? messageAsMode : undefined;
-            await this.setDeviceState(undefined, undefined, mode);
+            const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
+            if (!supportedModes.includes(messageAsMode)) {
+              // Ignore unsupported fan modes entirely; forwarding them would omit fanSpeed but
+              // still reapply the current temperature/mode, which is not a no-op.
+              break;
+            }
+            await this.setDeviceState(
+              this.mqttClimate.targetTemperature,
+              this.mqttClimate.currentMode as MysaDeviceMode,
+              messageAsMode
+            );
             break;
           }
         }
@@ -228,6 +308,27 @@ export class Thermostat {
       }
     });
 
+    // In-floor thermostats report a floor-probe temperature alongside the ambient air reading. The
+    // ambient reading remains the climate's current temperature; the floor probe gets its own sensor.
+    this.mqttFloorTemperature = isInFloor
+      ? new Sensor({
+          mqtt: this.mqttSettings,
+          logger: this.logger,
+          component: {
+            component: 'sensor',
+            device: this.mqttDevice,
+            origin: this.mqttOrigin,
+            unique_id: `mysa_${mysaDevice.Id}_floor_temperature`,
+            name: 'Floor temperature',
+            device_class: 'temperature',
+            state_class: 'measurement',
+            unit_of_measurement: '°C',
+            suggested_display_precision: is_celsius ? 0.1 : 0.0,
+            force_update: true
+          }
+        })
+      : undefined;
+
     this.mqttHumidity = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
@@ -245,7 +346,7 @@ export class Thermostat {
       }
     });
 
-    this.mqttPower = new Sensor({
+    const powerSensor = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
       component: {
@@ -261,6 +362,12 @@ export class Thermostat {
         force_update: true
       }
     });
+
+    // The discovery config is retained, so a device that can no longer report power has to have
+    // its topic cleared explicitly — otherwise an entity published by an earlier run lingers in
+    // Home Assistant forever.
+    this.mqttPower = canReportPower ? powerSensor : undefined;
+    this.mqttRetiredPower = canReportPower ? undefined : powerSensor;
   }
 
   async start() {
@@ -275,29 +382,25 @@ export class Thermostat {
       const deviceStates = await this.mysaApiClient.getDeviceStates();
       const state = deviceStates.DeviceStatesObj[this.mysaDevice.Id];
 
-      this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
-      this.mqttClimate.currentHumidity = state.Humidity?.v;
-      this.mqttClimate.currentMode =
-        MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
-      this.mqttClimate.currentFanMode =
-        MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
-      this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
-      this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
+      // The device may be absent from the account-wide response; still register the entities so the
+      // realtime stream and REST poll can populate them later, but skip the state that would deref it.
+      if (state != null) {
+        await this.publishRestState(state);
+      }
 
       await this.mqttClimate.writeConfig();
-
-      await this.mqttTemperature.setState(
-        'state_topic',
-        state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
-      );
       await this.mqttTemperature.writeConfig();
-
-      await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
+      await this.mqttFloorTemperature?.writeConfig();
       await this.mqttHumidity.writeConfig();
 
-      // `state.Current.v` always has a non-zero value, even for thermostats that are off, so we can't use it to determine initial power state.
-      await this.mqttPower.setState('state_topic', 'None');
-      await this.mqttPower.writeConfig();
+      // Neither REST field is usable as an initial power state: `state.Current.v` always has a
+      // non-zero value, even for thermostats that are off, and `state.Duty.v` lags the realtime
+      // duty cycle badly. Publish nothing until the first status message arrives.
+      if (this.mqttPower != null) {
+        await this.mqttPower.setState('state_topic', 'None');
+        await this.mqttPower.writeConfig();
+      }
+      await this.mqttRetiredPower?.removeConfig();
 
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
@@ -309,6 +412,58 @@ export class Thermostat {
       this.clearRealtimeRetry();
       throw error;
     }
+  }
+
+  /**
+   * Refreshes the published entities from a periodic REST state poll.
+   *
+   * The bridge normally tracks state through the real-time MQTT stream, but that connection never establishes for some
+   * fleets (e.g. all-Lite accounts, whose AWS IoT WebSocket handshake fails) and is chronically unstable for others.
+   * This keeps Home Assistant current in those cases: the REST `getDeviceStates` endpoint reports fresh temperature,
+   * humidity, setpoint and mode for every device type regardless of the real-time path.
+   *
+   * A no-op until the thermostat is started, and when the poll response omits this device. Power is intentionally not
+   * refreshed here — see {@link publishRestState}.
+   *
+   * @param state - This device's entry from a `getDeviceStates` response, or undefined when it was absent.
+   */
+  async refreshFromRest(state: DeviceState | undefined): Promise<void> {
+    if (!this.isStarted || state == null) {
+      return;
+    }
+
+    try {
+      await this.publishRestState(state);
+    } catch (error) {
+      this.logger.error('Failed to apply REST state poll', { error, deviceId: this.mysaDevice.Id });
+    }
+  }
+
+  /**
+   * Maps a REST device-state snapshot onto the climate, temperature and humidity entities.
+   *
+   * Shared by startup and the periodic {@link refreshFromRest} poll. It publishes entity state only; discovery config is
+   * written separately. The power sensor is deliberately left untouched: `state.Current` is non-zero even when the
+   * thermostat is off and `state.Duty` lags the real-time duty cycle badly, so power is published only from real-time
+   * status messages.
+   *
+   * @param state - This device's entry from a `getDeviceStates` response.
+   */
+  private async publishRestState(state: DeviceState): Promise<void> {
+    this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
+    this.mqttClimate.currentHumidity = state.Humidity?.v;
+    this.mqttClimate.currentMode =
+      MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
+    this.mqttClimate.currentFanMode =
+      MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[state.FanSpeed?.v as number] ?? this.mqttClimate.currentFanMode;
+    this.mqttClimate.currentAction = this.computeCurrentAction(undefined, state.Duty?.v);
+    this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? state.SetPoint?.v : undefined;
+
+    await this.mqttTemperature.setState(
+      'state_topic',
+      state.CorrectedTemp != null ? state.CorrectedTemp.v.toFixed(2) : 'None'
+    );
+    await this.mqttHumidity.setState('state_topic', state.Humidity != null ? state.Humidity.v.toFixed(2) : 'None');
   }
 
   async stop() {
@@ -325,8 +480,9 @@ export class Thermostat {
     this.mysaApiClient.emitter.off('statusChanged', this.mysaStatusUpdateHandler);
     this.mysaApiClient.emitter.off('stateChanged', this.mysaStateChangeHandler);
 
-    await this.mqttPower.setState('state_topic', 'None');
+    await this.mqttPower?.setState('state_topic', 'None');
     await this.mqttTemperature.setState('state_topic', 'None');
+    await this.mqttFloorTemperature?.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
   }
 
@@ -406,14 +562,16 @@ export class Thermostat {
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
-    if (this.mysaDevice.Voltage != null && status.current != null) {
-      const watts = this.mysaDevice.Voltage * status.current;
-      await this.mqttPower.setState('state_topic', watts.toFixed(2));
-    } else {
-      await this.mqttPower.setState('state_topic', 'None');
+    if (this.mqttPower != null) {
+      const watts = this.computeWatts(status);
+      this.logger.debug('Computed power draw', { current: status.current, dutyCycle: status.dutyCycle, watts });
+      await this.mqttPower.setState('state_topic', watts != null ? watts.toFixed(2) : 'None');
     }
 
     await this.mqttTemperature.setState('state_topic', status.temperature.toFixed(2));
+    if (status.floorTemperature != null) {
+      await this.mqttFloorTemperature?.setState('state_topic', status.floorTemperature.toFixed(2));
+    }
     await this.mqttHumidity.setState('state_topic', status.humidity.toFixed(2));
   }
 
@@ -438,14 +596,22 @@ export class Thermostat {
           this.mqttClimate.currentAction = this.computeCurrentAction();
         }
         this.mqttClimate.targetTemperature = state.setPoint;
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
 
       case 'dry':
       case 'fan_only':
         this.mqttClimate.currentMode = state.mode;
         this.mqttClimate.currentAction = this.computeCurrentAction();
-        this.mqttClimate.currentFanMode = state.fanSpeed;
+        // Only update fan mode if the device reported one — AC-V1-X in heat mode
+        // omits the fn field entirely, which would otherwise overwrite the known state with undefined
+        if (state.fanSpeed !== undefined) {
+          this.mqttClimate.currentFanMode = state.fanSpeed;
+        }
         break;
 
       default:
@@ -461,6 +627,20 @@ export class Thermostat {
         }
         break;
     }
+  }
+
+  private computeWatts(status: Status): number | undefined {
+    if (status.current != null && this.mysaDevice.Voltage != null) {
+      return this.mysaDevice.Voltage * status.current;
+    }
+
+    if (status.dutyCycle != null && this.heaterWatts != null) {
+      // The duty cycle is a 0.0-1.0 fraction of the heating element's rated output. Clamping
+      // bounds the error should some firmware ever report it on a different scale.
+      return this.heaterWatts * Math.min(Math.max(status.dutyCycle, 0), 1);
+    }
+
+    return undefined;
   }
 
   private computeCurrentAction(current?: number, dutyCycle?: number): ClimateAction {

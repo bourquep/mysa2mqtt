@@ -4,5 +4,5 @@ export * from './Logger';
 export * from './MysaApiClient';
 export * from './MysaApiClientEventTypes';
 export * from './MysaApiClientOptions';
+export * from './MysaCredentials';
 export * from './MysaDeviceMode';
-export * from './MysaSession';

@@ -52,7 +52,11 @@ npm ci
 npm run build      # builds mqtt2ha, then mysa-js-sdk, then mysa2mqtt
 npm run lint
 npm run typecheck
+npm test           # runs each package's test suite (currently mqtt2ha, via vitest)
 ```
+
+`mqtt2ha` is covered by a [vitest](https://vitest.dev) suite in `packages/mqtt2ha/test/`; run it in watch mode with
+`npm run test:watch -w mqtt2ha`. CI runs lint, typecheck, build, and the tests on every pull request.
 
 Releases are managed with [changesets](https://github.com/changesets/changesets). Add one with
 `npm run changeset` in any PR that should ship a new version; see

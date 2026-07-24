@@ -10,10 +10,30 @@ A JavaScript/TypeScript library to create MQTT entities that are automatically d
 - Easy creation of Home Assistant MQTT entities
 - Automatic MQTT discovery configuration
 - Supported entity types:
+  - Alarm Control Panels
   - Binary Sensors
   - Buttons
+  - Cameras
+  - Climates
+  - Covers
+  - Events
+  - Fans
+  - Humidifiers
+  - Images
+  - Lawn Mowers
+  - Lights
+  - Locks
+  - Numbers
+  - Scenes
+  - Selects
   - Sensors
+  - Sirens
   - Switches
+  - Texts
+  - Updates
+  - Vacuums
+  - Valves
+  - Water Heaters
 - TypeScript support with full type definitions
 - Configurable availability reporting
 

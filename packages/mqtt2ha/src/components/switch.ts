@@ -22,6 +22,7 @@ SOFTWARE.
 */
 
 import { ComponentConfiguration } from '@/configuration/component_configuration';
+import { serializeAsync } from '@/lib/utils';
 import { ComponentSettings } from '../api/settings';
 import { Subscriber } from '../api/subscriber';
 
@@ -60,7 +61,9 @@ export class Switch extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMa
       ['state_topic'],
       async () => {},
       ['command_topic'],
-      async (topicName: string, message: string) => {
+      // Serialize command handling so overlapping commands complete in arrival
+      // order and can never publish an older state after a newer one.
+      serializeAsync(async (topicName: string, message: string) => {
         // In optimistic mode the new state is assumed and published before
         // the device command runs. Otherwise the state is only published
         // once the callback has succeeded, so a failed device command never
@@ -72,7 +75,7 @@ export class Switch extends Subscriber<SwitchInfo, StateTopicMap, CommandTopicMa
           await commandCallback(topicName, message);
           await this.applyCommandedState(message);
         }
-      }
+      })
     );
   }
 

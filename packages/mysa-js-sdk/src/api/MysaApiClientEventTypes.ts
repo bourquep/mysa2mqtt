@@ -1,7 +1,6 @@
 import { SetPointChange } from '@/api/events/SetPointChange';
 import { StateChange } from '@/api/events/StateChange';
 import { Status } from '@/api/events/Status';
-import { MysaSession } from '@/api/MysaSession';
 import { OutPayload } from '@/types/mqtt/OutPayload';
 
 /**
@@ -11,15 +10,6 @@ import { OutPayload } from '@/types/mqtt/OutPayload';
  * emission in the Mysa API client's event system.
  */
 export type MysaApiClientEventTypes = {
-  /**
-   * Event emitted when the session changes.
-   *
-   * @remarks
-   * You should subscribe to this event and persist the session object whenever it changes.
-   * @param session - The new session object or undefined if session was cleared.
-   */
-  sessionChanged: [session: MysaSession | undefined];
-
   /**
    * Event emitted when a device's status information is updated.
    *

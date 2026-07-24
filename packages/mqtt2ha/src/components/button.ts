@@ -53,6 +53,6 @@ export class Button extends Subscriber<ButtonInfo, never, CommandTopicMap> {
     settings: ComponentSettings<ButtonInfo>,
     commandCallback: (topicName: string, message: string) => Promise<void>
   ) {
-    super(settings, ['state_topic'], async () => {}, ['command_topic'], commandCallback);
+    super(settings, [], async () => {}, ['command_topic'], commandCallback);
   }
 }

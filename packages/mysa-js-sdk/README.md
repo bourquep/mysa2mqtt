@@ -66,16 +66,19 @@ The Mysa SDK provides a simple interface to interact with Mysa smart thermostats
 ```typescript
 import { MysaApiClient } from 'mysa-js-sdk';
 
-const client = new MysaApiClient();
+// The client holds your credentials and authenticates on demand
+const client = new MysaApiClient({
+  username: 'your-email@example.com',
+  password: 'your-password'
+});
 
-// Login with email and password
-await client.login('your-email@example.com', 'your-password');
-
-// Check if authenticated
-if (client.isAuthenticated) {
-  console.log('Successfully authenticated!');
-}
+// Optional: log in eagerly to fail fast on invalid credentials
+await client.login();
 ```
+
+The client manages its session on its own: it refreshes the session when it needs to, and logs back in automatically
+when the refresh token has itself expired or been revoked. There is nothing to persist, and no need to re-create the
+client after a long run.
 
 ### Retrieving Thermostat Data
 
@@ -139,10 +142,9 @@ The SDK provides specific error types to handle API errors:
 ```typescript
 import { MysaApiClient, MysaApiError, UnauthenticatedError } from 'mysa-js-sdk';
 
-const client = new MysaApiClient();
+const client = new MysaApiClient({ username: 'user@example.com', password: 'password' });
 
 try {
-  await client.login('user@example.com', 'password');
   const devices = await client.getDevices();
 } catch (error) {
   if (error instanceof UnauthenticatedError) {
@@ -170,31 +172,13 @@ const logger = pino({
 });
 
 // Configure client with options
-const client = new MysaApiClient(undefined, {
-  logger: logger,
-  fetcher: fetch // Custom fetch implementation if needed
-});
-
-// Or restore from a saved session
-const savedSession = {
-  username: 'user@example.com',
-  idToken: 'eyJ...',
-  accessToken: 'eyJ...',
-  refreshToken: 'abc123...'
-};
-
-const clientWithSession = new MysaApiClient(savedSession, { logger });
-
-// Listen for session changes to persist them
-client.emitter.on('sessionChanged', (newSession) => {
-  if (newSession) {
-    // Save session to storage (file, database, etc.)
-    localStorage.setItem('mysaSession', JSON.stringify(newSession));
-  } else {
-    // Session expired or logged out
-    localStorage.removeItem('mysaSession');
+const client = new MysaApiClient(
+  { username: 'user@example.com', password: 'password' },
+  {
+    logger: logger,
+    fetcher: fetch // Custom fetch implementation if needed
   }
-});
+);
 ```
 
 ### Reference documentation

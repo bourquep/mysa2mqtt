@@ -15,6 +15,8 @@ export interface Status {
   setPoint: number;
   /** Optional electrical current draw measurement in amperes */
   current?: number;
-  /** Optional heating element duty cycle as a percentage (0-100) */
+  /** Optional heating element duty cycle, as a fraction between 0.0 and 1.0 */
   dutyCycle?: number;
+  /** Optional floor-probe temperature reading, reported only by in-floor heating thermostats (INF-V1-0) */
+  floorTemperature?: number;
 }

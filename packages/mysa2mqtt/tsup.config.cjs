@@ -25,7 +25,7 @@ SOFTWARE.
 `;
 
 export default defineConfig({
-  entry: ['src/main.ts'],
+  entry: ['src/main.ts', 'src/capture.ts'],
   platform: 'node',
   format: ['esm'],
   clean: true,

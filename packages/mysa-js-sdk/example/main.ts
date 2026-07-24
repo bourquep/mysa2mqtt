@@ -1,6 +1,5 @@
-import { MysaApiClient, MysaSession } from '@/api';
+import { MysaApiClient } from '@/api';
 import 'dotenv/config';
-import { readFile, rm, writeFile } from 'fs/promises';
 import { pino } from 'pino';
 
 const rootLogger = pino({
@@ -19,41 +18,17 @@ const rootLogger = pino({
 
 /** Main entry point of the example application. */
 async function main() {
-  let session: MysaSession | undefined;
-  try {
-    rootLogger.info('Loading session...');
-    const sessionJson = await readFile('session.json', 'utf8');
-    session = JSON.parse(sessionJson);
-  } catch {
-    rootLogger.info('No valid session file found.');
+  const username = process.env.MYSA_USERNAME;
+  const password = process.env.MYSA_PASSWORD;
+
+  if (!username || !password) {
+    throw new Error('Missing MYSA_USERNAME or MYSA_PASSWORD environment variables.');
   }
-  const client = new MysaApiClient(session, { logger: rootLogger.child({ module: 'mysa-js-sdk' }) });
 
-  client.emitter.on('sessionChanged', async (newSession) => {
-    if (newSession) {
-      rootLogger.info('Saving new session...');
-      await writeFile('session.json', JSON.stringify(newSession));
-    } else {
-      try {
-        rootLogger.info('Removing session file...');
-        await rm('session.json');
-      } catch {
-        // Ignore error if file does not exist
-      }
-    }
-  });
+  const client = new MysaApiClient({ username, password }, { logger: rootLogger.child({ module: 'mysa-js-sdk' }) });
 
-  if (!client.isAuthenticated) {
-    rootLogger.info('Logging in...');
-    const username = process.env.MYSA_USERNAME;
-    const password = process.env.MYSA_PASSWORD;
-
-    if (!username || !password) {
-      throw new Error('Missing MYSA_USERNAME or MYSA_PASSWORD environment variables.');
-    }
-
-    await client.login(username, password);
-  }
+  rootLogger.info('Logging in...');
+  await client.login();
 
   const homes = await client.getHomes();
   await Promise.all(

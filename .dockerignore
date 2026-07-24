@@ -9,6 +9,5 @@ site
 docs-landing
 .env
 .env.local
-session.json
 **/*.md
 !packages/mysa2mqtt/README.md
