@@ -1,5 +1,11 @@
 # mqtt2ha
 
+## 5.1.2
+
+### Patch Changes
+
+- [#232](https://github.com/bourquep/mysa2mqtt/pull/232) [`ec4842d`](https://github.com/bourquep/mysa2mqtt/commit/ec4842da2d7854f68b32a2cae684e486320577ff) Thanks [@bourquep](https://github.com/bourquep)! - Updates the brace-expansion package to address this security alert: https://github.com/bourquep/mysa2mqtt/security/dependabot/128
+
 ## 5.1.1
 
 ### Patch Changes
