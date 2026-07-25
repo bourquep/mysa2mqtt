@@ -25,6 +25,9 @@ export enum OutMessageType {
   // When the message type is reported in the `msg` field of the payload.
   //
 
+  /** Periodic status report from an in-floor heating thermostat (INF-V1-0) */
+  DEVICE_IN_FLOOR_STATUS = 17,
+
   /** Version 2 device status report with enhanced device information */
   DEVICE_V2_STATUS = 40,
 

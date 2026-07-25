@@ -1,4 +1,5 @@
 export * from './DeviceAcStatus';
+export * from './DeviceInFloorStatus';
 export * from './DeviceLog';
 export * from './DevicePostBoot';
 export * from './DeviceSetpointChange';

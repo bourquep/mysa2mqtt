@@ -1,4 +1,5 @@
 import { DeviceAcStatus } from './out/DeviceAcStatus';
+import { DeviceInFloorStatus } from './out/DeviceInFloorStatus';
 import { DeviceStateChange } from './out/DeviceStateChange';
 import { DeviceV2Status } from './out/DeviceV2Status';
 
@@ -8,4 +9,4 @@ import { DeviceV2Status } from './out/DeviceV2Status';
  * This type encompasses payloads where the message type is specified in the `msg` field rather than the `MsgType`
  * field. Includes device status reports and state change notifications.
  */
-export type MsgOutPayload = DeviceAcStatus | DeviceV2Status | DeviceStateChange;
+export type MsgOutPayload = DeviceAcStatus | DeviceInFloorStatus | DeviceV2Status | DeviceStateChange;
