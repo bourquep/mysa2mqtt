@@ -1286,6 +1286,21 @@ export class MysaApiClient {
             });
             break;
 
+          case OutMessageType.DEVICE_IN_FLOOR_STATUS:
+            // In-floor heating thermostats (INF-V1-0) report their periodic telemetry here rather than as a
+            // DEVICE_V2_STATUS. They drive a plain relay, so heating is expressed as the binary `heatStat` (0 or 1),
+            // which is a valid 0.0-1.0 duty fraction and maps straight onto `dutyCycle`. The body's own `dutyCycle`
+            // field is deliberately ignored: it has been observed pinned to a constant value regardless of the relay.
+            this.emitter.emit('statusChanged', {
+              deviceId: parsedPayload.src.ref,
+              temperature: parsedPayload.body.ambTemp,
+              humidity: parsedPayload.body.hum,
+              setPoint: parsedPayload.body.stpt,
+              dutyCycle: parsedPayload.body.heatStat,
+              floorTemperature: parsedPayload.body.flrSnsrTemp
+            });
+            break;
+
           case OutMessageType.DEVICE_V2_STATUS:
             // In-floor heating thermostats (INF-V1-0) share this message type but report a binary heating-relay state
             // (`heatStat`) instead of a fractional `dtyCycle`, plus a floor-probe temperature. `heatStat` (0 or 1) is a
