@@ -71,12 +71,15 @@ const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedM
 /**
  * The `SupportedCaps.keys` entry a device lists when it supports fan-speed control. These are raw ACState shadow keys
  * (e.g. key 3 = setpoint, key 4 = fan speed). AC-V1-0 units with a configured AC brand list key 4 and report a live
- * `FanSpeed`, yet their generic IR code set omits an enumerated `SupportedCaps.fanSpeeds` — so fan-speed support must be
- * inferred from `keys` rather than the (absent) `fanSpeeds` list.
+ * `FanSpeed`, yet their generic IR code set omits an enumerated `SupportedCaps.fanSpeeds` — so fan-speed support must
+ * be inferred from `keys` rather than the (absent) `fanSpeeds` list.
  */
 const FAN_SPEED_SUPPORTED_CAP_KEY = 4;
 
-/** Fan speeds advertised for AC devices that support fan control but don't enumerate their speeds (matches the SDK's `LegacyFanSpeedSendMap`, sans `max`). */
+/**
+ * Fan speeds advertised for AC devices that support fan control but don't enumerate their speeds (matches the SDK's
+ * `LegacyFanSpeedSendMap`, sans `max`).
+ */
 const DEFAULT_AC_FAN_MODES: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'high'];
 
 const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
@@ -92,8 +95,8 @@ const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY
  *
  *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
  *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
- *   - SupportedCaps present, no fanSpeeds, but the FanSpeed key IS in `keys` → the device supports multi-speed control
- *       but doesn't enumerate its speeds (e.g. AC-V1-0 with a configured brand whose generic IR code set omits
+ *   - SupportedCaps present, no fanSpeeds, but the FanSpeed key IS in `keys` → the device supports multi-speed control but
+ *       doesn't enumerate its speeds (e.g. AC-V1-0 with a configured brand whose generic IR code set omits
  *       `fanSpeeds`). Advertise the canonical AC speeds — the SDK send path drives them via `LegacyFanSpeedSendMap`.
  *   - SupportedCaps present, no fanSpeeds, and no FanSpeed key → genuinely single-speed / Brand=None → expose only 'auto'
  */
