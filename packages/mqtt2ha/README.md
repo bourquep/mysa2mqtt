@@ -113,7 +113,7 @@ copyright notice and license text in any copy of the software or substantial por
 
 ## Copyright
 
-© 2025 Pascal Bourque
+© 2025-2026 Pascal Bourque
 
 ## Support
 

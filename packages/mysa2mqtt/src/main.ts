@@ -2,7 +2,7 @@
 
 /*
 mysa2mqtt
-Copyright (C) 2025 Pascal Bourque
+Copyright (C) 2025-2026 Pascal Bourque
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
