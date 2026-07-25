@@ -29,12 +29,26 @@ RUN npm run build
 # Final stage
 FROM node:24-alpine AS final
 
-# Metadata
+# Metadata. The release workflow additionally stamps the labels that only a
+# build knows -- version, revision, created -- via docker/metadata-action, and
+# `com.docker.image.source.entrypoint` via BUILDX_GIT_LABELS. Those override the
+# values below, which are what a plain `docker build` produces.
 LABEL maintainer="Pascal Bourque <pascal@cosmos.moi>"
 LABEL description="Expose Mysa smart thermostats to home automation platforms via MQTT."
+LABEL copyright="Copyright (c) 2025-2026 Pascal Bourque"
+LABEL org.opencontainers.image.title="mysa2mqtt"
 LABEL org.opencontainers.image.source="https://github.com/bourquep/mysa2mqtt"
 LABEL org.opencontainers.image.description="Expose Mysa smart thermostats to home automation platforms via MQTT"
 LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.authors="Pascal Bourque <pascal@cosmos.moi>"
+LABEL org.opencontainers.image.vendor="Pascal Bourque"
+LABEL org.opencontainers.image.url="https://bourquep.github.io/mysa2mqtt/"
+LABEL org.opencontainers.image.documentation="https://bourquep.github.io/mysa2mqtt/"
+# The path Docker Hub and Docker Desktop link "view Dockerfile" to, relative to
+# the repository root.
+LABEL com.docker.image.source.entrypoint="packages/mysa2mqtt/Dockerfile"
+
+ENV NODE_ENV=production
 
 # Install security updates
 RUN apk --no-cache upgrade

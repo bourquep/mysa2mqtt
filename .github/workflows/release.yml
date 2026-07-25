@@ -88,8 +88,29 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
+      # Produces the OCI labels a build has to supply because the Dockerfile
+      # cannot know them (version, revision, created), plus the same values as
+      # annotations. `index` is included because the pushed artifact is a
+      # multi-platform index -- annotations on the per-platform manifests alone
+      # are not what registries read.
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: bourquep/mysa2mqtt
+          tags: |
+            type=raw,value=${{ needs.release.outputs.mysa2mqtt_version }}
+            type=raw,value=latest
+
       - name: Build and push
         uses: docker/build-push-action@v6
+        env:
+          # Adds org.opencontainers.image.revision/source and, above all,
+          # com.docker.image.source.entrypoint -- the Dockerfile path Docker Hub
+          # uses to link the image back to its source on GitHub.
+          BUILDX_GIT_LABELS: full
         with:
           context: .
           file: ./packages/mysa2mqtt/Dockerfile
@@ -97,9 +118,14 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            bourquep/mysa2mqtt:${{ needs.release.outputs.mysa2mqtt_version }}
-            bourquep/mysa2mqtt:latest
+          # mode=max is already the default for public repositories, but it is
+          # what carries the Dockerfile source and build parameters into the
+          # provenance attestation, so pin it rather than inherit it.
+          provenance: mode=max
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
 
   # Replaces the "released in version x" comments semantic-release used to post.
   # Runs after `docker` so the comment can only claim an image tag that exists.
