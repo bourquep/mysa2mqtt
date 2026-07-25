@@ -68,6 +68,17 @@ const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedM
   8: 'max'
 };
 
+/**
+ * The `SupportedCaps.keys` entry a device lists when it supports fan-speed control. These are raw ACState shadow keys
+ * (e.g. key 3 = setpoint, key 4 = fan speed). AC-V1-0 units with a configured AC brand list key 4 and report a live
+ * `FanSpeed`, yet their generic IR code set omits an enumerated `SupportedCaps.fanSpeeds` — so fan-speed support must be
+ * inferred from `keys` rather than the (absent) `fanSpeeds` list.
+ */
+const FAN_SPEED_SUPPORTED_CAP_KEY = 4;
+
+/** Fan speeds advertised for AC devices that support fan control but don't enumerate their speeds (matches the SDK's `LegacyFanSpeedSendMap`, sans `max`). */
+const DEFAULT_AC_FAN_MODES: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'high'];
+
 const REALTIME_RETRY_INITIAL_DELAY_MS = 30_000;
 const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
@@ -80,10 +91,11 @@ const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY
  * @returns The supported fan speed modes, falling back to {@link FAN_SPEED_MODES} when none are reported.
  *
  *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
- *   - SupportedCaps present but no fanSpeeds in any mode → expose only 'auto' (device's AC brand not configured or IR code
- *       set doesn't support multi-speed; e.g. AC-V1-0 with Brand=None uses a generic code set with only auto+one manual
- *       speed)
  *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
+ *   - SupportedCaps present, no fanSpeeds, but the FanSpeed key IS in `keys` → the device supports multi-speed control
+ *       but doesn't enumerate its speeds (e.g. AC-V1-0 with a configured brand whose generic IR code set omits
+ *       `fanSpeeds`). Advertise the canonical AC speeds — the SDK send path drives them via `LegacyFanSpeedSendMap`.
+ *   - SupportedCaps present, no fanSpeeds, and no FanSpeed key → genuinely single-speed / Brand=None → expose only 'auto'
  */
 function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
   if (!supportedCaps?.modes) {
@@ -107,8 +119,15 @@ function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMo
   }
 
   if (allSpeeds.size === 0) {
-    // SupportedCaps exists but has no fan speeds → device doesn't support multi-speed control
-    // (typically Brand=None / generic IR code set). Only expose 'auto'.
+    // No enumerated fanSpeeds. Distinguish two cases:
+    //   - The device still declares fan-speed support via SupportedCaps.keys (the FanSpeed ACState key) — e.g. an
+    //     AC-V1-0 with a configured brand whose generic IR code set omits `fanSpeeds`. It DOES support multi-speed
+    //     control (the SDK send path falls back to LegacyFanSpeedSendMap for it), so advertise the canonical speeds
+    //     rather than hiding them behind 'auto' only.
+    //   - Otherwise (no FanSpeed key) → genuinely single-speed / Brand=None → expose only 'auto'.
+    if (supportedCaps.keys?.includes(FAN_SPEED_SUPPORTED_CAP_KEY)) {
+      return [...DEFAULT_AC_FAN_MODES];
+    }
     return ['auto'];
   }
 

@@ -67,6 +67,16 @@ const CanonicalFanSpeedOrder: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'hi
 const LegacyFanSpeedSendMap: Record<MysaFanSpeedMode, number> = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
 
 /**
+ * AC-V1-X (`CodeNum` 1117) canonical fan-speed `fn` mapping. These devices use `1/2/4/6` for auto/low/medium/high but
+ * frequently omit an explicit `SupportedCaps.fanSpeeds` list, so the legacy `1/3/5/7` map would send `fn` values they
+ * ignore. Used as the no-`fanSpeeds` fallback for CodeNum=1117 devices.
+ */
+const CanonicalFanSpeedSendMap: Partial<Record<MysaFanSpeedMode, number>> = { auto: 1, low: 2, medium: 4, high: 6 };
+
+/** `CodeNum` for AC-V1-X thermostats that use the canonical `1/2/4/6` fan-speed `fn` values. */
+const CANONICAL_FAN_SPEED_CODE_NUM = 1117;
+
+/**
  * Receive-side `fn`-to-fan-speed mapping. Includes both the legacy universal values (3/5/7) and the AC-V1-X
  * CodeNum=1117 canonical values (2/4/6); the latter are unused by legacy devices, so there is no conflict.
  */
@@ -85,8 +95,9 @@ const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
  * Builds the send-side fan-speed `fn` mapping for a device.
  *
  * When the device reports `SupportedCaps.fanSpeeds`, its values are zipped positionally with
- * {@link CanonicalFanSpeedOrder} (e.g. `[1, 2, 4, 6]` → `{ auto: 1, low: 2, medium: 4, high: 6 }`). Otherwise the
- * {@link LegacyFanSpeedSendMap} is used, preserving backward compatibility.
+ * {@link CanonicalFanSpeedOrder} (e.g. `[1, 2, 4, 6]` → `{ auto: 1, low: 2, medium: 4, high: 6 }`). Otherwise, a
+ * CodeNum=1117 (AC-V1-X) device uses the {@link CanonicalFanSpeedSendMap} (it uses canonical `fn` values even without
+ * enumerating them), and any other device uses the {@link LegacyFanSpeedSendMap}, preserving backward compatibility.
  *
  * @param device - The device to build the mapping for.
  * @returns A partial map from fan-speed mode to the device-specific `fn` value.
@@ -94,7 +105,10 @@ const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
 function buildFanSpeedSendMap(device: DeviceBase): Partial<Record<MysaFanSpeedMode, number>> {
   const fanSpeeds = device.SupportedCaps?.fanSpeeds;
   if (!fanSpeeds || fanSpeeds.length === 0) {
-    return LegacyFanSpeedSendMap;
+    // CodeNum=1117 (AC-V1-X) devices use canonical fn values (1/2/4/6) but frequently omit an explicit
+    // SupportedCaps.fanSpeeds list. The legacy map (1/3/5/7) would send fn values these devices ignore, so
+    // fall back to the canonical map for them; all other no-fanSpeeds devices keep the legacy universal map.
+    return device.CodeNum === CANONICAL_FAN_SPEED_CODE_NUM ? CanonicalFanSpeedSendMap : LegacyFanSpeedSendMap;
   }
 
   const map: Partial<Record<MysaFanSpeedMode, number>> = {};
