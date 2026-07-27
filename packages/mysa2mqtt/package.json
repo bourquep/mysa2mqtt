@@ -48,7 +48,9 @@
     "capture": "tsx src/capture.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsup"
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "commander": "15.0.0",

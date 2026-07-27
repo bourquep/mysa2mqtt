@@ -56,6 +56,11 @@ const MYSA_RAW_MODE_TO_DEVICE_MODE: Partial<Record<number, MysaDeviceMode>> = {
   6: 'dry'
 };
 
+/** Inverse of {@link MYSA_RAW_MODE_TO_DEVICE_MODE}, for indexing into `SupportedCaps.modes`. */
+const DEVICE_MODE_TO_MYSA_RAW_MODE = Object.fromEntries(
+  Object.entries(MYSA_RAW_MODE_TO_DEVICE_MODE).map(([rawMode, mode]) => [mode, Number(rawMode)])
+) as Partial<Record<MysaDeviceMode, number>>;
+
 const FAN_SPEED_MODES: Partial<MysaFanSpeedMode>[] = ['auto', 'low', 'medium', 'high', 'max'];
 const MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE: Partial<Record<number, MysaFanSpeedMode>> = {
   1: 'auto',
@@ -87,37 +92,52 @@ const REALTIME_RETRY_MAX_DELAY_MS = 300_000;
 const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY_MS / REALTIME_RETRY_INITIAL_DELAY_MS));
 
 /**
- * Build the fan_modes list from the device's SupportedCaps. Takes the union of fanSpeeds across all modes, preserving
- * canonical order.
+ * Build the fan_modes list from the device's SupportedCaps, for one mode or for the device as a whole.
  *
  * @param supportedCaps - The device's supported capabilities, if reported.
+ * @param mode - When given, report only the speeds this mode accepts. A device can accept different speeds per mode —
+ *   an AC-V1-0 offers all four in heat and cool but only `auto` in dry — so this is what a command must be validated
+ *   against. Omit it for the device-wide union that discovery advertises.
  * @returns The supported fan speed modes, falling back to {@link FAN_SPEED_MODES} when none are reported.
  *
  *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
+ *   - A `mode` was given and that mode enumerates fanSpeeds → expose exactly those speeds
  *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
  *   - SupportedCaps present, no fanSpeeds, but the FanSpeed key IS in `keys` → the device supports multi-speed control but
  *       doesn't enumerate its speeds (e.g. AC-V1-0 with a configured brand whose generic IR code set omits
  *       `fanSpeeds`). Advertise the canonical AC speeds — the SDK send path drives them via `LegacyFanSpeedSendMap`.
  *   - SupportedCaps present, no fanSpeeds, and no FanSpeed key → genuinely single-speed / Brand=None → expose only 'auto'
  */
-function buildFanModes(supportedCaps: SupportedCaps | undefined): MysaFanSpeedMode[] {
+export function buildFanModes(supportedCaps: SupportedCaps | undefined, mode?: MysaDeviceMode): MysaFanSpeedMode[] {
   if (!supportedCaps?.modes) {
     return [...FAN_SPEED_MODES] as MysaFanSpeedMode[];
   }
 
   const allSpeeds = new Set<number>();
 
-  // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
-  if (supportedCaps.fanSpeeds) {
-    for (const speed of supportedCaps.fanSpeeds) {
+  const rawMode = mode !== undefined ? DEVICE_MODE_TO_MYSA_RAW_MODE[mode] : undefined;
+  const modeSpeeds = rawMode !== undefined ? supportedCaps.modes[rawMode]?.fanSpeeds : undefined;
+
+  if (modeSpeeds && modeSpeeds.length > 0) {
+    // The requested mode states its own speeds — the most specific answer available.
+    for (const speed of modeSpeeds) {
       allSpeeds.add(speed);
     }
-  }
+  } else {
+    // No mode was named, or the named one does not enumerate its speeds: fall back to what the device says overall.
 
-  // Also check per-mode fanSpeeds (future-proofing)
-  for (const modeCaps of Object.values(supportedCaps.modes)) {
-    for (const speed of modeCaps.fanSpeeds ?? []) {
-      allSpeeds.add(speed);
+    // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
+    if (supportedCaps.fanSpeeds) {
+      for (const speed of supportedCaps.fanSpeeds) {
+        allSpeeds.add(speed);
+      }
+    }
+
+    // Also check per-mode fanSpeeds (future-proofing)
+    for (const modeCaps of Object.values(supportedCaps.modes)) {
+      for (const speed of modeCaps.fanSpeeds ?? []) {
+        allSpeeds.add(speed);
+      }
     }
   }
 
@@ -227,6 +247,8 @@ export class Thermostat {
           min_temp: mysaDevice.MinSetpoint,
           max_temp: mysaDevice.MaxSetpoint,
           modes: isAC ? HA_AC_MODES : HA_HEAT_ONLY_MODES,
+          // Home Assistant's fan_modes list is fixed at discovery time, so it has to be the union across every mode.
+          // Where a mode accepts fewer speeds, the command handler below rejects the difference.
           fan_modes: isAC ? buildFanModes(mysaDevice.SupportedCaps) : undefined,
           precision: is_celsius ? 0.1 : 1.0,
           temp_step: is_celsius ? 0.5 : 1.0,
@@ -296,17 +318,21 @@ export class Thermostat {
 
           case 'fan_mode_command_topic': {
             const messageAsMode = message as MysaFanSpeedMode;
-            const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps);
+            const currentMode = this.mqttClimate.currentMode as MysaDeviceMode | undefined;
+            const supportedModes = buildFanModes(this.mysaDevice.SupportedCaps, currentMode);
             if (!supportedModes.includes(messageAsMode)) {
-              // Ignore unsupported fan modes entirely; forwarding them would omit fanSpeed but
+              // Discovery advertises the union of every mode's speeds, so Home Assistant can offer one the
+              // *current* mode does not accept. Ignore it entirely; forwarding it would omit fanSpeed but
               // still reapply the current temperature/mode, which is not a no-op.
+              this.logger.warn('Ignoring a fan mode the current device mode does not support', {
+                deviceId: this.mysaDevice.Id,
+                fanMode: messageAsMode,
+                mode: currentMode,
+                supportedFanModes: supportedModes
+              });
               break;
             }
-            await this.setDeviceState(
-              this.mqttClimate.targetTemperature,
-              this.mqttClimate.currentMode as MysaDeviceMode,
-              messageAsMode
-            );
+            await this.setDeviceState(this.mqttClimate.targetTemperature, currentMode, messageAsMode);
             break;
           }
         }
