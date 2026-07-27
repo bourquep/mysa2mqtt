@@ -102,6 +102,8 @@ const REALTIME_RETRY_MAX_EXPONENT = Math.ceil(Math.log2(REALTIME_RETRY_MAX_DELAY
  *
  *   - No SupportedCaps at all → expose all modes (we have no data, so be permissive)
  *   - A `mode` was given and that mode enumerates fanSpeeds → expose exactly those speeds
+ *   - A `mode` was given but enumerates none → expose the device-wide fanSpeeds, matching what the SDK will send for that
+ *       mode; a wider union would accept speeds the SDK then rejects
  *   - SupportedCaps present with fanSpeeds → expose exactly those speeds
  *   - SupportedCaps present, no fanSpeeds, but the FanSpeed key IS in `keys` → the device supports multi-speed control but
  *       doesn't enumerate its speeds (e.g. AC-V1-0 with a configured brand whose generic IR code set omits
@@ -117,14 +119,25 @@ export function buildFanModes(supportedCaps: SupportedCaps | undefined, mode?: M
 
   const rawMode = mode !== undefined ? DEVICE_MODE_TO_MYSA_RAW_MODE[mode] : undefined;
   const modeSpeeds = rawMode !== undefined ? supportedCaps.modes[rawMode]?.fanSpeeds : undefined;
+  // Raw values this bridge cannot name are dropped by the filter at the end of this function. Were they left in
+  // here, a mode enumerating nothing else would produce an empty list and reject every fan-speed command for
+  // that mode; ignore them and fall back instead, the way the SDK's send map does.
+  const namedModeSpeeds = modeSpeeds?.filter((speed) => MYSA_RAW_FAN_SPEED_TO_FAN_SPEED_MODE[speed] !== undefined);
 
-  if (modeSpeeds && modeSpeeds.length > 0) {
+  if (namedModeSpeeds && namedModeSpeeds.length > 0) {
     // The requested mode states its own speeds — the most specific answer available.
-    for (const speed of modeSpeeds) {
+    for (const speed of namedModeSpeeds) {
+      allSpeeds.add(speed);
+    }
+  } else if (mode !== undefined && supportedCaps.fanSpeeds && supportedCaps.fanSpeeds.length > 0) {
+    // A mode was named, but says nothing usable about its own speeds. The SDK builds this device's send map from
+    // the device-wide list alone, so validating against a wider union would accept speeds it then rejects.
+    for (const speed of supportedCaps.fanSpeeds) {
       allSpeeds.add(speed);
     }
   } else {
-    // No mode was named, or the named one does not enumerate its speeds: fall back to what the device says overall.
+    // Discovery, where no mode is named and Home Assistant's fixed fan_modes list has to cover every mode; or a
+    // device with no device-wide list to fall back on. Take everything the device reports.
 
     // Check top-level fanSpeeds first (API returns this for CodeNum=1117 devices)
     if (supportedCaps.fanSpeeds) {

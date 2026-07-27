@@ -49,6 +49,31 @@ describe('buildFanModes', () => {
     expect(buildFanModes(caps, 'dry')).toEqual(['auto', 'low', 'medium', 'high']);
   });
 
+  it('ignores a per-mode list of unrecognized values rather than rejecting every speed', () => {
+    const caps: SupportedCaps = {
+      ...AC_V1_0_CAPS,
+      modes: { ...AC_V1_0_CAPS.modes, 4: { temperatures: [20], fanSpeeds: [91, 92] } }
+    };
+
+    // Carrying 91/92 through would leave nothing after the raw-value filter, and an empty list rejects every
+    // fan-speed command for the mode. The SDK's send map falls through in the same situation.
+    expect(buildFanModes(caps, 'cool')).toEqual(['auto', 'low', 'medium', 'high']);
+  });
+
+  it('prefers the device-wide list alone for a mode that enumerates none, matching the SDK send map', () => {
+    const caps: SupportedCaps = {
+      tempRange: [16, 30],
+      version: '1.2',
+      keys: [3, 4],
+      fanSpeeds: [1, 2, 4],
+      modes: { 4: { temperatures: [20] }, 5: { temperatures: [25], fanSpeeds: [7] } }
+    };
+
+    // `high` comes only from fan-only. Advertising it for cool would pass validation here and then fail in the
+    // SDK, which builds cool's send map from the device-wide list alone.
+    expect(buildFanModes(caps, 'cool')).toEqual(['auto', 'low', 'medium']);
+  });
+
   it('falls back to the device-wide union for a mode the device does not report at all', () => {
     expect(buildFanModes(AC_V1_0_CAPS, 'off')).toEqual(['auto', 'low', 'medium', 'high']);
   });
