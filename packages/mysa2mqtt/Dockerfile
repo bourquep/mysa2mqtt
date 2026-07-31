@@ -5,7 +5,7 @@
 # this is an npm workspace: the root lockfile and the sibling packages are both
 # required. Build with:
 #   docker build -f packages/mysa2mqtt/Dockerfile .
-FROM node:24-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN npm run build
 
 ################################################################################
 # Final stage
-FROM node:24-alpine AS final
+FROM node:25-alpine AS final
 
 # Metadata. The release workflow additionally stamps the labels that only a
 # build knows -- version, revision, created -- via docker/metadata-action, and
