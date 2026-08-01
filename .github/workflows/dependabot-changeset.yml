@@ -112,8 +112,14 @@ jobs:
           fi
 
           # Only ever the file this workflow owns; a hand-written changeset
-          # already on the branch is left alone.
-          git add -A -- "$file"
+          # already on the branch is left alone. The guard is not cosmetic:
+          # `git add` exits 128 on a pathspec matching nothing, which is the
+          # most common case of all -- no changeset warranted and none on the
+          # branch. `ls-files` keeps the branch that stages a *deletion*, where
+          # the path is gone from the tree but still in the index.
+          if [ -e "$file" ] || git ls-files --error-unmatch -- "$file" >/dev/null 2>&1; then
+            git add -A -- "$file"
+          fi
           if git diff --cached --quiet; then
             echo 'Changeset already up to date.'
           else
