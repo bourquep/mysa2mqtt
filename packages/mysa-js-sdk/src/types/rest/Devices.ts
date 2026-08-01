@@ -131,8 +131,14 @@ export interface DeviceBase {
   Brand?: BrandInfo;
   /** Optional supported capabilities for AC devices */
   SupportedCaps?: SupportedCaps;
-  /** Optional device code number */
-  CodeNum?: number;
+  /**
+   * Optional device code number, identifying the IR code set an AC controller drives its unit with.
+   *
+   * The REST API reports this as a string (e.g. `"2009"`) even though the value is numeric, and has been observed to do
+   * so for every device. Coerce with `Number()` before comparing — a strict `===` against a numeric literal silently
+   * never matches.
+   */
+  CodeNum?: number | string;
 }
 
 /**

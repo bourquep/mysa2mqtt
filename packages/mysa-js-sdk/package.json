@@ -45,6 +45,8 @@
     "example": "tsx --watch ./example/main.ts",
     "example:raw": "MYSA_OUTPUT_RAW_DATA=true tsx --watch ./example/main.ts",
     "lint": "eslint --max-warnings 0 src/**/*.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsup",
     "build:docs": "typedoc"

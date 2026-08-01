@@ -1,4 +1,5 @@
 import { MysaCredentials } from '@/api/MysaCredentials';
+import { buildFanSpeedSendMap, FanSpeedReceiveMap, ModeSendMap } from '@/lib/DeviceCapabilities';
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
 import { isMsgOutPayload, isMsgTypeOutPayload } from '@/lib/PayloadTypeGuards';
@@ -6,7 +7,7 @@ import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { DeviceBase, Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
+import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserSession } from 'amazon-cognito-identity-js';
@@ -59,66 +60,6 @@ const MqttResetBaseDelay = dayjs.duration(1, 'second');
 const MqttResetMaxDelay = dayjs.duration(30, 'seconds');
 /** How long a connection must stay interrupt-free before the consecutive-reset counter is cleared. */
 const MqttStabilityWindow = dayjs.duration(60, 'seconds');
-
-/** Canonical fan-speed order, matching the positional layout of a device's `SupportedCaps.fanSpeeds`. */
-const CanonicalFanSpeedOrder: MysaFanSpeedMode[] = ['auto', 'low', 'medium', 'high', 'max'];
-
-/** Universal fan-speed `fn` mapping used when a device does not report its own `SupportedCaps.fanSpeeds`. */
-const LegacyFanSpeedSendMap: Record<MysaFanSpeedMode, number> = { auto: 1, low: 3, medium: 5, high: 7, max: 8 };
-
-/**
- * AC-V1-X (`CodeNum` 1117) canonical fan-speed `fn` mapping. These devices use `1/2/4/6` for auto/low/medium/high but
- * frequently omit an explicit `SupportedCaps.fanSpeeds` list, so the legacy `1/3/5/7` map would send `fn` values they
- * ignore. Used as the no-`fanSpeeds` fallback for CodeNum=1117 devices.
- */
-const CanonicalFanSpeedSendMap: Partial<Record<MysaFanSpeedMode, number>> = { auto: 1, low: 2, medium: 4, high: 6 };
-
-/** `CodeNum` for AC-V1-X thermostats that use the canonical `1/2/4/6` fan-speed `fn` values. */
-const CANONICAL_FAN_SPEED_CODE_NUM = 1117;
-
-/**
- * Receive-side `fn`-to-fan-speed mapping. Includes both the legacy universal values (3/5/7) and the AC-V1-X
- * CodeNum=1117 canonical values (2/4/6); the latter are unused by legacy devices, so there is no conflict.
- */
-const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
-  1: 'auto',
-  2: 'low', // CodeNum=1117 canonical low
-  3: 'low', // legacy
-  4: 'medium', // CodeNum=1117 canonical medium
-  5: 'medium', // legacy
-  6: 'high', // CodeNum=1117 canonical high
-  7: 'high', // legacy
-  8: 'max'
-};
-
-/**
- * Builds the send-side fan-speed `fn` mapping for a device.
- *
- * When the device reports `SupportedCaps.fanSpeeds`, its values are zipped positionally with
- * {@link CanonicalFanSpeedOrder} (e.g. `[1, 2, 4, 6]` → `{ auto: 1, low: 2, medium: 4, high: 6 }`). Otherwise, a
- * CodeNum=1117 (AC-V1-X) device uses the {@link CanonicalFanSpeedSendMap} (it uses canonical `fn` values even without
- * enumerating them), and any other device uses the {@link LegacyFanSpeedSendMap}, preserving backward compatibility.
- *
- * @param device - The device to build the mapping for.
- * @returns A partial map from fan-speed mode to the device-specific `fn` value.
- */
-function buildFanSpeedSendMap(device: DeviceBase): Partial<Record<MysaFanSpeedMode, number>> {
-  const fanSpeeds = device.SupportedCaps?.fanSpeeds;
-  if (!fanSpeeds || fanSpeeds.length === 0) {
-    // CodeNum=1117 (AC-V1-X) devices use canonical fn values (1/2/4/6) but frequently omit an explicit
-    // SupportedCaps.fanSpeeds list. The legacy map (1/3/5/7) would send fn values these devices ignore, so
-    // fall back to the canonical map for them; all other no-fanSpeeds devices keep the legacy universal map.
-    return device.CodeNum === CANONICAL_FAN_SPEED_CODE_NUM ? CanonicalFanSpeedSendMap : LegacyFanSpeedSendMap;
-  }
-
-  const map: Partial<Record<MysaFanSpeedMode, number>> = {};
-  CanonicalFanSpeedOrder.forEach((name, index) => {
-    if (index < fanSpeeds.length) {
-      map[name] = fanSpeeds[index];
-    }
-  });
-  return map;
-}
 
 /**
  * Main client for interacting with the Mysa API and real-time device communication.
@@ -509,11 +450,11 @@ export class MysaApiClient {
     const now = dayjs();
 
     this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
-    const modeMap = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
-    const fanSpeedMap = buildFanSpeedSendMap(device);
+    const fanSpeedMap = buildFanSpeedSendMap(device, mode);
 
     // Reject an unsupported fan speed (e.g. 'max' on a device whose SupportedCaps.fanSpeeds only covers auto/low/
-    // medium/high) rather than silently publishing fn: undefined, which the caller would perceive as a no-op.
+    // medium/high, or any speed but 'auto' on an AC-V1-0 in dry mode) rather than silently publishing fn: undefined,
+    // which the caller would perceive as a no-op.
     if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
       throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
     }
@@ -550,7 +491,7 @@ export class MysaApiClient {
           {
             tm: -1,
             sp: setPoint,
-            md: mode ? modeMap[mode] : undefined,
+            md: mode ? ModeSendMap[mode] : undefined,
             fn: fanSpeed ? fanSpeedMap[fanSpeed] : undefined
           }
         ]
