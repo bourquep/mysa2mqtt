@@ -44,9 +44,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Keying the name on the PR number makes the whole step idempotent:
-          # Dependabot force-pushes when a newer version lands, wiping our
-          # commit, and the resulting `synchronize` rewrites this same path.
+          # Keying the name on the PR number makes the whole step idempotent.
+          # Dependabot force-pushes over our commit when a newer version lands
+          # -- it only keeps doing so because the commit message carries
+          # `[dependabot skip]`, see the last step -- and the resulting
+          # `synchronize` rewrites this same path.
           file=".changeset/dependabot-${PR_NUMBER}.md"
 
           merge_base=$(git merge-base "$BASE_SHA" HEAD)
@@ -59,16 +61,19 @@ jobs:
 
           packages=()
 
-          # A runtime dependency of a workspace package. Comparing the whole
-          # `dependencies` object ignores a devDependencies-only bump and picks
-          # up every package when a group update spans several of them.
+          # A runtime dependency of a workspace package. Comparing whole
+          # dependency objects ignores a devDependencies-only bump and picks up
+          # every package when a group update spans several of them. `optional`
+          # and `peer` are in there because they are equally user-visible; no
+          # manifest declares either today, and missing one would be silent.
+          runtime='[.dependencies, .optionalDependencies, .peerDependencies] | map(. // {}) | add'
           while IFS= read -r f; do
             case "$f" in
               packages/*/package.json)
                 [ -f "$f" ] || continue
                 # A package added by this PR has no base revision to read.
-                old=$(git show "$merge_base:$f" 2>/dev/null | jq -Sc '.dependencies // {}') || old='{}'
-                new=$(jq -Sc '.dependencies // {}' "$f")
+                old=$(git show "$merge_base:$f" 2>/dev/null | jq -Sc "$runtime") || old='{}'
+                new=$(jq -Sc "$runtime" "$f")
                 if [ "$old" != "$new" ]; then
                   packages+=("$(jq -r .name "$f")")
                 fi
@@ -123,5 +128,8 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'chore: add changeset for dependency bump'
+          # `[dependabot skip]`: Dependabot stops updating a branch that carries
+          # a commit by anyone else -- this one is authored by github-actions[bot]
+          # -- and this directive is what lets it keep force-pushing over us.
+          git commit -m 'chore: add changeset for dependency bump [dependabot skip]'
           git push origin "HEAD:$HEAD_REF"
