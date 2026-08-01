@@ -1,5 +1,18 @@
 # mysa2mqtt
 
+## 3.0.5
+
+### Patch Changes
+
+- [#234](https://github.com/bourquep/mysa2mqtt/pull/234) [`4152c3f`](https://github.com/bourquep/mysa2mqtt/commit/4152c3f51f0f2be0b3e2f372330d761bdf0db100) Thanks [@vavallee](https://github.com/vavallee)! - Stop forwarding fan-mode commands the thermostat's current mode does not support.
+
+  Home Assistant's `fan_modes` list is fixed when the entity is discovered, so it has to advertise the union of every mode's fan speeds. On a device whose modes differ — an AC-V1-0 offers all four speeds in heat and cool but only `auto` in dry — that means the UI can offer a speed the current mode will not accept. Such a command used to be dropped silently; worse, the fan speed was validated against the union, so a speed valid in _some_ mode was forwarded, and the resulting command reapplied the current temperature and mode without changing the fan.
+
+  Fan-mode commands are now validated against the current mode's own capabilities and a rejected one is logged with the mode and the speeds that mode does support, instead of disappearing.
+
+- Updated dependencies [[`2e6746c`](https://github.com/bourquep/mysa2mqtt/commit/2e6746c48f2f28056564e0235ac5df60053392f4), [`a414f13`](https://github.com/bourquep/mysa2mqtt/commit/a414f13892cad96edeb8cf8d4a9ac0c188a6fd0e), [`4152c3f`](https://github.com/bourquep/mysa2mqtt/commit/4152c3f51f0f2be0b3e2f372330d761bdf0db100)]:
+  - mysa-js-sdk@3.1.4
+
 ## 3.0.4
 
 ### Patch Changes
