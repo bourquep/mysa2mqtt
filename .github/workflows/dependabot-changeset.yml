@@ -1,0 +1,135 @@
+name: 'Dependabot: add changeset'
+
+# Nothing ships without a changeset, and Dependabot does not write one. A
+# runtime bump merged without one sits on main until an unrelated change happens
+# to release that package, so this workflow commits the changeset that used to
+# be added by hand.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-changeset-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changeset:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      # Dependabot-triggered runs get a read-only token unless the workflow asks
+      # for more; this is what lets the changeset be pushed onto the PR branch.
+      # No PAT and no Dependabot secret is involved.
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          # The merge base has to be reachable for the diff below.
+          fetch-depth: 0
+
+      - name: Generate changeset
+        id: generate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Through the environment, never interpolated into the script body: a
+          # PR title that reaches the shell as source is an injection vector.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          # Keying the name on the PR number makes the whole step idempotent.
+          # Dependabot force-pushes over our commit when a newer version lands
+          # -- it only keeps doing so because the commit message carries
+          # `[dependabot skip]`, see the last step -- and the resulting
+          # `synchronize` rewrites this same path.
+          file=".changeset/dependabot-${PR_NUMBER}.md"
+
+          merge_base=$(git merge-base "$BASE_SHA" HEAD)
+
+          # Our own file is excluded so a re-run sees the same file set as the
+          # first run -- the "lockfile only" test below depends on that.
+          changed=$(git diff --name-only "$merge_base" HEAD | grep -vFx "$file" || true)
+          echo "Changed files:"
+          echo "$changed"
+
+          packages=()
+
+          # A runtime dependency of a workspace package. Comparing whole
+          # dependency objects ignores a devDependencies-only bump and picks up
+          # every package when a group update spans several of them. `optional`
+          # and `peer` are in there because they are equally user-visible; no
+          # manifest declares either today, and missing one would be silent.
+          runtime='[.dependencies, .optionalDependencies, .peerDependencies] | map(. // {}) | add'
+          while IFS= read -r f; do
+            case "$f" in
+              packages/*/package.json)
+                [ -f "$f" ] || continue
+                # A package added by this PR has no base revision to read.
+                old=$(git show "$merge_base:$f" 2>/dev/null | jq -Sc "$runtime") || old='{}'
+                new=$(jq -Sc "$runtime" "$f")
+                if [ "$old" != "$new" ]; then
+                  packages+=("$(jq -r .name "$f")")
+                fi
+                ;;
+            esac
+          done <<< "$changed"
+
+          # A new base image reaches users only as a published mysa2mqtt image,
+          # and an image is published only by a release.
+          if grep -qxF 'packages/mysa2mqtt/Dockerfile' <<< "$changed"; then
+            packages+=('mysa2mqtt')
+          fi
+
+          # Transitive and security bumps rewrite only the lockfile: no manifest
+          # to attribute them to, and the lockfile is what the Docker image
+          # installs from. Requiring it to be the *only* change is what keeps a
+          # root devDependencies bump -- package.json *and* lockfile -- out.
+          if [ "$changed" = 'package-lock.json' ]; then
+            packages+=('mysa2mqtt')
+          fi
+
+          if [ ${#packages[@]} -eq 0 ]; then
+            # Also covers a rebase that turned a releasable PR into a
+            # CI-only one: the stale changeset is removed rather than left.
+            echo 'Nothing user-visible in this update; no changeset needed.'
+            rm -f "$file"
+          else
+            printf 'Bumping: %s\n' "${packages[*]}"
+            {
+              echo '---'
+              printf '%s\n' "${packages[@]}" | sort -u | sed "s/.*/'&': patch/"
+              echo '---'
+              echo
+              printf '%s\n' "$PR_TITLE"
+            } > "$file"
+          fi
+
+          # Only ever the file this workflow owns; a hand-written changeset
+          # already on the branch is left alone.
+          git add -A -- "$file"
+          if git diff --cached --quiet; then
+            echo 'Changeset already up to date.'
+          else
+            echo 'commit=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.generate.outputs.commit == 'true'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # `[dependabot skip]`: Dependabot stops updating a branch that carries
+          # a commit by anyone else -- this one is authored by github-actions[bot]
+          # -- and this directive is what lets it keep force-pushing over us.
+          git commit -m 'chore: add changeset for dependency bump [dependabot skip]'
+          git push origin "HEAD:$HEAD_REF"

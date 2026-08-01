@@ -116,7 +116,9 @@ Guidance:
 - **Usually omit `mysa2mqtt` when only a library changed** — it is bumped automatically as a dependent, and adding a
   redundant entry produces noisy changelogs.
 - Refactors, CI changes and docs need no changeset.
-- Dependency bumps affecting a **runtime** dependency should get a `patch` changeset added by hand.
+- Dependency bumps affecting a **runtime** dependency need a `patch` changeset. On a Dependabot PR the
+  `Dependabot: add changeset` workflow commits one; replace it by hand if the bump warrants more than a patch or a real
+  release note. Bumps with no runtime impact — root dev dependencies, GitHub Actions — get none.
 
 Merging to `main` publishes nothing. It opens a "chore: version packages" PR; publishing happens when a maintainer
 merges that. Do not attempt to publish, tag, or trigger a release.

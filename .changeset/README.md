@@ -13,6 +13,8 @@ We have a quick list of common questions to get you started engaging with this p
 - `mysa2mqtt` usually does **not** need its own changeset when only a library changed — it is bumped
   automatically because it depends on `mysa-js-sdk` and `mqtt2ha` (see `updateInternalDependencies`
   in `config.json`).
-- Dependency-bump PRs do not get a changeset automatically. If a bump affects a **runtime**
-  dependency, add a `patch` changeset by hand so it reaches users.
+- Dependabot PRs get their changeset from the `Dependabot: add changeset` workflow: a `patch` for
+  each package whose **runtime** dependencies changed, for a `mysa2mqtt` Dockerfile bump, and for a
+  lockfile-only security bump. Replace it by hand if the update warrants more than a patch or a real
+  release note. Bumps with no runtime impact — root dev dependencies, GitHub Actions — get none.
 - Releases happen when the **Version Packages** PR is merged, not when you push to `main`.
