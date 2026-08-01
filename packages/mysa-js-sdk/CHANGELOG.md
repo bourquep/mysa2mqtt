@@ -1,5 +1,23 @@
 # mysa-js-sdk
 
+## 3.1.4
+
+### Patch Changes
+
+- [#238](https://github.com/bourquep/mysa2mqtt/pull/238) [`2e6746c`](https://github.com/bourquep/mysa2mqtt/commit/2e6746c48f2f28056564e0235ac5df60053392f4) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/credential-providers from 3.1094.0 to 3.1097.0
+
+- [#240](https://github.com/bourquep/mysa2mqtt/pull/240) [`a414f13`](https://github.com/bourquep/mysa2mqtt/commit/a414f13892cad96edeb8cf8d4a9ac0c188a6fd0e) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1094.0 to 3.1097.0
+
+- [#234](https://github.com/bourquep/mysa2mqtt/pull/234) [`4152c3f`](https://github.com/bourquep/mysa2mqtt/commit/4152c3f51f0f2be0b3e2f372330d761bdf0db100) Thanks [@vavallee](https://github.com/vavallee)! - Send fan-speed commands the device actually accepts in its current mode.
+
+  An AC thermostat can accept different fan speeds per mode: an AC-V1-0 driving a mini-split offers auto/low/medium/high in heat and cool, but only `auto` in auto and dry, and only low/medium/high in fan-only. The send map was built from the device-wide `SupportedCaps.fanSpeeds` alone, so a command was mapped identically in every mode. `setDeviceState` now prefers the target mode's own `SupportedCaps.modes[md].fanSpeeds` list, and rejects a speed that mode does not support with `UnsupportedFanSpeedError` instead of publishing an `fn` value the unit ignores.
+
+  Per-mode lists are mapped by value rather than by position. A mode that omits a speed — fan-only reporting `3, 5, 7`, with no `auto` — would otherwise have every speed shifted by one when zipped against the canonical order, so asking for `auto` would have set the fan to low. Devices that publish only a device-wide list keep the positional reading, which is how that list is defined.
+
+  Devices with per-mode lists but no device-wide list previously fell through to the universal legacy mapping. They now use their own reported values.
+
+  Also fixes the `CodeNum` comparison that selects the canonical `1/2/4/6` fan-speed mapping for AC-V1-X thermostats. The REST API reports `CodeNum` as a string (e.g. `"2009"`), so a strict `===` against the numeric literal `1117` never matched and those devices silently fell back to the legacy `1/3/5/7` values, which they ignore. The comparison is now numeric, and `DeviceBase.CodeNum` is typed `number | string` to match what the API returns.
+
 ## 3.1.3
 
 ### Patch Changes
