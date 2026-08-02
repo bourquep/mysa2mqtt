@@ -77,7 +77,7 @@ export const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
  * Receive-side `trackedSnsr`-to-sensor mapping for in-floor heating thermostats (`INF-V1-0`). Any other raw value is
  * left unmapped rather than guessed at, so an unrecognized selection reads as "not reported".
  */
-export const TrackedSensorReceiveMap: Record<number, MysaTrackedSensor> = {
+export const TrackedSensorReceiveMap: Partial<Record<number, MysaTrackedSensor>> = {
   3: 'floor',
   5: 'ambient'
 };

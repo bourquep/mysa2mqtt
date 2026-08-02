@@ -695,6 +695,10 @@ export class Thermostat {
 
     // Track both before publishing: the device's sensor selection decides which reading the climate entity gets, and
     // the probe reading has to outlive this message so a later REST poll cannot revert the entity to ambient.
+    //
+    // Both are guarded rather than assigned unconditionally, for the same reason the fan-mode update in
+    // handleMysaStateChange is: a field missing from one message means "not reported", not "unset". Overwriting with
+    // undefined would drop the climate entity to ambient for a single cycle and flap back on the next status.
     if (status.trackedSensor !== undefined) {
       this.reportedTrackedSensor = status.trackedSensor;
     }
