@@ -1,3 +1,5 @@
+import { MysaTrackedSensor } from '@/api/MysaTrackedSensor';
+
 /**
  * Interface representing the current status of a Mysa device.
  *
@@ -19,4 +21,10 @@ export interface Status {
   dutyCycle?: number;
   /** Optional floor-probe temperature reading, reported only by in-floor heating thermostats (INF-V1-0) */
   floorTemperature?: number;
+  /**
+   * Which sensor the device regulates against, as selected by the owner in the Mysa app. Reported only by in-floor
+   * heating thermostats (INF-V1-0), which have both an ambient sensor and a floor probe; undefined for every other
+   * device family, and for an in-floor unit reporting a selection this SDK does not recognize.
+   */
+  trackedSensor?: MysaTrackedSensor;
 }

@@ -37,6 +37,7 @@ import {
   MysaApiClient,
   MysaDeviceMode,
   MysaFanSpeedMode,
+  MysaTrackedSensor,
   StateChange,
   Status,
   SupportedCaps
@@ -178,6 +179,29 @@ export function buildFanModes(supportedCaps: SupportedCaps | undefined, mode?: M
   );
 }
 
+/**
+ * Decides which temperature sensor drives a thermostat's climate entity.
+ *
+ * Only in-floor units (`INF-V1-0`) have a floor probe, so every other family is always ambient. For an in-floor unit,
+ * follow the sensor the device reports it regulates against, which mirrors the choice its owner made in the Mysa app.
+ *
+ * @param isInFloor - Whether this is an in-floor heating thermostat.
+ * @param reportedTrackedSensor - The sensor the device last reported regulating against. Only ever arrives on realtime
+ *   status messages, so it is undefined until the first one lands — and stays undefined on accounts where the realtime
+ *   stream never connects at all, which is why this falls back to ambient rather than blocking.
+ * @returns The sensor whose reading the climate entity should publish.
+ */
+export function resolveTemperatureSource(
+  isInFloor: boolean,
+  reportedTrackedSensor: MysaTrackedSensor | undefined
+): MysaTrackedSensor {
+  if (!isInFloor) {
+    return 'ambient';
+  }
+
+  return reportedTrackedSensor ?? 'ambient';
+}
+
 export class Thermostat {
   private isStarted = false;
   private realtimeGeneration = 0;
@@ -206,6 +230,15 @@ export class Thermostat {
   };
 
   private readonly deviceType: DeviceType;
+
+  /** True for in-floor heating thermostats (INF-V1-0), the only family with a floor probe. */
+  private readonly isInFloor: boolean;
+  /** The sensor the device last reported regulating against. Undefined until a realtime status message arrives. */
+  private reportedTrackedSensor: MysaTrackedSensor | undefined;
+  /** Latest floor-probe reading, retained so a REST poll cannot drop the climate entity back to the ambient sensor. */
+  private lastFloorTemperature: number | undefined;
+  /** Guards {@link resolveCurrentTemperature}'s fallback warning, which would otherwise repeat on every update. */
+  private warnedAboutMissingFloorTemperature = false;
 
   constructor(
     public readonly mysaApiClient: MysaApiClient,
@@ -244,6 +277,7 @@ export class Thermostat {
     // models, which report `Current` natively today.
     const isV2 = /-v2-/i.test(mysaDevice.Model);
     const isInFloor = /^INF-/i.test(mysaDevice.Model);
+    this.isInFloor = isInFloor;
     const needsHeaterWatts = isV2 || isInFloor;
     const canReportPower = !isAC && (!needsHeaterWatts || heaterWatts != null);
 
@@ -511,7 +545,7 @@ export class Thermostat {
    * @param state - This device's entry from a `getDeviceStates` response.
    */
   private async publishRestState(state: DeviceState): Promise<void> {
-    this.mqttClimate.currentTemperature = state.CorrectedTemp?.v;
+    this.mqttClimate.currentTemperature = this.resolveCurrentTemperature(state.CorrectedTemp?.v);
     this.mqttClimate.currentHumidity = state.Humidity?.v;
     this.mqttClimate.currentMode =
       MYSA_RAW_MODE_TO_DEVICE_MODE[state.TstatMode?.v as number] ?? this.mqttClimate.currentMode;
@@ -545,6 +579,47 @@ export class Thermostat {
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttFloorTemperature?.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
+  }
+
+  /**
+   * Whether the climate entity reports the floor probe rather than the ambient air sensor.
+   *
+   * @returns True when the climate entity should report the floor probe.
+   */
+  private get usesFloorTemperature(): boolean {
+    return resolveTemperatureSource(this.isInFloor, this.reportedTrackedSensor) === 'floor';
+  }
+
+  /**
+   * Picks the reading to publish as the climate entity's current temperature.
+   *
+   * The **Current temperature** and **Floor temperature** sensors are unaffected: each keeps reporting its own probe
+   * regardless of which one drives the climate entity.
+   *
+   * @param ambientTemperature - The ambient air reading from the status message or REST poll being applied.
+   * @returns The floor-probe reading when this thermostat tracks the floor, otherwise the ambient reading.
+   */
+  private resolveCurrentTemperature(ambientTemperature: number | undefined): number | undefined {
+    if (!this.usesFloorTemperature) {
+      return ambientTemperature;
+    }
+
+    if (this.lastFloorTemperature == null) {
+      // Practically unreachable: a device reporting that it regulates against the floor sends the probe reading in the
+      // same message, and the two fields are only independently optional in the payload types. Fall back to ambient
+      // rather than blanking the entity out, but say so once in case some firmware really does split them.
+      if (!this.warnedAboutMissingFloorTemperature) {
+        this.warnedAboutMissingFloorTemperature = true;
+        this.logger.warn(
+          'Device reports that it regulates against the floor probe but has never sent a floor temperature; using the ambient temperature instead',
+          { deviceId: this.mysaDevice.Id, model: this.mysaDevice.Model }
+        );
+      }
+
+      return ambientTemperature;
+    }
+
+    return this.lastFloorTemperature;
   }
 
   private async setDeviceState(setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode): Promise<void> {
@@ -618,8 +693,17 @@ export class Thermostat {
       return;
     }
 
+    // Track both before publishing: the device's sensor selection decides which reading the climate entity gets, and
+    // the probe reading has to outlive this message so a later REST poll cannot revert the entity to ambient.
+    if (status.trackedSensor !== undefined) {
+      this.reportedTrackedSensor = status.trackedSensor;
+    }
+    if (status.floorTemperature != null) {
+      this.lastFloorTemperature = status.floorTemperature;
+    }
+
     this.mqttClimate.currentAction = this.computeCurrentAction(status.current, status.dutyCycle);
-    this.mqttClimate.currentTemperature = status.temperature;
+    this.mqttClimate.currentTemperature = this.resolveCurrentTemperature(status.temperature);
     this.mqttClimate.currentHumidity = status.humidity;
     this.mqttClimate.targetTemperature = this.mqttClimate.currentMode !== 'off' ? status.setPoint : undefined;
 
