@@ -1,8 +1,7 @@
 # mysa2mqtt
 
 <!-- ALL-CONTRIBUTORS-BADGE:START - Do not remove or modify this section -->
-
-[![All Contributors](https://img.shields.io/badge/all_contributors-7-orange.svg?style=flat-square)](#contributors-)
+[![All Contributors](https://img.shields.io/badge/all_contributors-8-orange.svg?style=flat-square)](#contributors-)
 <!-- ALL-CONTRIBUTORS-BADGE:END -->
 
 [![NPM Version](https://img.shields.io/npm/v/mysa2mqtt)](https://www.npmjs.com/package/mysa2mqtt)
@@ -89,6 +88,9 @@ Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/d
       <td align="center" valign="top" width="14.28%"><a href="http://olicarbo.me"><img src="https://avatars.githubusercontent.com/u/1908784?v=4?s=100" width="100px;" alt="Olivier Carbonneau"/><br /><sub><b>Olivier Carbonneau</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=olicarbo" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://element26.net"><img src="https://avatars.githubusercontent.com/u/7200365?v=4?s=100" width="100px;" alt="Daniel Caspi"/><br /><sub><b>Daniel Caspi</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=dxdc" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/souvik101990"><img src="https://avatars.githubusercontent.com/u/247682655?v=4?s=100" width="100px;" alt="souvik101990"/><br /><sub><b>souvik101990</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=souvik101990" title="Code">💻</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/mhlas7"><img src="https://avatars.githubusercontent.com/u/3398654?v=4?s=100" width="100px;" alt="mhlas7"/><br /><sub><b>mhlas7</b></sub></a><br /><a href="https://github.com/bourquep/mysa2mqtt/commits?author=mhlas7" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
