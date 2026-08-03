@@ -28,6 +28,7 @@ import {
   Logger,
   MqttSettings,
   OriginConfiguration,
+  Select,
   Sensor
 } from 'mqtt2ha';
 import {
@@ -202,6 +203,35 @@ export function resolveTemperatureSource(
   return reportedTrackedSensor ?? 'ambient';
 }
 
+/**
+ * The label the temperature-source select entity shows for each sensor, in the order Home Assistant lists them.
+ *
+ * A Home Assistant select has no separate display name for an option, so these labels are also the entity's state. They
+ * are capitalized for presentation and therefore differ from the SDK's lowercase {@link MysaTrackedSensor} values, which
+ * every published state and accepted command has to be translated through.
+ */
+export const TEMPERATURE_SOURCE_LABELS: Record<MysaTrackedSensor, string> = {
+  ambient: 'Ambient',
+  floor: 'Floor'
+};
+
+/**
+ * Parses a temperature-source command payload received from Home Assistant.
+ *
+ * The select component hands its callback the raw message even when it is not one of the configured options — it warns
+ * and drops the value from its own state, then invokes the callback regardless — so the payload has to be validated
+ * here before anything is sent to the thermostat. Matching is exact, labels included: Home Assistant only ever sends
+ * back a string it was given in `options`.
+ *
+ * @param message - The raw payload published to the command topic.
+ * @returns The requested sensor, or undefined when the payload is not one this entity offers.
+ */
+export function parseTemperatureSource(message: string): MysaTrackedSensor | undefined {
+  return (Object.keys(TEMPERATURE_SOURCE_LABELS) as MysaTrackedSensor[]).find(
+    (trackedSensor) => TEMPERATURE_SOURCE_LABELS[trackedSensor] === message
+  );
+}
+
 export class Thermostat {
   private isStarted = false;
   private realtimeGeneration = 0;
@@ -213,6 +243,10 @@ export class Thermostat {
   private readonly mqttTemperature: Sensor;
   /** Floor-probe temperature, published only for in-floor heating thermostats (INF-V1-0). */
   private readonly mqttFloorTemperature: Sensor | undefined;
+  /** Chooses which sensor the thermostat regulates against. In-floor heating thermostats (INF-V1-0) only. */
+  private readonly mqttTemperatureSource: Select | undefined;
+  /** Set instead of {@link mqttTemperatureSource} on devices with one sensor, to retire a previously published entity. */
+  private readonly mqttRetiredTemperatureSource: Select | undefined;
   private readonly mqttHumidity: Sensor;
   private readonly mqttPower: Sensor | undefined;
   /** Set instead of {@link mqttPower} when this device cannot report power, to retire a previously published entity. */
@@ -424,6 +458,30 @@ export class Thermostat {
         })
       : undefined;
 
+    // Built unconditionally so a device that should not expose it can still clear a config published by an earlier
+    // run — the discovery topic is retained, so an entity left behind never disappears on its own.
+    const temperatureSourceSelect = new Select(
+      {
+        mqtt: this.mqttSettings,
+        logger: this.logger,
+        component: {
+          component: 'select',
+          device: this.mqttDevice,
+          origin: this.mqttOrigin,
+          unique_id: `mysa_${mysaDevice.Id}_temperature_source`,
+          name: 'Temperature source',
+          options: Object.values(TEMPERATURE_SOURCE_LABELS),
+          entity_category: 'config'
+        }
+      },
+      async (_topic, message) => {
+        await this.handleTemperatureSourceCommand(message);
+      }
+    );
+
+    this.mqttTemperatureSource = isInFloor ? temperatureSourceSelect : undefined;
+    this.mqttRetiredTemperatureSource = isInFloor ? undefined : temperatureSourceSelect;
+
     this.mqttHumidity = new Sensor({
       mqtt: this.mqttSettings,
       logger: this.logger,
@@ -496,6 +554,14 @@ export class Thermostat {
         await this.mqttPower.writeConfig();
       }
       await this.mqttRetiredPower?.removeConfig();
+
+      // The device only reports its selection over the realtime stream, so publish 'None' ahead of the discovery
+      // config rather than let a retained value from an earlier run stand in for a reading we do not have yet.
+      if (this.mqttTemperatureSource != null) {
+        await this.mqttTemperatureSource.setState('state_topic', 'None');
+        await this.mqttTemperatureSource.writeConfig();
+      }
+      await this.mqttRetiredTemperatureSource?.removeConfig();
 
       this.mysaApiClient.emitter.on('statusChanged', this.mysaStatusUpdateHandler);
       this.mysaApiClient.emitter.on('stateChanged', this.mysaStateChangeHandler);
@@ -579,6 +645,8 @@ export class Thermostat {
     await this.mqttTemperature.setState('state_topic', 'None');
     await this.mqttFloorTemperature?.setState('state_topic', 'None');
     await this.mqttHumidity.setState('state_topic', 'None');
+    // 'None' is not one of the configured options, so setSelectedOption would warn and drop it.
+    await this.mqttTemperatureSource?.setState('state_topic', 'None');
   }
 
   /**
@@ -620,6 +688,56 @@ export class Thermostat {
     }
 
     return this.lastFloorTemperature;
+  }
+
+  /**
+   * Applies a temperature-source command from Home Assistant.
+   *
+   * The select component applies the requested option to its own state before this runs and never reverts it — it has
+   * no optimistic flag to turn off — so both the rejection and the failure path have to republish the truth explicitly,
+   * or Home Assistant is left showing a selection the thermostat never accepted.
+   *
+   * @param message - The raw payload published to the command topic.
+   */
+  private async handleTemperatureSourceCommand(message: string): Promise<void> {
+    const requested = parseTemperatureSource(message);
+
+    if (requested === undefined) {
+      this.logger.warn('Ignoring an unrecognized temperature source command', {
+        deviceId: this.mysaDevice.Id,
+        message
+      });
+      await this.republishTemperatureSource();
+      return;
+    }
+
+    try {
+      await this.mysaApiClient.setTrackedSensor(this.mysaDevice.Id, requested);
+    } catch (error) {
+      this.logger.error('Failed to change the tracked sensor', {
+        error,
+        deviceId: this.mysaDevice.Id,
+        trackedSensor: requested
+      });
+      await this.republishTemperatureSource();
+    }
+  }
+
+  /**
+   * Republishes the sensor the device last reported regulating against, discarding whatever the select entity is
+   * currently showing.
+   *
+   * Publishes nothing but `'None'` when no selection has been reported yet. Unlike {@link resolveTemperatureSource},
+   * which must pick some temperature for the climate entity to display, this entity reports the device's own setting
+   * and must not invent one.
+   */
+  private async republishTemperatureSource(): Promise<void> {
+    if (this.reportedTrackedSensor === undefined) {
+      await this.mqttTemperatureSource?.setState('state_topic', 'None');
+      return;
+    }
+
+    await this.mqttTemperatureSource?.setSelectedOption(TEMPERATURE_SOURCE_LABELS[this.reportedTrackedSensor]);
   }
 
   private async setDeviceState(setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode): Promise<void> {
@@ -701,6 +819,9 @@ export class Thermostat {
     // undefined would drop the climate entity to ambient for a single cycle and flap back on the next status.
     if (status.trackedSensor !== undefined) {
       this.reportedTrackedSensor = status.trackedSensor;
+      // Republished on every status rather than only on change: the device reports its selection every few seconds,
+      // so this is what pulls the select entity back into line after a lost write or a change made in the Mysa app.
+      await this.mqttTemperatureSource?.setSelectedOption(TEMPERATURE_SOURCE_LABELS[status.trackedSensor]);
     }
     if (status.floorTemperature != null) {
       this.lastFloorTemperature = status.floorTemperature;
@@ -727,6 +848,13 @@ export class Thermostat {
   private async handleMysaStateChange(state: StateChange) {
     if (!this.isStarted || state.deviceId !== this.mysaDevice.Id) {
       return;
+    }
+
+    // The device acknowledges a tracked-sensor change here, about a second after the command and well ahead of the
+    // next periodic status, so this is what makes the select entity feel responsive.
+    if (state.trackedSensor !== undefined) {
+      this.reportedTrackedSensor = state.trackedSensor;
+      await this.mqttTemperatureSource?.setSelectedOption(TEMPERATURE_SOURCE_LABELS[state.trackedSensor]);
     }
 
     switch (state.mode) {

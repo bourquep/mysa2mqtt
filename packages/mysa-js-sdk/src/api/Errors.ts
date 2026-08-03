@@ -78,6 +78,26 @@ export class UnsupportedFanSpeedError extends Error {
   }
 }
 
+/** Error thrown when a device has no selectable temperature sensor to track. */
+export class UnsupportedTrackedSensorError extends Error {
+  /**
+   * Creates a new UnsupportedTrackedSensorError instance.
+   *
+   * @param deviceId - The id of the device the command was aimed at.
+   * @param model - The device's model, which determines whether it has a floor probe at all.
+   */
+  constructor(
+    public readonly deviceId: string,
+    public readonly model: string
+  ) {
+    super(
+      `Device '${deviceId}' (model '${model}') has no selectable temperature sensor. Only in-floor heating ` +
+        `thermostats (INF-V1-0) have both an ambient sensor and a floor probe.`
+    );
+    this.name = 'UnsupportedTrackedSensorError';
+  }
+}
+
 /** Error thrown when an MQTT publish ultimately fails after retry attempts. */
 export class MqttPublishError extends Error {
   /**

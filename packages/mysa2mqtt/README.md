@@ -188,18 +188,24 @@ A few things to be aware of:
 ### In-floor temperature source
 
 In-floor thermostats (`INF-V1-0`) have two temperature sensors: an ambient air sensor in the wall unit and a probe
-embedded in the floor. The Mysa app lets you choose which one the thermostat regulates against, and **mysa2mqtt follows
-that choice automatically** — pick the floor probe in the app and the **Thermostat** entity's current temperature
-becomes the floor reading, with no configuration needed here.
+embedded in the floor. Which one the thermostat regulates against is a device setting, and mysa2mqtt exposes it as a
+**Temperature source** dropdown with two options, `Ambient` and `Floor`.
+
+Changing it in Home Assistant changes it on the thermostat, exactly as the Mysa app does — this is the real setting, not
+a display preference, so it also changes what the device heats to. Changing it in the app instead updates the dropdown
+within a few seconds. The **Thermostat** entity's current temperature follows the selection either way.
 
 A few things to be aware of:
 
 - Only the **Thermostat** (climate) entity's current temperature changes. The **Current temperature** and **Floor
   temperature** sensors are unaffected: each keeps reporting its own probe, so no history is lost either way.
-- The device only reports its selection on real-time status messages. Until the first one arrives after startup — and on
-  accounts where the real-time connection never establishes at all, such as all-Lite fleets kept current by the REST
-  poll alone — the ambient reading is used.
-- Changing the setting in the Mysa app is picked up on the next status message; there is nothing to restart.
+- The device only reports its selection on real-time status messages. Until the first one arrives after startup, the
+  dropdown reads unknown and the ambient reading is used. On accounts where the real-time connection never establishes
+  at all — such as all-Lite fleets, kept current by the REST poll alone — the setting cannot be read or changed, since
+  the REST API does not carry it.
+- The dropdown always converges on what the thermostat reports. If a change does not reach the device, it reverts within
+  a few seconds rather than sitting on a value that was never applied.
+- Only in-floor thermostats get this entity; every other model has a single sensor and nothing to choose between.
 
 ## Usage Examples
 

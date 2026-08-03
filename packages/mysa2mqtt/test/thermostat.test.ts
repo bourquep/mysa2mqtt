@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 // credential options are absent — which they are under vitest.
 vi.mock('@/options', () => ({ version: '0.0.0-test' }));
 
-const { buildFanModes, resolveTemperatureSource } = await import('@/thermostat');
+const { buildFanModes, parseTemperatureSource, resolveTemperatureSource, TEMPERATURE_SOURCE_LABELS } =
+  await import('@/thermostat');
 
 /**
  * `SupportedCaps` as actually reported by an AC-V1-0 driving a DAIKIN mini-split (caps version 1.2). No device-wide
@@ -111,5 +112,28 @@ describe('resolveTemperatureSource', () => {
     // Baseboard V2 units share the status message type that carries the selection, but never populate the field.
     expect(resolveTemperatureSource(false, undefined)).toBe('ambient');
     expect(resolveTemperatureSource(false, 'floor')).toBe('ambient');
+  });
+});
+
+describe('temperature source labels', () => {
+  it('advertises capitalized labels', () => {
+    expect(TEMPERATURE_SOURCE_LABELS).toEqual({ ambient: 'Ambient', floor: 'Floor' });
+  });
+
+  it('parses back every label it publishes', () => {
+    // The invariant that matters: Home Assistant only ever echoes a string from `options`, and setSelectedOption
+    // silently drops anything outside that list. If the two sides ever diverge the entity stops working entirely.
+    for (const trackedSensor of ['ambient', 'floor'] as const) {
+      expect(parseTemperatureSource(TEMPERATURE_SOURCE_LABELS[trackedSensor])).toBe(trackedSensor);
+    }
+  });
+
+  it('rejects anything that is not an advertised label', () => {
+    // The select component hands its callback the raw payload even when it is not a configured option, so these all
+    // reach this function. Passing one through would publish a command with no sensor set. The lowercase spellings
+    // are the SDK's own MysaTrackedSensor values — close enough to the labels to be worth pinning down.
+    for (const payload of ['', ' ', 'floor', 'ambient', 'FLOOR', 'None', 'null', 'true', '3', 'Floor ', '{"tr":3}']) {
+      expect(parseTemperatureSource(payload)).toBeUndefined();
+    }
   });
 });

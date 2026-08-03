@@ -31,6 +31,12 @@ export interface DeviceStateChange extends MsgPayload<OutMessageType.DEVICE_STAT
       sp: number;
       /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
       fn?: number;
+      /**
+       * Optional sensor the thermostat regulates against (3 = floor probe, 5 = ambient air). Reported by in-floor
+       * heating thermostats (INF-V1-0) only, and echoed here as soon as the selection changes — ahead of the next
+       * periodic status message.
+       */
+      tr?: number;
     };
     /** Success indicator for the state change operation (1 = success, 0 = failure) */
     success: number;
