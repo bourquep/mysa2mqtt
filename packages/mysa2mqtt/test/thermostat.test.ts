@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 // credential options are absent — which they are under vitest.
 vi.mock('@/options', () => ({ version: '0.0.0-test' }));
 
-const { buildFanModes } = await import('@/thermostat');
+const { buildFanModes, resolveTemperatureSource } = await import('@/thermostat');
 
 /**
  * `SupportedCaps` as actually reported by an AC-V1-0 driving a DAIKIN mini-split (caps version 1.2). No device-wide
@@ -92,5 +92,24 @@ describe('buildFanModes', () => {
     const caps: SupportedCaps = { tempRange: [16, 30], version: '1.2', keys: [3], modes: {} };
 
     expect(buildFanModes(caps)).toEqual(['auto']);
+  });
+});
+
+describe('resolveTemperatureSource', () => {
+  it('follows the sensor an in-floor thermostat reports regulating against', () => {
+    expect(resolveTemperatureSource(true, 'floor')).toBe('floor');
+    expect(resolveTemperatureSource(true, 'ambient')).toBe('ambient');
+  });
+
+  it('uses ambient for an in-floor thermostat that has not reported a selection yet', () => {
+    // The selection only rides along on realtime status messages, which have not arrived at startup and never arrive
+    // at all on accounts whose realtime stream cannot connect. Ambient is the pre-existing behaviour.
+    expect(resolveTemperatureSource(true, undefined)).toBe('ambient');
+  });
+
+  it('never reports floor for a device that has no floor probe', () => {
+    // Baseboard V2 units share the status message type that carries the selection, but never populate the field.
+    expect(resolveTemperatureSource(false, undefined)).toBe('ambient');
+    expect(resolveTemperatureSource(false, 'floor')).toBe('ambient');
   });
 });

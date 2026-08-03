@@ -22,6 +22,7 @@ SOFTWARE.
 */
 
 import { MysaDeviceMode, MysaFanSpeedMode } from '@/api/MysaDeviceMode';
+import { MysaTrackedSensor } from '@/api/MysaTrackedSensor';
 import { DeviceBase, SupportedCaps } from '@/types/rest';
 
 /**
@@ -70,6 +71,15 @@ export const FanSpeedReceiveMap: Record<number, MysaFanSpeedMode> = {
   6: 'high', // CodeNum=1117 canonical high
   7: 'high', // legacy
   8: 'max'
+};
+
+/**
+ * Receive-side `trackedSnsr`-to-sensor mapping for in-floor heating thermostats (`INF-V1-0`). Any other raw value is
+ * left unmapped rather than guessed at, so an unrecognized selection reads as "not reported".
+ */
+export const TrackedSensorReceiveMap: Partial<Record<number, MysaTrackedSensor>> = {
+  3: 'floor',
+  5: 'ambient'
 };
 
 /** Raw `md` values for each mode. Doubles as the key into `SupportedCaps.modes`, which is indexed by the same value. */

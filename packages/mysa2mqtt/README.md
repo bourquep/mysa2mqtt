@@ -185,6 +185,22 @@ A few things to be aware of:
 - Do not use the thermostat's own maximum current rating here. That figure describes what the thermostat is rated to
   switch, which is typically several times more than the heaters connected to it.
 
+### In-floor temperature source
+
+In-floor thermostats (`INF-V1-0`) have two temperature sensors: an ambient air sensor in the wall unit and a probe
+embedded in the floor. The Mysa app lets you choose which one the thermostat regulates against, and **mysa2mqtt follows
+that choice automatically** — pick the floor probe in the app and the **Thermostat** entity's current temperature
+becomes the floor reading, with no configuration needed here.
+
+A few things to be aware of:
+
+- Only the **Thermostat** (climate) entity's current temperature changes. The **Current temperature** and **Floor
+  temperature** sensors are unaffected: each keeps reporting its own probe, so no history is lost either way.
+- The device only reports its selection on real-time status messages. Until the first one arrives after startup — and on
+  accounts where the real-time connection never establishes at all, such as all-Lite fleets kept current by the REST
+  poll alone — the ambient reading is used.
+- Changing the setting in the Mysa app is picked up on the next status message; there is nothing to restart.
+
 ## Usage Examples
 
 ### Using Environment Variables (.env file)

@@ -1,5 +1,10 @@
 import { MysaCredentials } from '@/api/MysaCredentials';
-import { buildFanSpeedSendMap, FanSpeedReceiveMap, ModeSendMap } from '@/lib/DeviceCapabilities';
+import {
+  buildFanSpeedSendMap,
+  FanSpeedReceiveMap,
+  ModeSendMap,
+  TrackedSensorReceiveMap
+} from '@/lib/DeviceCapabilities';
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
 import { isMsgOutPayload, isMsgTypeOutPayload } from '@/lib/PayloadTypeGuards';
@@ -1252,7 +1257,11 @@ export class MysaApiClient {
               humidity: parsedPayload.body.hum,
               setPoint: parsedPayload.body.stpt,
               dutyCycle: parsedPayload.body.heatStat,
-              floorTemperature: parsedPayload.body.flrSnsrTemp
+              floorTemperature: parsedPayload.body.flrSnsrTemp,
+              trackedSensor:
+                parsedPayload.body.trackedSnsr !== undefined
+                  ? TrackedSensorReceiveMap[parsedPayload.body.trackedSnsr]
+                  : undefined
             });
             break;
 
@@ -1266,7 +1275,11 @@ export class MysaApiClient {
               humidity: parsedPayload.body.hum,
               setPoint: parsedPayload.body.stpt,
               dutyCycle: parsedPayload.body.dtyCycle ?? parsedPayload.body.heatStat,
-              floorTemperature: parsedPayload.body.flrSnsrTemp
+              floorTemperature: parsedPayload.body.flrSnsrTemp,
+              trackedSensor:
+                parsedPayload.body.trackedSnsr !== undefined
+                  ? TrackedSensorReceiveMap[parsedPayload.body.trackedSnsr]
+                  : undefined
             });
             break;
 

@@ -6,3 +6,4 @@ export * from './MysaApiClientEventTypes';
 export * from './MysaApiClientOptions';
 export * from './MysaCredentials';
 export * from './MysaDeviceMode';
+export * from './MysaTrackedSensor';
