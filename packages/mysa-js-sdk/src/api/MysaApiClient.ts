@@ -428,10 +428,11 @@ export class MysaApiClient {
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
    * @param trackedSensor - The sensor an in-floor thermostat should regulate against, or undefined to leave unchanged.
-   *   Accepted as-is: prefer {@link setTrackedSensor}, which rejects devices that have no floor probe.
    * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
    * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
+   * @throws {@link UnsupportedTrackedSensorError} When a tracked sensor is requested for a device that has no floor
+   *   probe to select.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setDeviceState(
@@ -473,6 +474,13 @@ export class MysaApiClient {
     // which the caller would perceive as a no-op.
     if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
       throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
+    }
+
+    // Likewise for the tracked sensor: only in-floor units have a second sensor to choose between, and every other
+    // family silently ignores `tr`. Matching the family rather than an exact model keeps a future in-floor revision
+    // working, consistent with how the rest of the codebase tests for device families.
+    if (trackedSensor !== undefined && !/^INF-/i.test(device.Model)) {
+      throw new UnsupportedTrackedSensorError(deviceId, device.Model);
     }
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
@@ -545,23 +553,6 @@ export class MysaApiClient {
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
   async setTrackedSensor(deviceId: string, trackedSensor: MysaTrackedSensor) {
-    if (!this._cachedDevices) {
-      this._cachedDevices = await this.getDevices();
-    }
-
-    // Own-property check, matching setDeviceState: an inherited key such as 'constructor' would otherwise reach
-    // device.Model below and fail with a TypeError instead of UnknownDeviceError.
-    if (!Object.prototype.hasOwnProperty.call(this._cachedDevices.DevicesObj, deviceId)) {
-      throw new UnknownDeviceError(deviceId);
-    }
-
-    // Every other family has a single sensor, so `tr` would be silently ignored by the device. Reject it here rather
-    // than publish a command that looks like it worked.
-    const model = this._cachedDevices.DevicesObj[deviceId].Model;
-    if (!/^INF-/i.test(model)) {
-      throw new UnsupportedTrackedSensorError(deviceId, model);
-    }
-
     await this.setDeviceState(deviceId, undefined, undefined, undefined, trackedSensor);
   }
 
