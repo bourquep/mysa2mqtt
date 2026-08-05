@@ -1,4 +1,5 @@
-import { buildFanSpeedSendMap } from '@/lib/DeviceCapabilities';
+import { MysaTrackedSensor } from '@/api/MysaTrackedSensor';
+import { buildFanSpeedSendMap, TrackedSensorReceiveMap, TrackedSensorSendMap } from '@/lib/DeviceCapabilities';
 import { DeviceBase, SupportedCaps } from '@/types/rest';
 import { describe, expect, it } from 'vitest';
 
@@ -123,5 +124,20 @@ describe('buildFanSpeedSendMap', () => {
     it('uses the legacy map when no CodeNum is reported', () => {
       expect(buildFanSpeedSendMap(device())).toEqual({ auto: 1, low: 3, medium: 5, high: 7, max: 8 });
     });
+  });
+});
+
+describe('tracked sensor maps', () => {
+  // The raw values were decoded from a real INF-V1-0: the `tr` command field and the `trackedSnsr` status field share
+  // an encoding, so a written value reads back unchanged. Anything that breaks that round trip would silently invert
+  // the setting.
+  it('round-trips every sensor through the send and receive maps', () => {
+    for (const sensor of Object.keys(TrackedSensorSendMap) as MysaTrackedSensor[]) {
+      expect(TrackedSensorReceiveMap[TrackedSensorSendMap[sensor]]).toBe(sensor);
+    }
+  });
+
+  it('uses the raw values observed on the wire', () => {
+    expect(TrackedSensorSendMap).toEqual({ floor: 3, ambient: 5 });
   });
 });

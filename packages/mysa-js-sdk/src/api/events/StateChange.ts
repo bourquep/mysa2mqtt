@@ -1,4 +1,5 @@
 import { MysaDeviceMode, MysaFanSpeedMode } from '@/api/MysaDeviceMode';
+import { MysaTrackedSensor } from '@/api/MysaTrackedSensor';
 
 /**
  * Interface representing a device state change event for a Mysa device.
@@ -16,4 +17,9 @@ export interface StateChange {
   setPoint: number;
   /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
   fanSpeed?: MysaFanSpeedMode;
+  /**
+   * Which sensor the device regulates against, when it reports one. In-floor heating thermostats (INF-V1-0) only.
+   * Arrives as soon as the selection changes, rather than on the next periodic status message.
+   */
+  trackedSensor?: MysaTrackedSensor;
 }

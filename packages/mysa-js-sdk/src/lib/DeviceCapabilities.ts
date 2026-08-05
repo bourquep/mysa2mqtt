@@ -82,6 +82,15 @@ export const TrackedSensorReceiveMap: Partial<Record<number, MysaTrackedSensor>>
   5: 'ambient'
 };
 
+/**
+ * Send-side sensor-to-`tr` mapping, the inverse of {@link TrackedSensorReceiveMap}. The command field (`tr`) and the
+ * status field (`trackedSnsr`) share an encoding, so a value written here reads back unchanged.
+ */
+export const TrackedSensorSendMap: Record<MysaTrackedSensor, number> = {
+  floor: 3,
+  ambient: 5
+};
+
 /** Raw `md` values for each mode. Doubles as the key into `SupportedCaps.modes`, which is indexed by the same value. */
 export const ModeSendMap: Record<MysaDeviceMode, number> = { off: 1, auto: 2, heat: 3, cool: 4, fan_only: 5, dry: 6 };
 

@@ -3,7 +3,8 @@ import {
   buildFanSpeedSendMap,
   FanSpeedReceiveMap,
   ModeSendMap,
-  TrackedSensorReceiveMap
+  TrackedSensorReceiveMap,
+  TrackedSensorSendMap
 } from '@/lib/DeviceCapabilities';
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
@@ -26,12 +27,14 @@ import {
   MysaApiError,
   UnauthenticatedError,
   UnknownDeviceError,
-  UnsupportedFanSpeedError
+  UnsupportedFanSpeedError,
+  UnsupportedTrackedSensorError
 } from './Errors';
 import { Logger, VoidLogger } from './Logger';
 import { MysaApiClientEventTypes } from './MysaApiClientEventTypes';
 import { MysaApiClientOptions } from './MysaApiClientOptions';
 import { MysaDeviceMode, MysaFanSpeedMode } from './MysaDeviceMode';
+import { MysaTrackedSensor } from './MysaTrackedSensor';
 
 dayjs.extend(duration);
 
@@ -424,12 +427,21 @@ export class MysaApiClient {
    * @param mode - The operating mode to set (one of MysaDeviceMode values, or undefined to leave unchanged).
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
+   * @param trackedSensor - The sensor an in-floor thermostat should regulate against, or undefined to leave unchanged.
    * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
    * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
    * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
+   * @throws {@link UnsupportedTrackedSensorError} When a tracked sensor is requested for a device that has no floor
+   *   probe to select.
    * @throws {@link Error} When MQTT connection or command sending fails.
    */
-  async setDeviceState(deviceId: string, setPoint?: number, mode?: MysaDeviceMode, fanSpeed?: MysaFanSpeedMode) {
+  async setDeviceState(
+    deviceId: string,
+    setPoint?: number,
+    mode?: MysaDeviceMode,
+    fanSpeed?: MysaFanSpeedMode,
+    trackedSensor?: MysaTrackedSensor
+  ) {
     this._logger.debug(`Setting device state for '${deviceId}'`);
 
     if (!this._cachedDevices) {
@@ -462,6 +474,13 @@ export class MysaApiClient {
     // which the caller would perceive as a no-op.
     if (fanSpeed !== undefined && fanSpeedMap[fanSpeed] === undefined) {
       throw new UnsupportedFanSpeedError(deviceId, fanSpeed, Object.keys(fanSpeedMap));
+    }
+
+    // Likewise for the tracked sensor: only in-floor units have a second sensor to choose between, and every other
+    // family silently ignores `tr`. Matching the family rather than an exact model keeps a future in-floor revision
+    // working, consistent with how the rest of the codebase tests for device families.
+    if (trackedSensor !== undefined && !/^INF-/i.test(device.Model)) {
+      throw new UnsupportedTrackedSensorError(deviceId, device.Model);
     }
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
@@ -497,7 +516,8 @@ export class MysaApiClient {
             tm: -1,
             sp: setPoint,
             md: mode ? ModeSendMap[mode] : undefined,
-            fn: fanSpeed ? fanSpeedMap[fanSpeed] : undefined
+            fn: fanSpeed ? fanSpeedMap[fanSpeed] : undefined,
+            tr: trackedSensor ? TrackedSensorSendMap[trackedSensor] : undefined
           }
         ]
       }
@@ -510,6 +530,30 @@ export class MysaApiClient {
       this._logger.error(`Failed to set device state for '${deviceId}'`, error);
       throw error;
     }
+  }
+
+  /**
+   * Chooses which temperature sensor an in-floor heating thermostat regulates against.
+   *
+   * In-floor units (INF-V1-0) carry both an ambient air sensor and a probe embedded in the floor, and this selects
+   * between them — the same setting the Mysa app exposes. The device confirms the change on its next status message via
+   * {@link Status.trackedSensor}, and immediately via {@link StateChange.trackedSensor}.
+   *
+   * @example
+   *
+   * ```typescript
+   * await client.setTrackedSensor('device123', 'floor');
+   * ```
+   *
+   * @param deviceId - The ID of the in-floor thermostat to control.
+   * @param trackedSensor - The sensor to regulate against.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
+   * @throws {@link UnknownDeviceError} When the device id does not match any device on the account.
+   * @throws {@link UnsupportedTrackedSensorError} When the device is not an in-floor thermostat.
+   * @throws {@link Error} When MQTT connection or command sending fails.
+   */
+  async setTrackedSensor(deviceId: string, trackedSensor: MysaTrackedSensor) {
+    await this.setDeviceState(deviceId, undefined, undefined, undefined, trackedSensor);
   }
 
   /**
@@ -1297,7 +1341,11 @@ export class MysaApiClient {
               mode: parsedPayload.body.state.md ? modeMap[parsedPayload.body.state.md] : undefined,
               setPoint: parsedPayload.body.state.sp,
               fanSpeed:
-                parsedPayload.body.state.fn !== undefined ? FanSpeedReceiveMap[parsedPayload.body.state.fn] : undefined
+                parsedPayload.body.state.fn !== undefined ? FanSpeedReceiveMap[parsedPayload.body.state.fn] : undefined,
+              trackedSensor:
+                parsedPayload.body.state.tr !== undefined
+                  ? TrackedSensorReceiveMap[parsedPayload.body.state.tr]
+                  : undefined
             });
             break;
           }

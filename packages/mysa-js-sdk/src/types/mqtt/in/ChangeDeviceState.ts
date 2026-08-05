@@ -38,6 +38,12 @@ export interface ChangeDeviceState extends MsgPayload<InMessageType.CHANGE_DEVIC
         tm: number;
         /** Optional fan speed (1 = auto, 3 = low, 5 = medium, 7 = high, 8 = max). AC only */
         fn?: number;
+        /**
+         * Optional selection of the sensor the thermostat regulates against (3 = floor probe, 5 = ambient air).
+         * In-floor heating thermostats (INF-V1-0) only, being the only family with both. Shares its encoding with the
+         * `trackedSnsr` status field the device reports back.
+         */
+        tr?: number;
       }
     ];
     /**
