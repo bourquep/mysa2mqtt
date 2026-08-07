@@ -61,7 +61,7 @@
     "nanoid": "5.1.16"
   },
   "devDependencies": {
-    "@types/lodash": "4.17.24",
+    "@types/lodash": "4.17.25",
     "dotenv": "17.4.2",
     "pino": "10.3.1",
     "pino-pretty": "13.1.3"
