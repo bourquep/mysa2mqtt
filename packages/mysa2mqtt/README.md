@@ -150,13 +150,13 @@ take precedence over command-line defaults.
 
 #### Application Settings
 
-| CLI Option               | Environment Variable   | Default  | Description                                                                                                                                                 |
-| ------------------------ | ---------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-l, --log-level`        | `M2M_LOG_LEVEL`        | `info`   | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace`                                                                                     |
-| `-f, --log-format`       | `M2M_LOG_FORMAT`       | `pretty` | Log format: `pretty`, `json`                                                                                                                                |
-| `-t, --temperature-unit` | `M2M_TEMPERATURE_UNIT` | `C`      | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                                                                                                          |
-| `--heater-watts`         | `M2M_HEATER_WATTS`     | -        | Rated wattage of the heaters controlled by each thermostat, as a comma-separated list of `<device>=<watts>` pairs (see [Power reporting](#power-reporting)) |
-| `--heartbeat-file`       | `M2M_HEARTBEAT_FILE`   | -        | File touched on every message received from the Mysa cloud, for external liveness checks (e.g. a container liveness probe on its mtime)                     |
+| CLI Option               | Environment Variable   | Default  | Description                                                                                                                                                                                           |
+| ------------------------ | ---------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-l, --log-level`        | `M2M_LOG_LEVEL`        | `info`   | Log level: `silent`, `fatal`, `error`, `warn`, `info`, `debug`, `trace`                                                                                                                               |
+| `-f, --log-format`       | `M2M_LOG_FORMAT`       | `pretty` | Log format: `pretty`, `json`                                                                                                                                                                          |
+| `-t, --temperature-unit` | `M2M_TEMPERATURE_UNIT` | `C`      | Temperature unit (`C` = Celsius, `F` = Fahrenheit)                                                                                                                                                    |
+| `--heater-watts`         | `M2M_HEATER_WATTS`     | -        | Rated wattage of the heaters controlled by each thermostat, as a comma-separated list of `<device>=<watts>` pairs (see [Power reporting](#power-reporting))                                           |
+| `--heartbeat-file`       | `M2M_HEARTBEAT_FILE`   | -        | File touched whenever the Mysa cloud is reached — on every real-time message and after every successful REST state poll — for external liveness checks (e.g. a container liveness probe on its mtime) |
 
 ### Power reporting
 
