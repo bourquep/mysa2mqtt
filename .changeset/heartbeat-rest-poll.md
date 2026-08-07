@@ -2,7 +2,8 @@
 'mysa2mqtt': patch
 ---
 
-Record a `--heartbeat-file` beat after every successful REST state poll, not only on real-time messages.
+Record a `--heartbeat-file` beat on successful REST state polls, not only on real-time messages. Writes stay throttled
+to one per 10 seconds, so a poll that follows a real-time message closely does not write again.
 
 A thermostat that is unplugged, powered off or off the network stops the real-time stream while mysa2mqtt itself stays
 healthy and keeps polling. The heartbeat file then went stale, so a liveness probe watching its mtime restarted the

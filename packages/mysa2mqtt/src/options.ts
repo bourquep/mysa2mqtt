@@ -225,7 +225,7 @@ export const options = new Command('mysa2mqtt')
   .addOption(
     new Option(
       '--heartbeat-file <heartbeatFile>',
-      'file touched whenever the Mysa cloud is reached — on every real-time message and after every successful REST state poll — for external liveness checks'
+      'file touched whenever the Mysa cloud is reached — on real-time messages and on successful REST state polls, throttled to one write per 10 seconds — for external liveness checks'
     )
       .env('M2M_HEARTBEAT_FILE')
       .helpGroup('Configuration')
