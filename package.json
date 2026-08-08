@@ -24,7 +24,8 @@
       "uuid": "11.1.1"
     },
     "esbuild": ">=0.28.1",
-    "brace-expansion": ">=5.0.9"
+    "brace-expansion": ">=5.0.9",
+    "js-yaml": ">=3.15.1"
   },
   "scripts": {
     "build": "npm run build -w mqtt2ha && npm run build -w mysa-js-sdk && npm run build -w mysa2mqtt",
