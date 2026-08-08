@@ -1,5 +1,5 @@
 ---
-‘mqtt2ha’: patch
+'mqtt2ha': patch
 'mysa-js-sdk': patch
 'mysa2mqtt': patch
 ---
