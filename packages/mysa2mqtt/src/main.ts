@@ -23,10 +23,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { writeFile } from 'fs/promises';
 import { MqttSettings } from 'mqtt2ha';
 import { DeviceBase, MysaApiClient, UnauthenticatedError } from 'mysa-js-sdk';
 import { pino } from 'pino';
+import { createHeartbeatRecorder, HeartbeatRecorder } from './heartbeat';
 import { PinoLogger } from './logger';
 import { options } from './options';
 import { Thermostat } from './thermostat';
@@ -61,23 +61,13 @@ async function main() {
     { logger: new PinoLogger(rootLogger.child({ module: 'mysa-js-sdk' })) }
   );
 
-  const heartbeatFile = options.heartbeatFile;
-  if (heartbeatFile) {
-    // Data-freshness heartbeat: an orchestrator liveness probe can compare
-    // this file's mtime against the expected message cadence (devices report
-    // at least every ~5 minutes while keep-alives flow) and restart the
-    // process when the Mysa cloud connection wedges without emitting errors.
-    let lastBeat = 0;
-    client.emitter.on('rawRealtimeMessageReceived', () => {
-      const now = Date.now();
-      if (now - lastBeat < 10_000) {
-        return;
-      }
-      lastBeat = now;
-      writeFile(heartbeatFile, `${new Date(now).toISOString()}\n`).catch((error) => {
-        rootLogger.warn(error, `Failed to write heartbeat file '${heartbeatFile}'`);
-      });
-    });
+  // Liveness heartbeat: an orchestrator probe can compare this file's mtime
+  // against the expected cadence and restart the process when it can no longer
+  // reach the Mysa cloud. Both paths to the cloud record a beat — real-time
+  // messages and successful REST state polls.
+  const recordHeartbeat = createHeartbeatRecorder(options.heartbeatFile, rootLogger);
+  if (recordHeartbeat) {
+    client.emitter.on('rawRealtimeMessageReceived', recordHeartbeat);
   }
 
   rootLogger.info('Logging in...');
@@ -177,7 +167,7 @@ async function main() {
     scheduleThermostatStartRetry(thermostat);
   }
 
-  startStatePolling(client, thermostats);
+  startStatePolling(client, thermostats, recordHeartbeat);
 }
 
 /**
@@ -188,10 +178,18 @@ async function main() {
  * fetches the whole account's state and fans it out to every thermostat, so the request cost is independent of fleet
  * size. Disabled when the interval is 0.
  *
+ * A successful poll also records a heartbeat, so the liveness signal tracks whether the process can still reach the
+ * Mysa cloud rather than whether a thermostat happens to be transmitting.
+ *
  * @param client - Authenticated Mysa API client.
  * @param thermostats - The thermostats to refresh.
+ * @param recordHeartbeat - Heartbeat recorder to call after each successful poll, when configured.
  */
-function startStatePolling(client: MysaApiClient, thermostats: Thermostat[]): void {
+function startStatePolling(
+  client: MysaApiClient,
+  thermostats: Thermostat[],
+  recordHeartbeat: HeartbeatRecorder | undefined
+): void {
   const intervalSeconds = options.pollIntervalSeconds;
   if (intervalSeconds <= 0 || thermostats.length === 0) {
     return;
@@ -215,6 +213,7 @@ function startStatePolling(client: MysaApiClient, thermostats: Thermostat[]): vo
     void (async () => {
       try {
         const deviceStates = await client.getDeviceStates();
+        recordHeartbeat?.();
         await Promise.all(
           Array.from(thermostatsById, ([deviceId, thermostat]) =>
             thermostat.refreshFromRest(deviceStates.DeviceStatesObj[deviceId])
