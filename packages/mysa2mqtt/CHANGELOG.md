@@ -1,5 +1,25 @@
 # mysa2mqtt
 
+## 3.2.1
+
+### Patch Changes
+
+- [#258](https://github.com/bourquep/mysa2mqtt/pull/258) [`9a5973c`](https://github.com/bourquep/mysa2mqtt/commit/9a5973cc93a170e70a0a1d9dfd215e0007d73317) Thanks [@bourquep](https://github.com/bourquep)! - security: Update js-yaml to address CVE-2026-59870
+
+- [#257](https://github.com/bourquep/mysa2mqtt/pull/257) [`7c6172f`](https://github.com/bourquep/mysa2mqtt/commit/7c6172f2aa46a5e5031b28bf9b31c4d10b30ab10) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps-dev): Bump fast-uri from 3.1.4 to 3.1.5
+
+- [#250](https://github.com/bourquep/mysa2mqtt/pull/250) [`a5ee5d6`](https://github.com/bourquep/mysa2mqtt/commit/a5ee5d651d28f2e15e280dfa46a3c76876f650c5) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump brace-expansion from 5.0.8 to 5.0.9
+
+- [#256](https://github.com/bourquep/mysa2mqtt/pull/256) [`ac71c31`](https://github.com/bourquep/mysa2mqtt/commit/ac71c318d62669cb81c7347239c0541f7c6d094a) Thanks [@vavallee](https://github.com/vavallee)! - Record a `--heartbeat-file` beat on successful REST state polls, not only on real-time messages. Writes stay throttled to one per 10 seconds, so a poll that follows a real-time message closely does not write again.
+
+  A thermostat that is unplugged, powered off or off the network stops the real-time stream while mysa2mqtt itself stays healthy and keeps polling. The heartbeat file then went stale, so a liveness probe watching its mtime restarted the process every few minutes for as long as the thermostat stayed offline — restarts that could not fix anything, and that re-authenticated against the Mysa cloud each time.
+
+  The heartbeat now means "mysa2mqtt can still reach the Mysa cloud", which is what a liveness probe can usefully act on. Detection of a wedged real-time connection is unaffected in practice: since REST polling was added, a wedged real-time path no longer freezes Home Assistant, and the poll fails alongside the real-time stream whenever the cause is on mysa2mqtt's side. Accounts that disable polling with `--poll-interval-seconds 0` keep the previous real-time-only behaviour.
+
+- Updated dependencies [[`9a5973c`](https://github.com/bourquep/mysa2mqtt/commit/9a5973cc93a170e70a0a1d9dfd215e0007d73317), [`3fd6fad`](https://github.com/bourquep/mysa2mqtt/commit/3fd6fad25e18b0cf6d055c86c4d0a9314af59f0a), [`686266f`](https://github.com/bourquep/mysa2mqtt/commit/686266f41c58284325196843646def12476ee2d2), [`da0bdd4`](https://github.com/bourquep/mysa2mqtt/commit/da0bdd49e735037efc0177d45735ed32830b5bed), [`a5ee5d6`](https://github.com/bourquep/mysa2mqtt/commit/a5ee5d651d28f2e15e280dfa46a3c76876f650c5)]:
+  - mqtt2ha@5.1.3
+  - mysa-js-sdk@3.3.1
+
 ## 3.2.0
 
 ### Minor Changes

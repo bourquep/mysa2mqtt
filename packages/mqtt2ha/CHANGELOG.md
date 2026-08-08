@@ -1,5 +1,13 @@
 # mqtt2ha
 
+## 5.1.3
+
+### Patch Changes
+
+- [#258](https://github.com/bourquep/mysa2mqtt/pull/258) [`9a5973c`](https://github.com/bourquep/mysa2mqtt/commit/9a5973cc93a170e70a0a1d9dfd215e0007d73317) Thanks [@bourquep](https://github.com/bourquep)! - security: Update js-yaml to address CVE-2026-59870
+
+- [#250](https://github.com/bourquep/mysa2mqtt/pull/250) [`a5ee5d6`](https://github.com/bourquep/mysa2mqtt/commit/a5ee5d651d28f2e15e280dfa46a3c76876f650c5) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump brace-expansion from 5.0.8 to 5.0.9
+
 ## 5.1.2
 
 ### Patch Changes
