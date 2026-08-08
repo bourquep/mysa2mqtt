@@ -1,5 +1,19 @@
 # mysa-js-sdk
 
+## 3.3.1
+
+### Patch Changes
+
+- [#258](https://github.com/bourquep/mysa2mqtt/pull/258) [`9a5973c`](https://github.com/bourquep/mysa2mqtt/commit/9a5973cc93a170e70a0a1d9dfd215e0007d73317) Thanks [@bourquep](https://github.com/bourquep)! - security: Update js-yaml to address CVE-2026-59870
+
+- [#252](https://github.com/bourquep/mysa2mqtt/pull/252) [`3fd6fad`](https://github.com/bourquep/mysa2mqtt/commit/3fd6fad25e18b0cf6d055c86c4d0a9314af59f0a) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/credential-providers from 3.1097.0 to 3.1102.0
+
+- [#253](https://github.com/bourquep/mysa2mqtt/pull/253) [`686266f`](https://github.com/bourquep/mysa2mqtt/commit/686266f41c58284325196843646def12476ee2d2) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1097.0 to 3.1103.0
+
+- [#254](https://github.com/bourquep/mysa2mqtt/pull/254) [`da0bdd4`](https://github.com/bourquep/mysa2mqtt/commit/da0bdd49e735037efc0177d45735ed32830b5bed) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump nanoid from 5.1.16 to 6.0.1
+
+- [#250](https://github.com/bourquep/mysa2mqtt/pull/250) [`a5ee5d6`](https://github.com/bourquep/mysa2mqtt/commit/a5ee5d651d28f2e15e280dfa46a3c76876f650c5) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump brace-expansion from 5.0.8 to 5.0.9
+
 ## 3.3.0
 
 ### Minor Changes
