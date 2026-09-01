@@ -1,5 +1,17 @@
 # mysa-js-sdk
 
+## 3.3.2
+
+### Patch Changes
+
+- [#263](https://github.com/bourquep/mysa2mqtt/pull/263) [`323c59a`](https://github.com/bourquep/mysa2mqtt/commit/323c59a4b598ae17e57a093b34497e4532301b85) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump aws-iot-device-sdk-v2 from 1.27.0 to 1.28.0
+
+- [#265](https://github.com/bourquep/mysa2mqtt/pull/265) [`2b41a0e`](https://github.com/bourquep/mysa2mqtt/commit/2b41a0e0c84d7f2f9b31e988b4d9cdb8b7bfaabf) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump dayjs from 1.11.21 to 1.11.23
+
+- [#266](https://github.com/bourquep/mysa2mqtt/pull/266) [`161e59e`](https://github.com/bourquep/mysa2mqtt/commit/161e59e57399e0a206062614e5fd9f924fd809fe) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1103.0 to 3.1112.0
+
+- [#267](https://github.com/bourquep/mysa2mqtt/pull/267) [`1bcdc0b`](https://github.com/bourquep/mysa2mqtt/commit/1bcdc0b237fda016bc8ed3e6f1b55b505d9736df) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/credential-providers from 3.1102.0 to 3.1121.0
+
 ## 3.3.1
 
 ### Patch Changes
