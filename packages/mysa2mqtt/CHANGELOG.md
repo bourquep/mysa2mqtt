@@ -1,5 +1,11 @@
 # mysa2mqtt
 
+## 3.2.3
+
+### Patch Changes
+
+- [#272](https://github.com/bourquep/mysa2mqtt/pull/272) [`9f6bd68`](https://github.com/bourquep/mysa2mqtt/commit/9f6bd68854679ad96323b87bbb0b2b956e371625) Thanks [@bourquep](https://github.com/bourquep)! - Publish a Docker image for the current release. 3.2.2 shipped to npm without one because the release workflow read a `changesets/action` output that v2 had renamed, leaving the version empty and skipping the image build.
+
 ## 3.2.2
 
 ### Patch Changes
