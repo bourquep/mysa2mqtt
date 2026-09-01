@@ -1,6 +1,6 @@
 {
   "name": "mysa2mqtt",
-  "version": "3.2.2",
+  "version": "3.2.3",
   "license": "MIT",
   "private": false,
   "description": "Expose Mysa smart thermostats to home automation platforms via MQTT.",
