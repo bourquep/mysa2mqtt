@@ -1,5 +1,12 @@
 # mysa2mqtt
 
+## 3.2.2
+
+### Patch Changes
+
+- Updated dependencies [[`323c59a`](https://github.com/bourquep/mysa2mqtt/commit/323c59a4b598ae17e57a093b34497e4532301b85), [`2b41a0e`](https://github.com/bourquep/mysa2mqtt/commit/2b41a0e0c84d7f2f9b31e988b4d9cdb8b7bfaabf), [`161e59e`](https://github.com/bourquep/mysa2mqtt/commit/161e59e57399e0a206062614e5fd9f924fd809fe), [`1bcdc0b`](https://github.com/bourquep/mysa2mqtt/commit/1bcdc0b237fda016bc8ed3e6f1b55b505d9736df)]:
+  - mysa-js-sdk@3.3.2
+
 ## 3.2.1
 
 ### Patch Changes
