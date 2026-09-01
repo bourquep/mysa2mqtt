@@ -30,7 +30,7 @@ jobs:
       id-token: write # npm provenance
     outputs:
       published: ${{ steps.changesets.outputs.published }}
-      published_packages: ${{ steps.changesets.outputs.publishedPackages }}
+      published_packages: ${{ steps.changesets.outputs.published-packages }}
       mysa2mqtt_version: ${{ steps.m2m.outputs.version }}
 
     steps:
@@ -66,7 +66,7 @@ jobs:
         id: m2m
         if: steps.changesets.outputs.published == 'true'
         env:
-          PUBLISHED: ${{ steps.changesets.outputs.publishedPackages }}
+          PUBLISHED: ${{ steps.changesets.outputs.published-packages }}
         run: |
           version=$(echo "$PUBLISHED" | jq -r '.[] | select(.name=="mysa2mqtt") | .version')
           echo "version=$version" >> "$GITHUB_OUTPUT"
