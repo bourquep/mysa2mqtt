@@ -47,7 +47,7 @@
     "eslint": "10.9.1",
     "eslint-plugin-jsdoc": "64.2.1",
     "eslint-plugin-tsdoc": "0.5.2",
-    "globals": "17.9.0",
+    "globals": "17.11.0",
     "prettier": "3.9.6",
     "prettier-plugin-jsdoc": "1.8.1",
     "prettier-plugin-organize-imports": "4.3.0",
