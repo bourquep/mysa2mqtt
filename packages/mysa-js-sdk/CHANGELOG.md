@@ -1,5 +1,11 @@
 # mysa-js-sdk
 
+## 3.3.3
+
+### Patch Changes
+
+- [#276](https://github.com/bourquep/mysa2mqtt/pull/276) [`1c5f1e7`](https://github.com/bourquep/mysa2mqtt/commit/1c5f1e74b5bc3df3f09c1e78872bc5c949b061ac) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1112.0 to 3.1123.0
+
 ## 3.3.2
 
 ### Patch Changes
