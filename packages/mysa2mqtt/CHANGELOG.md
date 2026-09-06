@@ -1,5 +1,13 @@
 # mysa2mqtt
 
+## 3.2.4
+
+### Patch Changes
+
+- [#274](https://github.com/bourquep/mysa2mqtt/pull/274) [`cc71d8e`](https://github.com/bourquep/mysa2mqtt/commit/cc71d8eb564ebae8a49c69cc9101006d93c50c1c) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps-dev): Bump fast-uri from 3.1.5 to 3.1.7
+- Updated dependencies [[`1c5f1e7`](https://github.com/bourquep/mysa2mqtt/commit/1c5f1e74b5bc3df3f09c1e78872bc5c949b061ac)]:
+  - mysa-js-sdk@3.3.3
+
 ## 3.2.3
 
 ### Patch Changes
