@@ -40,12 +40,12 @@
     "release": "npm run build && changeset publish"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "1.0.0",
-    "@changesets/cli": "3.0.1",
+    "@changesets/changelog-github": "1.0.1",
+    "@changesets/cli": "3.0.2",
     "@eslint/js": "10.0.1",
-    "@types/node": "26.4.0",
-    "eslint": "10.9.1",
-    "eslint-plugin-jsdoc": "64.3.3",
+    "@types/node": "26.5.0",
+    "eslint": "10.10.0",
+    "eslint-plugin-jsdoc": "64.3.6",
     "eslint-plugin-tsdoc": "0.5.2",
     "globals": "17.12.0",
     "prettier": "3.9.6",
@@ -56,7 +56,7 @@
     "typedoc": "0.28.20",
     "typedoc-material-theme": "1.4.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.69.0",
+    "typescript-eslint": "8.70.0",
     "vitest": "4.1.11"
   }
 }
