@@ -1,5 +1,13 @@
 # mysa-js-sdk
 
+## 3.3.4
+
+### Patch Changes
+
+- [#281](https://github.com/bourquep/mysa2mqtt/pull/281) [`43a631a`](https://github.com/bourquep/mysa2mqtt/commit/43a631ac00b1c84149077e9a5a160ff0cd0082f7) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/credential-providers from 3.1121.0 to 3.1127.0
+
+- [#283](https://github.com/bourquep/mysa2mqtt/pull/283) [`b042377`](https://github.com/bourquep/mysa2mqtt/commit/b042377595008249de6afa3c109f9d1e98cad884) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1123.0 to 3.1128.0
+
 ## 3.3.3
 
 ### Patch Changes
