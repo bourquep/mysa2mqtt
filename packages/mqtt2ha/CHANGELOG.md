@@ -1,5 +1,11 @@
 # mqtt2ha
 
+## 5.1.4
+
+### Patch Changes
+
+- [#291](https://github.com/bourquep/mysa2mqtt/pull/291) [`1c5f22b`](https://github.com/bourquep/mysa2mqtt/commit/1c5f22be893cde339e00ec3bf2d1a9081fe0b7d8) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump mqtt from 5.15.2 to 5.16.0
+
 ## 5.1.3
 
 ### Patch Changes

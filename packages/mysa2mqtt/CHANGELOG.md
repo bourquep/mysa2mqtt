@@ -1,5 +1,26 @@
 # mysa2mqtt
 
+## 3.2.7
+
+### Patch Changes
+
+- [#294](https://github.com/bourquep/mysa2mqtt/pull/294) [`5857852`](https://github.com/bourquep/mysa2mqtt/commit/5857852b715e8f7cbd8acf8a1c32e0d23bf5e8c9) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump dotenv from 17.4.2 to 18.0.2
+
+- [#296](https://github.com/bourquep/mysa2mqtt/pull/296) [`16bdd3b`](https://github.com/bourquep/mysa2mqtt/commit/16bdd3b3f94c03c70a8d6d8a1c3360092613a490) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump ip-address from 10.4.0 to 10.7.3
+
+- [#297](https://github.com/bourquep/mysa2mqtt/pull/297) [`23a9aa1`](https://github.com/bourquep/mysa2mqtt/commit/23a9aa126d7c3ee3598891b3c1093d117c74e006) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump axios from 1.19.0 to 1.20.0
+
+- [#298](https://github.com/bourquep/mysa2mqtt/pull/298) [`651b224`](https://github.com/bourquep/mysa2mqtt/commit/651b224c61ef443ac315ad81c75b711dd8d22438) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump markdown-it from 14.3.0 to 14.3.2
+
+- [#301](https://github.com/bourquep/mysa2mqtt/pull/301) [`6ae3d86`](https://github.com/bourquep/mysa2mqtt/commit/6ae3d8600aa945d95d90764d40a831f118e49800) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump fast-copy from 4.0.4 to 4.1.2
+
+- [#302](https://github.com/bourquep/mysa2mqtt/pull/302) [`68cba0e`](https://github.com/bourquep/mysa2mqtt/commit/68cba0e2d227cf946b7480ae5e93750ad8ac378a) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump source-map-js from 1.2.1 to 1.2.2
+
+- [#304](https://github.com/bourquep/mysa2mqtt/pull/304) [`5505290`](https://github.com/bourquep/mysa2mqtt/commit/5505290f320aebc94743072310c268763d109f91) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps-dev): Bump shell-quote from 1.10.0 to 1.12.0
+- Updated dependencies [[`1c5f22b`](https://github.com/bourquep/mysa2mqtt/commit/1c5f22be893cde339e00ec3bf2d1a9081fe0b7d8), [`68d5efc`](https://github.com/bourquep/mysa2mqtt/commit/68d5efc49ca708eb85e62eff80ba2e9ed0479f92)]:
+  - mqtt2ha@5.1.4
+  - mysa-js-sdk@3.3.6
+
 ## 3.2.6
 
 ### Patch Changes
