@@ -54,7 +54,7 @@
   },
   "dependencies": {
     "commander": "15.0.0",
-    "dotenv": "17.4.2",
+    "dotenv": "18.0.2",
     "mqtt2ha": "5.1.3",
     "mysa-js-sdk": "3.3.5",
     "pino": "10.3.1",
