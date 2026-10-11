@@ -53,7 +53,7 @@
     "build:docs": "typedoc"
   },
   "dependencies": {
-    "mqtt": "5.15.2"
+    "mqtt": "5.16.0"
   },
   "devDependencies": {
     "pino": "10.3.1",
