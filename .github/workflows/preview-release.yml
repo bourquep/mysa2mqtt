@@ -15,6 +15,9 @@ name: Preview release
 # Hub names, so review the PR before running it. Fork PRs are refused unless
 # explicitly allowed.
 #
+# npm publishing uses trusted publishing (OIDC), like release.yml: each package
+# on npmjs.com must list this workflow file as a trusted publisher.
+#
 # This workflow runs on main, so it never executes the PR's code on its
 # runners: doing so would let that code poison main's Actions cache, which the
 # CI and release workflows restore. The `preview` job of ci.yml installs,
@@ -176,14 +179,18 @@ jobs:
   npm:
     needs: resolve
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      # npm trusted publishing: npm exchanges this job's OIDC token for a
+      # short-lived publish token. Every package must list this workflow
+      # (`preview-release.yml`) as a trusted publisher on npmjs.com, next to
+      # release.yml; there is no npm token secret.
+      id-token: write
 
     steps:
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
 
       - uses: actions/download-artifact@v8
         with:
@@ -192,11 +199,13 @@ jobs:
 
       # Libraries first, so a failure never leaves mysa2mqtt pointing at a
       # library version that does not exist. Already-published versions are
-      # skipped, which makes "Re-run failed jobs" safe. Without `id-token`, npm
-      # cannot attest provenance, so a tarball that asks for it fails here.
+      # skipped, which makes "Re-run failed jobs" safe.
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Trusted publishing attests provenance by default, and the
+          # attestation would name main's commit and this workflow as the
+          # source rather than the pull request's commit.
+          NPM_CONFIG_PROVENANCE: 'false'
           PACKAGES: ${{ needs.resolve.outputs.packages }}
         run: |
           set -euo pipefail
