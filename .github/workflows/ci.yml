@@ -65,3 +65,111 @@ jobs:
           docker run --rm mysa2mqtt:ci --help
           docker run --rm --entrypoint node mysa2mqtt:ci \
             -e "import('mysa-js-sdk').then(m => console.log('sdk ok', Object.keys(m).length))"
+
+  preview:
+    # Builds what the Preview release workflow publishes, when a maintainer
+    # runs it for this pull request. The pull request's code is installed,
+    # versioned, built and packed here, in the pull request's own context,
+    # rather than in that workflow: it runs on main, where executing it would
+    # expose main's Actions cache to poisoning. Preview release only publishes
+    # the tarballs this job uploads, and only after this CI run has passed.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      # The head commit, not the default merge commit: the preview, and the
+      # Docker image built from it, must match what the pull request contains.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      # The snapshot settings are applied here rather than committed to
+      # .changeset/config.json, so normal releases are unaffected. The changelog
+      # is disabled because previews ship no release notes, and generating them
+      # would call the GitHub API.
+      - name: Version packages as a snapshot
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # `changeset version` fails when there is no changeset, and
+          # `changeset status` fails whenever code changed without one, so look
+          # for changeset files directly. Without one, the next step finds no
+          # snapshot versions and the rest of the job is skipped.
+          if [ -z "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
+            echo "::notice::This pull request has no changeset, so there is nothing to preview"
+            exit 0
+          fi
+
+          config=.changeset/config.json
+          jq '.changelog = false | .snapshot = {useCalculatedVersion: true, prereleaseTemplate: "{tag}.{datetime}"}' \
+            "$config" > "$RUNNER_TEMP/config.json"
+          mv "$RUNNER_TEMP/config.json" "$config"
+
+          npx changeset version --snapshot "pr$PR"
+          # Same as `npm run version-packages`: keep the lockfile in step with
+          # the new versions, which the Docker build's `npm ci` requires.
+          npm install --package-lock-only --ignore-scripts
+
+      - name: Collect preview packages
+        id: packages
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          packages='[]'
+          for manifest in packages/*/package.json; do
+            name=$(jq -r .name "$manifest")
+            version=$(jq -r .version "$manifest")
+            # Packages without a changeset keep their published version.
+            if [[ "$version" != *"-pr$PR."* ]]; then
+              continue
+            fi
+
+            # A provenance attestation would name the workflow that publishes
+            # the preview, on main, rather than this pull request's commit.
+            jq 'del(.publishConfig.provenance)' "$manifest" > "$RUNNER_TEMP/package.json"
+            mv "$RUNNER_TEMP/package.json" "$manifest"
+
+            packages=$(jq -c --arg name "$name" --arg version "$version" '. + [{name: $name, version: $version}]' <<< "$packages")
+          done
+
+          # A pull request without a changeset has nothing to preview; that is
+          # not a CI failure.
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "Preview: \(.name)@\(.version)"' <<< "$packages"
+
+      - if: steps.packages.outputs.packages != '[]'
+        run: npm run build
+
+      - name: Pack
+        if: steps.packages.outputs.packages != '[]'
+        env:
+          PACKAGES: ${{ steps.packages.outputs.packages }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/preview/tarballs"
+          for name in $(jq -r '.[].name' <<< "$PACKAGES"); do
+            npm pack -w "$name" --pack-destination "$RUNNER_TEMP/preview/tarballs"
+          done
+          jq . <<< "$PACKAGES" > "$RUNNER_TEMP/preview/packages.json"
+
+          # The Docker build starts from the same commit and reapplies these
+          # changes, so the image reports the preview version.
+          git diff --binary > "$RUNNER_TEMP/preview/snapshot.patch"
+
+      - if: steps.packages.outputs.packages != '[]'
+        uses: actions/upload-artifact@v7
+        with:
+          name: preview
+          path: ${{ runner.temp }}/preview
+          retention-days: 7
