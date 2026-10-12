@@ -101,6 +101,15 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          # `changeset version` fails when there is no changeset, and
+          # `changeset status` fails whenever code changed without one, so look
+          # for changeset files directly. Without one, the next step finds no
+          # snapshot versions and the rest of the job is skipped.
+          if [ -z "$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' -print -quit)" ]; then
+            echo "::notice::This pull request has no changeset, so there is nothing to preview"
+            exit 0
+          fi
+
           config=.changeset/config.json
           jq '.changelog = false | .snapshot = {useCalculatedVersion: true, prereleaseTemplate: "{tag}.{datetime}"}' \
             "$config" > "$RUNNER_TEMP/config.json"
