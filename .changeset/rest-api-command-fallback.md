@@ -1,6 +1,6 @@
 ---
 'mysa-js-sdk': minor
-'mysa2mqtt': patch
+'mysa2mqtt': minor
 ---
 
 Send set point and mode changes through Mysa's REST API when a thermostat's MQTT topic rejects them. On some accounts,
