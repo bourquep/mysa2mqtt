@@ -513,6 +513,11 @@ copyright notice and license text in any copy of the software or substantial por
   - This library would not be possible without the amazing work by [@dlenski](https://github.com/dlenski) in his
     [mysotherm](https://github.com/dlenski/mysotherm) repository. He's the one who reversed-engineered the Mysa MQTT
     protocol which is being used by this library.
+  - The REST fallback used to control thermostats whose MQTT topic rejects commands is based on the Mysa cloud API
+    reverse-engineered by [@SokolskyNikita](https://github.com/SokolskyNikita) and documented in their
+    [mysa-homeassistant](https://github.com/SokolskyNikita/mysa-homeassistant/tree/main/custom_components/mysa_local/protocols)
+    repository. Thanks also to [@laurentlgm](https://github.com/laurentlgm) for diagnosing the rejected MQTT commands
+    and validating the REST state endpoints on a `BB-V1` thermostat.
 
 - [mqtt2ha](https://github.com/bourquep/mysa2mqtt/tree/main/packages/mqtt2ha) - MQTT to Home Assistant bridge library
 - [Commander.js](https://github.com/tj/commander.js) - Command-line argument parsing
