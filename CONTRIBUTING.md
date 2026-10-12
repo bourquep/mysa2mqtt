@@ -54,6 +54,7 @@ mysa2mqtt/
 │   └── workflows/
 │       ├── ci.yml                 # Lint, typecheck, build, Docker smoke test
 │       ├── release.yml            # Changesets → npm + Docker Hub
+│       ├── preview-release.yml    # Manual preview of a pull request → npm + Docker Hub
 │       ├── documentation.yml      # TypeDoc → GitHub Pages
 │       └── codeql.yml             # Security scanning
 ├── docs-landing/                  # Landing page for the published docs site
@@ -141,6 +142,19 @@ Some guidance:
 Merging to `main` does **not** publish anything. It opens (or updates) a pull request titled _"chore: version packages"_
 that applies all pending changesets. Publishing to npm and Docker Hub happens when a maintainer merges that pull
 request.
+
+#### Preview builds of a pull request
+
+To let the people affected by a bug try a fix before it is merged, a maintainer can publish a preview of a pull request:
+in the Actions tab, run the **Preview release** workflow on `main` and enter the pull request number. It snapshots the
+pull request's changesets into versions like `mysa2mqtt@3.3.0-pr306.20261012133331`, publishes them to npm under the
+`pr-306` dist-tag and pushes the Docker image as `bourquep/mysa2mqtt:pr-306`, then comments on the pull request with
+install instructions. Testers use `docker pull bourquep/mysa2mqtt:pr-306` or `npm install -g mysa2mqtt@pr-306`.
+
+Previews never move the `latest` tags and create no commit, git tag or changelog entry; running the workflow again
+publishes a newer preview and moves the `pr-<number>` tags to it. Only pull requests with a changeset can be previewed.
+Since a preview publishes the pull request's code under the project's name, review it first; pull requests from forks
+are refused unless the workflow's **allow-fork** box is checked.
 
 Git tags are named `<package>@<version>`, for example `mysa-js-sdk@2.1.0`. Tags of the form `v1.2.3` are pre-monorepo
 `mysa2mqtt` releases and are kept because GitHub Releases are attached to them — please don't delete them.

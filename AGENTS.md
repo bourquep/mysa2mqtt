@@ -123,6 +123,10 @@ Guidance:
 Merging to `main` publishes nothing. It opens a "chore: version packages" PR; publishing happens when a maintainer
 merges that. Do not attempt to publish, tag, or trigger a release.
 
+Maintainers can publish a preview of an open PR with the manually-run **Preview release** workflow
+(`.github/workflows/preview-release.yml`), which snapshots the PR's changesets to versions tagged `pr-<number>` on npm
+and Docker Hub. Do not trigger it yourself; a preview needs a changeset in the PR.
+
 Tags are `<package>@<version>`. Tags matching `v*` are pre-monorepo `mysa2mqtt` releases with GitHub Releases attached —
 never delete them.
 
