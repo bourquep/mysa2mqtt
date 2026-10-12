@@ -162,6 +162,10 @@ The pull request's code is built by the `preview` job of `ci.yml`, in the pull r
 Preview release workflow: that workflow runs on `main`, where executing untrusted code could poison the Actions cache
 that CI and releases restore.
 
+Like releases, previews publish to npm through [trusted publishing](https://docs.npmjs.com/trusted-publishers), with no
+npm token: on npmjs.com, each package lists both `release.yml` and `preview-release.yml` from this repository as trusted
+publishers. A package without the second entry fails to publish with `ENEEDAUTH`.
+
 Git tags are named `<package>@<version>`, for example `mysa-js-sdk@2.1.0`. Tags of the form `v1.2.3` are pre-monorepo
 `mysa2mqtt` releases and are kept because GitHub Releases are attached to them — please don't delete them.
 
