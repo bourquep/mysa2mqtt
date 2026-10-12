@@ -124,8 +124,10 @@ Merging to `main` publishes nothing. It opens a "chore: version packages" PR; pu
 merges that. Do not attempt to publish, tag, or trigger a release.
 
 Maintainers can publish a preview of an open PR with the manually-run **Preview release** workflow
-(`.github/workflows/preview-release.yml`), which snapshots the PR's changesets to versions tagged `pr-<number>` on npm
-and Docker Hub. Do not trigger it yourself; a preview needs a changeset in the PR.
+(`.github/workflows/preview-release.yml`), which publishes the snapshot that the `preview` job of `ci.yml` built for the
+PR's latest commit, tagged `pr-<number>` on npm and Docker Hub. Do not trigger it yourself; a preview needs a changeset
+in the PR and passing CI. Never make `preview-release.yml` check out or run PR code: it runs on `main`, and doing so
+exposes main's Actions cache to poisoning (CodeQL `actions/cache-poisoning`). PR code runs only in `ci.yml`.
 
 Tags are `<package>@<version>`. Tags matching `v*` are pre-monorepo `mysa2mqtt` releases with GitHub Releases attached —
 never delete them.

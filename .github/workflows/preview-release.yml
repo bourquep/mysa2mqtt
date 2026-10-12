@@ -13,11 +13,16 @@ name: Preview release
 #
 # Trust model: this publishes the PR's code under the project's npm and Docker
 # Hub names, so review the PR before running it. Fork PRs are refused unless
-# explicitly allowed. The PR's code runs only in jobs that hold no publishing
-# credentials: `prepare` installs, versions, builds and packs it; `npm`
-# publishes the resulting tarballs without checking anything out or running
-# lifecycle scripts; `docker` executes the PR only inside the BuildKit build,
-# which cannot read the runner's Docker Hub login.
+# explicitly allowed.
+#
+# This workflow runs on main, so it never executes the PR's code on its
+# runners: doing so would let that code poison main's Actions cache, which the
+# CI and release workflows restore. The `preview` job of ci.yml installs,
+# versions, builds and packs the PR in the PR's own context instead; this
+# workflow only validates and publishes the tarballs that job uploaded, for the
+# PR's latest commit and only once its CI run has passed. The Docker image is
+# built from that same commit, with the PR's code confined to the BuildKit
+# build, which can reach neither the cache nor the runner's Docker Hub login.
 
 on:
   workflow_dispatch:
@@ -42,22 +47,22 @@ env:
   PR: ${{ inputs.pr }}
 
 jobs:
-  prepare:
+  resolve:
     # Same guard as release.yml: workflow_dispatch accepts any ref, and the
     # workflow file is read from that ref. Only main's copy may publish, so a
-    # branch cannot change how previews are built or which secrets they see.
+    # branch cannot change how previews are validated or which secrets they see.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      actions: read # find the PR's CI run and download its artifact
       pull-requests: read
     outputs:
       sha: ${{ steps.pr.outputs.sha }}
-      packages: ${{ steps.packages.outputs.packages }}
-      mysa2mqtt-version: ${{ steps.packages.outputs.mysa2mqtt-version }}
+      packages: ${{ steps.validate.outputs.packages }}
+      mysa2mqtt-version: ${{ steps.validate.outputs.mysa2mqtt-version }}
 
     steps:
-      - name: Resolve pull request
+      - name: Resolve pull request and its CI run
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
@@ -80,89 +85,87 @@ jobs:
             exit 1
           fi
 
-          # Pin the commit once: every job builds exactly this commit, even if
-          # the PR is pushed to while the workflow runs.
-          echo "sha=$(jq -r .headRefOid <<< "$info")" >> "$GITHUB_OUTPUT"
+          # Pin the commit once: every job works from exactly this commit, even
+          # if the PR is pushed to while the workflow runs.
+          sha=$(jq -r .headRefOid <<< "$info")
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v7
+          run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --event pull_request --commit "$sha" \
+            --json databaseId,status,conclusion --jq 'first // empty')
+          if [ -z "$run" ] || [ "$(jq -r .status <<< "$run")" != 'completed' ]; then
+            echo "::error::CI has not finished for ${sha:0:7}, the latest commit of #$PR. Wait for it, then try again"
+            exit 1
+          fi
+          if [ "$(jq -r .conclusion <<< "$run")" != 'success' ]; then
+            echo "::error::CI did not pass for ${sha:0:7}, the latest commit of #$PR; only passing commits can be previewed"
+            exit 1
+          fi
+          echo "ci-run-id=$(jq -r .databaseId <<< "$run")" >> "$GITHUB_OUTPUT"
+
+      # Downloaded outside the workspace, and only ever read as data. A PR
+      # without a changeset, or branched before ci.yml built previews, has no
+      # such artifact, and this step fails.
+      - name: Download the CI preview build
+        uses: actions/download-artifact@v8
         with:
-          ref: ${{ steps.pr.outputs.sha }}
-          persist-credentials: false
+          name: preview
+          path: ${{ runner.temp }}/preview
+          run-id: ${{ steps.pr.outputs.ci-run-id }}
+          github-token: ${{ github.token }}
 
-      # No `cache: 'npm'`: this run belongs to main, so a cache it saved would be
-      # restored by main's own workflows, and its contents come from the PR.
-      - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v7
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - run: npm ci
-
-      # The snapshot settings are applied here rather than committed to
-      # .changeset/config.json so that every PR, including one branched before
-      # this workflow existed, gets the same version scheme. The changelog is
-      # disabled because previews ship no release notes, and generating them
-      # would call the GitHub API.
-      - name: Version packages as a snapshot
+      # The artifact comes from a run of the PR's own code, so check that it
+      # holds exactly what a preview may publish: known packages, at snapshot
+      # versions of this PR, whose tarballs say the same.
+      - name: Validate the preview build
+        id: validate
         run: |
           set -euo pipefail
-          config=.changeset/config.json
-          jq '.changelog = false | .snapshot = {useCalculatedVersion: true, prereleaseTemplate: "{tag}.{datetime}"}' \
-            "$config" > "$RUNNER_TEMP/config.json"
-          mv "$RUNNER_TEMP/config.json" "$config"
+          dir="$RUNNER_TEMP/preview"
+          packages=$(jq -c '[.[] | {name, version}]' "$dir/packages.json")
 
-          npx changeset version --snapshot "pr$PR"
-          # Same as `npm run version-packages`: keep the lockfile in step with
-          # the new versions, which the Docker build's `npm ci` requires.
-          npm install --package-lock-only --ignore-scripts
+          if [ "$packages" = '[]' ]; then
+            echo "::error::The CI preview build of #$PR is empty"
+            exit 1
+          fi
+          if [ "$(jq '[.[].name] | length == (unique | length)' <<< "$packages")" != 'true' ]; then
+            echo "::error::The CI preview build of #$PR lists a package more than once"
+            exit 1
+          fi
 
-      - name: Collect preview packages
-        id: packages
-        run: |
-          set -euo pipefail
-          packages='[]'
-          for manifest in packages/*/package.json; do
-            name=$(jq -r .name "$manifest")
-            version=$(jq -r .version "$manifest")
-            # Packages without a changeset keep their published version.
-            if [[ "$version" != *"-pr$PR."* ]]; then
-              continue
+          for name in $(jq -r '.[].name' <<< "$packages"); do
+            case "$name" in
+              mqtt2ha | mysa-js-sdk | mysa2mqtt) ;;
+              *)
+                echo "::error::Unexpected package '$name' in the CI preview build"
+                exit 1
+                ;;
+            esac
+
+            version=$(jq -r --arg name "$name" '.[] | select(.name == $name) | .version' <<< "$packages")
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-pr$PR\.[0-9]+$ ]]; then
+              echo "::error::$name@$version is not a snapshot version of #$PR"
+              exit 1
             fi
 
-            # A provenance attestation would name main's commit (the workflow's
-            # ref) as the source, which is not what a preview is built from.
-            jq 'del(.publishConfig.provenance)' "$manifest" > "$RUNNER_TEMP/package.json"
-            mv "$RUNNER_TEMP/package.json" "$manifest"
+            tarball="$dir/tarballs/$name-$version.tgz"
+            if [ ! -f "$tarball" ]; then
+              echo "::error::The CI preview build of #$PR has no tarball for $name@$version"
+              exit 1
+            fi
 
-            packages=$(jq -c --arg name "$name" --arg version "$version" '. + [{name: $name, version: $version}]' <<< "$packages")
+            manifest=$(tar -xOzf "$tarball" package/package.json)
+            if [ "$(jq -r '"\(.name)@\(.version)"' <<< "$manifest")" != "$name@$version" ]; then
+              echo "::error::The $name-$version.tgz tarball does not contain $name@$version"
+              exit 1
+            fi
+
             if [ "$name" = 'mysa2mqtt' ]; then
               echo "mysa2mqtt-version=$version" >> "$GITHUB_OUTPUT"
             fi
           done
 
-          if [ "$packages" = '[]' ]; then
-            echo "::error::Pull request #$PR has no changeset, so there is nothing to preview"
-            exit 1
-          fi
-
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
           jq -r '.[] | "Preview: \(.name)@\(.version)"' <<< "$packages"
-
-      - run: npm run build
-
-      - name: Pack
-        env:
-          PACKAGES: ${{ steps.packages.outputs.packages }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/preview/tarballs"
-          for name in $(jq -r '.[].name' <<< "$PACKAGES"); do
-            npm pack -w "$name" --pack-destination "$RUNNER_TEMP/preview/tarballs"
-          done
-
-          # The Docker build starts from the same commit and reapplies these
-          # changes, so the image reports the preview version.
-          git diff --binary > "$RUNNER_TEMP/preview/snapshot.patch"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -171,7 +174,7 @@ jobs:
           retention-days: 7
 
   npm:
-    needs: prepare
+    needs: resolve
     runs-on: ubuntu-latest
     permissions: {}
 
@@ -189,11 +192,12 @@ jobs:
 
       # Libraries first, so a failure never leaves mysa2mqtt pointing at a
       # library version that does not exist. Already-published versions are
-      # skipped, which makes "Re-run failed jobs" safe.
+      # skipped, which makes "Re-run failed jobs" safe. Without `id-token`, npm
+      # cannot attest provenance, so a tarball that asks for it fails here.
       - name: Publish to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PACKAGES: ${{ needs.prepare.outputs.packages }}
+          PACKAGES: ${{ needs.resolve.outputs.packages }}
         run: |
           set -euo pipefail
           for name in mqtt2ha mysa-js-sdk mysa2mqtt; do
@@ -212,8 +216,8 @@ jobs:
           done
 
   docker:
-    needs: prepare
-    if: needs.prepare.outputs.mysa2mqtt-version != ''
+    needs: resolve
+    if: needs.resolve.outputs.mysa2mqtt-version != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -221,7 +225,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.prepare.outputs.sha }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - uses: actions/download-artifact@v8
@@ -241,25 +245,24 @@ jobs:
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 
-      # Reads main's layer cache but never writes to it: a cache saved by this
-      # run would be restored by release builds, and its layers come from the PR.
+      # No layer cache, in either direction: the build runs the PR's code, and
+      # main's cache is shared with release builds.
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./packages/mysa2mqtt/Dockerfile
-          cache-from: type=gha
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             bourquep/mysa2mqtt:pr-${{ env.PR }}
-            bourquep/mysa2mqtt:${{ needs.prepare.outputs.mysa2mqtt-version }}
+            bourquep/mysa2mqtt:${{ needs.resolve.outputs.mysa2mqtt-version }}
           labels: |
-            org.opencontainers.image.version=${{ needs.prepare.outputs.mysa2mqtt-version }}
-            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.resolve.outputs.mysa2mqtt-version }}
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.sha }}
 
   comment:
-    needs: [prepare, npm, docker]
+    needs: [resolve, npm, docker]
     # `docker` is skipped when the PR does not change mysa2mqtt; only a failure
     # should suppress the comment.
     if: ${{ !cancelled() && needs.npm.result == 'success' && needs.docker.result != 'failure' }}
@@ -272,9 +275,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          SHA: ${{ needs.prepare.outputs.sha }}
-          PACKAGES: ${{ needs.prepare.outputs.packages }}
-          M2M_VERSION: ${{ needs.prepare.outputs.mysa2mqtt-version }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          PACKAGES: ${{ needs.resolve.outputs.packages }}
+          M2M_VERSION: ${{ needs.resolve.outputs.mysa2mqtt-version }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
