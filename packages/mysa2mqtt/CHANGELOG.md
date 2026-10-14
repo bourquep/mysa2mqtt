@@ -1,5 +1,16 @@
 # mysa2mqtt
 
+## 3.3.0
+
+### Minor Changes
+
+- [#306](https://github.com/bourquep/mysa2mqtt/pull/306) [`2bd7d72`](https://github.com/bourquep/mysa2mqtt/commit/2bd7d72b3c4d25ce58449f7239d77a73866f465e) Thanks [@bourquep](https://github.com/bourquep)! - Send set point and mode changes through Mysa's REST API when a thermostat's MQTT topic rejects them. On some accounts, AWS IoT now drops the connection on every publish to a device, so temperature and mode changes from Home Assistant failed with `AWS_ERROR_MQTT_UNEXPECTED_HANGUP` while status updates kept working. After the first rejected publish, commands for that device go straight to the REST API, and the periodic status keep-alive that would keep dropping the connection is no longer sent to it. The SDK also gains `getDeviceShadowState()` to read a device's structured state.
+
+### Patch Changes
+
+- Updated dependencies [[`2bd7d72`](https://github.com/bourquep/mysa2mqtt/commit/2bd7d72b3c4d25ce58449f7239d77a73866f465e)]:
+  - mysa-js-sdk@3.4.0
+
 ## 3.2.7
 
 ### Patch Changes
