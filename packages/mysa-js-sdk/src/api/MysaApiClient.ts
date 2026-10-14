@@ -9,11 +9,12 @@ import {
 import { EventEmitter } from '@/lib/EventEmitter';
 import { parseMqttPayload, serializeMqttPayload } from '@/lib/PayloadParser';
 import { isMsgOutPayload, isMsgTypeOutPayload } from '@/lib/PayloadTypeGuards';
+import { buildShadowStateUpdate, isCoolingCapable, ShadowModeReceiveMap } from '@/lib/ShadowStateUpdate';
 import { ChangeDeviceState } from '@/types/mqtt/in/ChangeDeviceState';
 import { InMessageType } from '@/types/mqtt/in/InMessageType';
 import { StartPublishingDeviceStatus } from '@/types/mqtt/in/StartPublishingDeviceStatus';
 import { OutMessageType } from '@/types/mqtt/out/OutMessageType';
-import { Devices, DeviceStates, Firmwares, Homes } from '@/types/rest';
+import { DeviceBase, Devices, DeviceStates, Firmwares, Homes, ShadowState } from '@/types/rest';
 import { DescribeThingCommand, IoTClient } from '@aws-sdk/client-iot';
 import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 import { AuthenticationDetails, CognitoUser, CognitoUserPool, CognitoUserSession } from 'amazon-cognito-identity-js';
@@ -55,6 +56,8 @@ const CognitoIdentityPoolId = 'us-east-1:ebd95d52-9995-45da-b059-56b865a18379';
 const CognitoLoginKey = `cognito-idp.${AwsRegion}.amazonaws.com/${CognitoUserPoolId}`;
 const MqttEndpoint = 'a3q27gia9qg3zy-ats.iot.us-east-1.amazonaws.com';
 const MysaApiBaseUrl = 'https://app-prod.mysa.cloud';
+/** Mysa's current backend, which serves the shadow-style device state used by the Mysa app. */
+const MysaBackendBaseUrl = 'https://mysa-backend.mysa.cloud';
 const RealtimeKeepAliveInterval = dayjs.duration(5, 'minutes');
 const PublishAckTimeout = dayjs.duration(30, 'seconds');
 
@@ -150,6 +153,13 @@ export class MysaApiClient {
 
   /** The cached devices object, if any. */
   private _cachedDevices?: Devices;
+
+  /**
+   * Devices whose MQTT command topic rejected a publish. AWS IoT drops the connection on a publish its policy forbids,
+   * which some accounts now get on every publish to a device's `in` topic. Commands for these devices go straight to
+   * the REST API, and status keep-alive requests are no longer published, so they stop tearing down the connection.
+   */
+  private _mqttRejectedDeviceIds: Set<string> = new Set();
 
   /**
    * Event emitter for client events.
@@ -401,10 +411,53 @@ export class MysaApiClient {
   }
 
   /**
-   * Sets the state of a specific device by sending commands via MQTT.
+   * Retrieves the current shadow-style state of a specific device from Mysa's current backend.
    *
-   * This method allows you to change the temperature set point and/or operating mode of a Mysa device. The command is
-   * sent through the MQTT connection for real-time device control.
+   * Unlike {@link getDeviceStates}, which returns the legacy telemetry of every device, this returns one device's
+   * structured state document, where each section separates the values requested by clients (`desired`) from those the
+   * device has applied (`reported`).
+   *
+   * @example
+   *
+   * ```typescript
+   * const state = await client.getDeviceShadowState('device123');
+   * console.log(`Reported setpoint: ${state.targetHeat?.reported?.setpoint}°C`);
+   * ```
+   *
+   * @param deviceId - The ID of the device to get the state of.
+   * @returns A promise that resolves to the device's state document.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
+   */
+  async getDeviceShadowState(deviceId: string): Promise<ShadowState> {
+    this._logger.debug(`Fetching shadow state for device '${deviceId}'...`);
+
+    const session = await this._getFreshSession();
+
+    const response = await this._fetcher(`${MysaBackendBaseUrl}/state/${deviceId}`, {
+      headers: {
+        Authorization: `${session.getIdToken().getJwtToken()}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new MysaApiError(response);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Sets the state of a specific device.
+   *
+   * This method allows you to change the temperature set point, operating mode, fan speed and tracked sensor of a Mysa
+   * device. The command is sent through the MQTT connection used for real-time device control.
+   *
+   * When the MQTT command cannot be delivered, a set point and/or mode change is sent through Mysa's REST API instead,
+   * the same way the Mysa app does. If the device's MQTT topic rejected the command outright — which AWS IoT signals by
+   * dropping the connection, as now happens on some accounts for every publish — later set point and mode changes for
+   * that device go straight to the REST API. Fan speed and tracked sensor changes have no REST equivalent and are
+   * always sent over MQTT.
    *
    * @example
    *
@@ -423,7 +476,7 @@ export class MysaApiClient {
    * ```
    *
    * @param deviceId - The ID of the device to control.
-   * @param setPoint - The target temperature set point (optional).
+   * @param setPoint - The target temperature set point, in degrees Celsius (optional).
    * @param mode - The operating mode to set (one of MysaDeviceMode values, or undefined to leave unchanged).
    * @param fanSpeed - The fan speed mode to set ('low', 'medium', 'high', 'max', 'auto', or undefined to leave
    *   unchanged).
@@ -433,7 +486,8 @@ export class MysaApiClient {
    * @throws {@link UnsupportedFanSpeedError} When the requested fan speed is not supported by the device.
    * @throws {@link UnsupportedTrackedSensorError} When a tracked sensor is requested for a device that has no floor
    *   probe to select.
-   * @throws {@link Error} When MQTT connection or command sending fails.
+   * @throws {@link MysaApiError} When the command had to go through the REST API and that request failed.
+   * @throws {@link Error} When MQTT connection or command sending fails for a command with no REST equivalent.
    */
   async setDeviceState(
     deviceId: string,
@@ -455,18 +509,6 @@ export class MysaApiClient {
     }
 
     const device = this._cachedDevices.DevicesObj[deviceId];
-
-    // Validate the session before reaching for a possibly cached MQTT connection. _getMqttConnection reuses
-    // _mqttConnectionPromise without checking auth, so without this a command could be published on a still-open
-    // connection after the session died — with no source ref to attribute it to.
-    await this._getFreshSession();
-
-    this._logger.debug(`Initializing MQTT connection...`);
-    const mqttConnection = await this._getMqttConnection();
-
-    const now = dayjs();
-
-    this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
     const fanSpeedMap = buildFanSpeedSendMap(device, mode);
 
     // Reject an unsupported fan speed (e.g. 'max' on a device whose SupportedCaps.fanSpeeds only covers auto/low/
@@ -482,6 +524,69 @@ export class MysaApiClient {
     if (trackedSensor !== undefined && !/^INF-/i.test(device.Model)) {
       throw new UnsupportedTrackedSensorError(deviceId, device.Model);
     }
+
+    // Validate the session before reaching for a possibly cached MQTT connection. _getMqttConnection reuses
+    // _mqttConnectionPromise without checking auth, so without this a command could be published on a still-open
+    // connection after the session died — with no source ref to attribute it to.
+    await this._getFreshSession();
+
+    // Only set point and mode changes have a known REST encoding.
+    const canUseRest = fanSpeed === undefined && trackedSensor === undefined;
+
+    if (canUseRest && this._mqttRejectedDeviceIds.has(deviceId)) {
+      this._logger.debug(`MQTT commands are rejected for '${deviceId}'; using the REST API`);
+      await this._setDeviceStateViaRest(deviceId, device, setPoint, mode);
+      return;
+    }
+
+    try {
+      await this._setDeviceStateViaMqtt(deviceId, device, setPoint, mode, fanSpeed, trackedSensor);
+      this._logger.debug(`Device state publish succeeded for '${deviceId}'`);
+      return;
+    } catch (error) {
+      if (!canUseRest) {
+        this._logger.error(`Failed to set device state for '${deviceId}'`, error);
+        throw error;
+      }
+
+      this._logger.warn(`Failed to set device state for '${deviceId}' over MQTT; falling back to the REST API`, error);
+    }
+
+    try {
+      await this._setDeviceStateViaRest(deviceId, device, setPoint, mode);
+    } catch (error) {
+      this._logger.error(`Failed to set device state for '${deviceId}'`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sends a state change command to a device over MQTT.
+   *
+   * @param deviceId - The ID of the device to control.
+   * @param device - The device to control.
+   * @param setPoint - The target temperature set point, or undefined to leave it unchanged.
+   * @param mode - The operating mode, or undefined to leave it unchanged.
+   * @param fanSpeed - The fan speed, already validated against the device's capabilities, or undefined.
+   * @param trackedSensor - The tracked sensor, already validated against the device's model, or undefined.
+   * @throws {@link MqttPublishError} When the command cannot be published.
+   * @throws {@link Error} When the MQTT connection cannot be established.
+   */
+  private async _setDeviceStateViaMqtt(
+    deviceId: string,
+    device: DeviceBase,
+    setPoint: number | undefined,
+    mode: MysaDeviceMode | undefined,
+    fanSpeed: MysaFanSpeedMode | undefined,
+    trackedSensor: MysaTrackedSensor | undefined
+  ): Promise<void> {
+    this._logger.debug(`Initializing MQTT connection...`);
+    const mqttConnection = await this._getMqttConnection();
+
+    const now = dayjs();
+
+    this._logger.debug(`Sending request to set device state for '${deviceId}'...`);
+    const fanSpeedMap = buildFanSpeedSendMap(device, mode);
 
     const payload = serializeMqttPayload<ChangeDeviceState>({
       msg: InMessageType.CHANGE_DEVICE_STATE,
@@ -523,13 +628,58 @@ export class MysaApiClient {
       }
     });
 
-    try {
-      await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
-      this._logger.debug(`Device state publish succeeded for '${deviceId}'`);
-    } catch (error) {
-      this._logger.error(`Failed to set device state for '${deviceId}'`, error);
-      throw error;
+    await this._publishToDevice(mqttConnection, deviceId, payload);
+  }
+
+  /**
+   * Sends a set point and/or mode change to a device through the REST API of Mysa's current backend.
+   *
+   * @param deviceId - The ID of the device to control.
+   * @param device - The device to control.
+   * @param setPoint - The target temperature set point, in degrees Celsius, or undefined to leave it unchanged.
+   * @param mode - The operating mode, or undefined to leave it unchanged.
+   * @throws {@link MysaApiError} When the API request fails.
+   * @throws {@link UnauthenticatedError} When the client cannot authenticate with its credentials.
+   */
+  private async _setDeviceStateViaRest(
+    deviceId: string,
+    device: DeviceBase,
+    setPoint: number | undefined,
+    mode: MysaDeviceMode | undefined
+  ): Promise<void> {
+    // A device that can cool keeps separate heating and cooling set points. When only the set point is changing, the
+    // device's current mode decides which one is meant, as it does for the MQTT command's single `sp`.
+    let currentMode: MysaDeviceMode | undefined;
+    if (setPoint !== undefined && mode === undefined && isCoolingCapable(device)) {
+      const state = await this.getDeviceShadowState(deviceId);
+      const currentModeValue = state.modes?.reported?.mode ?? state.modes?.desired?.mode;
+      currentMode = currentModeValue !== undefined ? ShadowModeReceiveMap[currentModeValue] : undefined;
     }
+
+    const body = buildShadowStateUpdate(device, setPoint, mode, currentMode);
+    if (!body) {
+      this._logger.debug(`Nothing to change for '${deviceId}'; skipping the REST state update`);
+      return;
+    }
+
+    this._logger.debug(`Sending REST state update for '${deviceId}'...`);
+
+    const session = await this._getFreshSession();
+
+    const response = await this._fetcher(`${MysaBackendBaseUrl}/state/${deviceId}/update`, {
+      method: 'POST',
+      headers: {
+        Authorization: `${session.getIdToken().getJwtToken()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      throw new MysaApiError(response);
+    }
+
+    this._logger.debug(`REST state update succeeded for '${deviceId}'`);
   }
 
   /**
@@ -606,12 +756,18 @@ export class MysaApiClient {
     // above still delivers the device's autonomous periodic status reports
     // even when the request-driven status stream is unavailable.
     try {
-      await this._publishWithRetry(mqttConnection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+      await this._publishToDevice(mqttConnection, deviceId, payload);
     } catch (error) {
       this._logger.warn(`Failed to request status publishing for '${deviceId}'; relying on periodic reports`, error);
     }
 
     const timer = setInterval(async () => {
+      if (this._mqttRejectedDeviceIds.has(deviceId)) {
+        // Every rejected publish costs a dropped connection, and this one cannot succeed; periodic reports still flow.
+        this._logger.debug(`Skipping status publishing keep-alive for '${deviceId}'; its MQTT topic rejects publishes`);
+        return;
+      }
+
       this._logger.debug(`Sending request to keep-alive publishing device status for '${deviceId}'...`);
 
       try {
@@ -622,7 +778,7 @@ export class MysaApiClient {
           Timestamp: dayjs().unix(),
           Timeout: RealtimeKeepAliveInterval.asSeconds()
         });
-        await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+        await this._publishToDevice(connection, deviceId, payload);
       } catch (error) {
         this._logger.warn(`Failed to keep-alive status publishing for '${deviceId}'`, error);
       }
@@ -904,6 +1060,41 @@ export class MysaApiClient {
 
         await new Promise((r) => setTimeout(r, delay));
       }
+    }
+  }
+
+  /**
+   * Publishes a message to a device's `in` topic, remembering devices whose topic rejects publishes.
+   *
+   * AWS IoT answers a publish its policy forbids by closing the connection, which cancels the in-flight publish with a
+   * non-transient error. Such a device is recorded so that commands go through the REST API instead and keep-alive
+   * requests stop tearing down the connection. Transient failures (timeouts, connection loss) are not recorded.
+   *
+   * @param connection - The active MQTT client connection used to send the publish.
+   * @param deviceId - The ID of the device to publish to.
+   * @param payload - The serialized payload.
+   * @throws {@link MqttPublishError} When the publish fails.
+   */
+  private async _publishToDevice(
+    connection: mqtt.MqttClientConnection,
+    deviceId: string,
+    payload: ArrayBuffer | Uint8Array
+  ): Promise<void> {
+    try {
+      await this._publishWithRetry(connection, `/v1/dev/${deviceId}/in`, payload, mqtt.QoS.AtLeastOnce);
+    } catch (error) {
+      if (
+        error instanceof MqttPublishError &&
+        !this._isTransientMqttError(error.original) &&
+        !this._mqttRejectedDeviceIds.has(deviceId)
+      ) {
+        this._logger.warn(
+          `The MQTT broker rejected a publish to device '${deviceId}'; its commands will be sent through the REST API`
+        );
+        this._mqttRejectedDeviceIds.add(deviceId);
+      }
+
+      throw error;
     }
   }
 

@@ -101,6 +101,19 @@ await client.setDeviceState('device-id', 22, 'heat'); // Set to 22°C in heat mo
 await client.setDeviceState('device-id', undefined, 'off'); // Turn off
 ```
 
+Commands are sent over MQTT. If a device's MQTT topic rejects them — as now happens on some accounts, where AWS IoT
+drops the connection on every publish — set point and mode changes are sent through Mysa's REST API instead, the same
+way the Mysa app does, and later ones for that device go straight there. Fan speed and tracked sensor changes have no
+REST equivalent and are always sent over MQTT.
+
+The REST API also exposes each device's structured state, which separates the values last requested from those the
+device has applied:
+
+```typescript
+const state = await client.getDeviceShadowState('device-id');
+console.log(`Requested: ${state.targetHeat?.desired?.setpoint}°C, applied: ${state.targetHeat?.reported?.setpoint}°C`);
+```
+
 ### Real-time Updates
 
 The SDK also supports real-time updates:
@@ -212,6 +225,12 @@ For general questions and discussions, join our [Discussion Forum](https://githu
 This library would not be possible without the amazing work by [@dlenski](https://github.com/dlenski) in his
 [mysotherm](https://github.com/dlenski/mysotherm) repository. He's the one who reversed-engineered the Mysa MQTT
 protocol which is being used by this library.
+
+The REST fallback used to control thermostats whose MQTT topic rejects commands is based on the Mysa cloud API
+reverse-engineered by [@SokolskyNikita](https://github.com/SokolskyNikita) and documented in their
+[mysa-homeassistant](https://github.com/SokolskyNikita/mysa-homeassistant/tree/main/custom_components/mysa_local/protocols)
+repository. Thanks also to [@laurentlgm](https://github.com/laurentlgm) for diagnosing the rejected MQTT commands and
+validating the REST state endpoints on a `BB-V1` thermostat.
 
 ## Contributors ✨
 
