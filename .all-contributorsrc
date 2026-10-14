@@ -78,6 +78,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "SokolskyNikita",
+      "name": "Nikita Sokolsky",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1880652?v=4",
+      "profile": "https://sokolsky.me/",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "contributorsPerLine": 7,
