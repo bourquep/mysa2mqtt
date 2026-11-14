@@ -132,6 +132,11 @@ export interface DeviceBase {
   /** Optional supported capabilities for AC devices */
   SupportedCaps?: SupportedCaps;
   /**
+   * Optional sensor an in-floor heating thermostat (INF-V1-0) regulates against: 3 = floor probe, 5 = ambient air. Same
+   * encoding as the `trackedSnsr` field of real-time status messages.
+   */
+  Tracking?: number;
+  /**
    * Optional device code number, identifying the IR code set an AC controller drives its unit with.
    *
    * The REST API reports this as a string (e.g. `"2009"`) even though the value is numeric, and has been observed to do

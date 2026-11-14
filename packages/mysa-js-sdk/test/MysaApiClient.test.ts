@@ -1,6 +1,7 @@
 import { MqttPublishError, MysaApiError } from '@/api/Errors';
 import { MysaApiClient } from '@/api/MysaApiClient';
 import { Devices } from '@/types/rest';
+import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const BB_ID = 'bb0000000001';
@@ -18,6 +19,8 @@ interface ClientInternals {
   _getFreshSession: () => Promise<unknown>;
   _getMqttConnection: () => Promise<unknown>;
   _publishWithRetry: (...args: unknown[]) => Promise<void>;
+  _resetMqttConnection: (reason: string) => Promise<void>;
+  _mqttConnectionPromise?: Promise<unknown>;
   _cognitoUser?: unknown;
 }
 
@@ -27,6 +30,17 @@ const rejectedPublish = () =>
     'MQTT publish failed after 1 attempts',
     1,
     new Error('Failed to publish: AWS_ERROR_MQTT_CANCELLED_FOR_CLEAN_SESSION')
+  );
+
+/**
+ * The error aws-crt reports for a publish still in flight when the client itself tears the connection down. aws-crt
+ * rejects with a plain string rather than an Error.
+ */
+const destroyedConnectionPublish = () =>
+  new MqttPublishError(
+    'MQTT publish failed after 1 attempts',
+    1,
+    'Failed to publish: AWS_ERROR_MQTT_CONNECTION_DESTROYED'
   );
 
 /** The error left after every retry of a publish that kept timing out. */
@@ -134,6 +148,34 @@ describe('MysaApiClient.setDeviceState', () => {
     expect(restUpdates()).toHaveLength(1);
   });
 
+  it('recognizes a rejection that aws-crt reports as a plain string', async () => {
+    const { client, publish, restUpdates } = setup();
+    publish.mockRejectedValueOnce(
+      new MqttPublishError(
+        'MQTT publish failed after 1 attempts',
+        1,
+        'Failed to publish: AWS_ERROR_MQTT_CANCELLED_FOR_CLEAN_SESSION'
+      )
+    );
+
+    await client.setDeviceState(BB_ID, 20);
+    await client.setDeviceState(BB_ID, 21);
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(restUpdates()).toHaveLength(2);
+  });
+
+  it('keeps using MQTT after a publish lost to a connection the client tore down itself', async () => {
+    const { client, publish, restUpdates } = setup();
+    publish.mockRejectedValueOnce(destroyedConnectionPublish());
+
+    await client.setDeviceState(BB_ID, 20);
+    await client.setDeviceState(BB_ID, 21);
+
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(restUpdates()).toHaveLength(1);
+  });
+
   it('falls back to the REST API when no MQTT connection can be established', async () => {
     const { client, restUpdates } = setup();
     vi.spyOn(client as unknown as ClientInternals, '_getMqttConnection').mockRejectedValueOnce(new Error('offline'));
@@ -225,5 +267,66 @@ describe('MysaApiClient.startRealtimeUpdates', () => {
     expect(publish).toHaveBeenCalledTimes(4);
 
     await client.stopRealtimeUpdates(BB_ID);
+  });
+});
+
+describe('MysaApiClient MQTT publish retries', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('retries a publish on the replacement of a connection torn down by a reset', async () => {
+    const { client, publish, restUpdates } = setup();
+    publish.mockRestore();
+
+    const discarded = { publish: vi.fn().mockRejectedValue('Failed to publish: AWS_ERROR_MQTT_CONNECTION_DESTROYED') };
+    const replacement = { publish: vi.fn().mockResolvedValue({ packet_id: 1 }) };
+    vi.spyOn(client as unknown as ClientInternals, '_getMqttConnection')
+      .mockResolvedValueOnce(discarded)
+      .mockResolvedValue(replacement);
+
+    const result = client.setDeviceState(BB_ID, 21);
+    await vi.advanceTimersByTimeAsync(1000);
+    await result;
+
+    expect(discarded.publish).toHaveBeenCalledTimes(1);
+    expect(replacement.publish).toHaveBeenCalledTimes(1);
+    expect(restUpdates()).toEqual([]);
+  });
+});
+
+describe('MysaApiClient MQTT connection reset', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('survives an operation failing on the discarded connection after its listeners are removed', async () => {
+    const { client } = setup();
+    const internals = client as unknown as ClientInternals;
+
+    // aws-crt reports each failed operation twice: by rejecting its promise, and by emitting 'error' on the next tick.
+    // An emitter with no 'error' listener throws, which here would surface as an uncaught exception.
+    const discarded = Object.assign(new EventEmitter(), {
+      disconnect: vi.fn(async () => {
+        process.nextTick(() => discarded.emit('error', new Error('AWS_ERROR_MQTT_CONNECTION_DESTROYED')));
+      })
+    });
+    discarded.on('error', () => {});
+    internals._mqttConnectionPromise = Promise.resolve(discarded);
+
+    const reset = internals._resetMqttConnection('test');
+    await vi.advanceTimersByTimeAsync(5000);
+    await reset;
+
+    expect(discarded.disconnect).toHaveBeenCalledTimes(1);
+    expect(discarded.listenerCount('error')).toBe(1);
   });
 });

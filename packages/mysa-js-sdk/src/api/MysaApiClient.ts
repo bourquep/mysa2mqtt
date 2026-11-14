@@ -959,13 +959,20 @@ export class MysaApiClient {
    * @returns True if the error appears transient and a retry should be attempted; false otherwise.
    */
   private _isTransientMqttError(err: unknown): boolean {
-    if (!err || typeof err !== 'object') {
+    let code: unknown;
+    let msg: string;
+
+    if (typeof err === 'string') {
+      // aws-crt rejects publish, subscribe and connect promises with a plain string such as
+      // "Failed to publish: AWS_ERROR_MQTT_CONNECTION_DESTROYED", not an Error object.
+      msg = err;
+    } else if (err && typeof err === 'object') {
+      const anyErr = err as { error_code?: unknown; error_name?: unknown; error?: unknown; message?: unknown };
+      code = anyErr.error_code || anyErr.error_name || anyErr.error;
+      msg = (anyErr.message || anyErr.error || '').toString();
+    } else {
       return false;
     }
-
-    const anyErr = err as { error_code?: unknown; error_name?: unknown; error?: unknown; message?: unknown };
-    const code = anyErr.error_code || anyErr.error_name || anyErr.error;
-    const msg = (anyErr.message || anyErr.error || '').toString();
 
     const transientMarkers = [
       'AWS_ERROR_MQTT_TIMEOUT',
@@ -984,8 +991,8 @@ export class MysaApiClient {
    * Publishes an MQTT message with exponential backoff retries for transient failures.
    *
    * Retries occur for errors classified by `_isTransientMqttError`. Between attempts the delay grows exponentially with
-   * jitter to avoid thundering herds after broker recovery. If the connection is not currently marked as connected, a
-   * reconnect is attempted; if that fails, the connection is rebuilt (fresh credentials) before the next retry.
+   * jitter to avoid thundering herds after broker recovery. Each retry goes through the client's current connection, so
+   * a publish whose connection was torn down by a forced reset is retried on its replacement.
    *
    * On final failure (after maxAttempts) a {@link MqttPublishError} is thrown including the number of attempts and
    * original error for higher-level handling.
@@ -996,7 +1003,7 @@ export class MysaApiClient {
    * - MaxAttempts: Maximum number of publish attempts before failing (default: 5).
    * - BaseDelayMs: Base delay in milliseconds used for exponential backoff calculation (default: 500).
    *
-   * @param connection - The active MQTT client connection used to send the publish.
+   * @param connection - The MQTT client connection used for the first attempt.
    * @param topic - The MQTT topic to publish to.
    * @param payload - The serialized payload (binary buffer or Uint8Array).
    * @param qos - The desired MQTT QoS level for the publish.
@@ -1018,6 +1025,11 @@ export class MysaApiClient {
     while (true) {
       attempt++;
       try {
+        // A forced reset replaces the connection, and the one it discarded can never deliver the retry.
+        if (attempt > 1) {
+          connection = await this._getMqttConnection();
+        }
+
         // Guard against publishes that never settle: a QoS1 publish the
         // broker silently ignores (e.g. an unauthorized topic) produces no
         // PUBACK and, in practice, no protocol-timeout rejection either —
@@ -1413,6 +1425,10 @@ export class MysaApiClient {
         try {
           const connection = await connectionToClose;
           connection.removeAllListeners();
+          // aws-crt emits an 'error' event for every operation that fails, and an EventEmitter with no 'error'
+          // listener throws. Removing all listeners also removed the no-op one aws-crt installs, so without this an
+          // in-flight publish failing as the connection is torn down would crash the process.
+          connection.on('error', () => {});
           await connection.disconnect();
         } catch (err) {
           this._logger.debug('Error tearing down old MQTT connection during reset (ignored)', err);

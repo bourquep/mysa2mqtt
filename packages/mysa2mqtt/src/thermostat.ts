@@ -35,6 +35,7 @@ import {
   DeviceBase,
   DeviceState,
   FirmwareDevice,
+  getDeviceTrackedSensor,
   MysaApiClient,
   MysaDeviceMode,
   MysaFanSpeedMode,
@@ -187,9 +188,9 @@ export function buildFanModes(supportedCaps: SupportedCaps | undefined, mode?: M
  * follow the sensor the device reports it regulates against, which mirrors the choice its owner made in the Mysa app.
  *
  * @param isInFloor - Whether this is an in-floor heating thermostat.
- * @param reportedTrackedSensor - The sensor the device last reported regulating against. Only ever arrives on realtime
- *   status messages, so it is undefined until the first one lands — and stays undefined on accounts where the realtime
- *   stream never connects at all, which is why this falls back to ambient rather than blocking.
+ * @param reportedTrackedSensor - The sensor the device last reported regulating against: seeded from the device record
+ *   at startup, then kept current by realtime status messages. Undefined when the record carries no selection and no
+ *   status message has landed yet, which is why this falls back to ambient rather than blocking.
  * @returns The sensor whose reading the climate entity should publish.
  */
 export function resolveTemperatureSource(
@@ -267,7 +268,10 @@ export class Thermostat {
 
   /** True for in-floor heating thermostats (INF-V1-0), the only family with a floor probe. */
   private readonly isInFloor: boolean;
-  /** The sensor the device last reported regulating against. Undefined until a realtime status message arrives. */
+  /**
+   * The sensor the device last reported regulating against. Seeded from the device record, so it is known even on
+   * accounts whose realtime stream never delivers a status message, then kept current by those messages.
+   */
   private reportedTrackedSensor: MysaTrackedSensor | undefined;
   /** Latest floor-probe reading, retained so a REST poll cannot drop the climate entity back to the ambient sensor. */
   private lastFloorTemperature: number | undefined;
@@ -312,6 +316,7 @@ export class Thermostat {
     const isV2 = /-v2-/i.test(mysaDevice.Model);
     const isInFloor = /^INF-/i.test(mysaDevice.Model);
     this.isInFloor = isInFloor;
+    this.reportedTrackedSensor = isInFloor ? getDeviceTrackedSensor(mysaDevice) : undefined;
     const needsHeaterWatts = isV2 || isInFloor;
     const canReportPower = !isAC && (!needsHeaterWatts || heaterWatts != null);
 
@@ -555,10 +560,10 @@ export class Thermostat {
       }
       await this.mqttRetiredPower?.removeConfig();
 
-      // The device only reports its selection over the realtime stream, so publish 'None' ahead of the discovery
-      // config rather than let a retained value from an earlier run stand in for a reading we do not have yet.
+      // Publish the selection from the device record ahead of the discovery config, or 'None' when the record has
+      // none, rather than let a retained value from an earlier run stand in for a reading we do not have.
       if (this.mqttTemperatureSource != null) {
-        await this.mqttTemperatureSource.setState('state_topic', 'None');
+        await this.republishTemperatureSource();
         await this.mqttTemperatureSource.writeConfig();
       }
       await this.mqttRetiredTemperatureSource?.removeConfig();
@@ -673,13 +678,13 @@ export class Thermostat {
     }
 
     if (this.lastFloorTemperature == null) {
-      // Practically unreachable: a device reporting that it regulates against the floor sends the probe reading in the
-      // same message, and the two fields are only independently optional in the payload types. Fall back to ambient
-      // rather than blanking the entity out, but say so once in case some firmware really does split them.
+      // The selection comes from the device record at startup, but the probe reading only ever arrives on realtime
+      // status messages. Until one does — and for good on accounts whose realtime stream delivers nothing — fall back
+      // to ambient rather than blanking the entity out, and say so once.
       if (!this.warnedAboutMissingFloorTemperature) {
         this.warnedAboutMissingFloorTemperature = true;
         this.logger.warn(
-          'Device reports that it regulates against the floor probe but has never sent a floor temperature; using the ambient temperature instead',
+          'Device regulates against the floor probe, but no floor temperature has been received over the realtime connection yet; using the ambient temperature until one arrives',
           { deviceId: this.mysaDevice.Id, model: this.mysaDevice.Model }
         );
       }

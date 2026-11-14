@@ -103,8 +103,8 @@ describe('resolveTemperatureSource', () => {
   });
 
   it('uses ambient for an in-floor thermostat that has not reported a selection yet', () => {
-    // The selection only rides along on realtime status messages, which have not arrived at startup and never arrive
-    // at all on accounts whose realtime stream cannot connect. Ambient is the pre-existing behaviour.
+    // Neither the device record nor a realtime status message has reported a selection. Ambient is the pre-existing
+    // behaviour.
     expect(resolveTemperatureSource(true, undefined)).toBe('ambient');
   });
 
