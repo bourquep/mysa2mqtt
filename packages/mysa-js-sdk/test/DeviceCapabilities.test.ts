@@ -1,4 +1,4 @@
-import { MysaTrackedSensor } from '@/api/MysaTrackedSensor';
+import { getDeviceTrackedSensor, MysaTrackedSensor } from '@/api/MysaTrackedSensor';
 import { buildFanSpeedSendMap, TrackedSensorReceiveMap, TrackedSensorSendMap } from '@/lib/DeviceCapabilities';
 import { DeviceBase, SupportedCaps } from '@/types/rest';
 import { describe, expect, it } from 'vitest';
@@ -139,5 +139,20 @@ describe('tracked sensor maps', () => {
 
   it('uses the raw values observed on the wire', () => {
     expect(TrackedSensorSendMap).toEqual({ floor: 3, ambient: 5 });
+  });
+});
+
+describe('getDeviceTrackedSensor', () => {
+  const inFloor = (Tracking?: number) => ({ Id: 'inf0000000001', Model: 'INF-V1-0', Tracking }) as DeviceBase;
+
+  it('reads the selection an in-floor device record stores as Tracking', () => {
+    expect(getDeviceTrackedSensor(inFloor(3))).toBe('floor');
+    expect(getDeviceTrackedSensor(inFloor(5))).toBe('ambient');
+  });
+
+  it('reports nothing for a record without a recognized selection', () => {
+    expect(getDeviceTrackedSensor(inFloor(undefined))).toBeUndefined();
+    expect(getDeviceTrackedSensor(inFloor(4))).toBeUndefined();
+    expect(getDeviceTrackedSensor({ Id: 'bb0000000001', Model: 'BB-V2-0' } as DeviceBase)).toBeUndefined();
   });
 });
