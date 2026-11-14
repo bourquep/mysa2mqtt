@@ -1,5 +1,31 @@
 # mysa2mqtt
 
+## 3.3.1
+
+### Patch Changes
+
+- [#313](https://github.com/bourquep/mysa2mqtt/pull/313) [`1281bd9`](https://github.com/bourquep/mysa2mqtt/commit/1281bd9b00b67cac9ebe669cf5a46a065ceed31c) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump dotenv from 18.0.2 to 18.0.7
+
+- [#317](https://github.com/bourquep/mysa2mqtt/pull/317) [`d4e16a8`](https://github.com/bourquep/mysa2mqtt/commit/d4e16a8c2ecbba7282bc6a79e5ae5bad7b23ebb9) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump markdown-it from 14.3.2 to 14.3.3
+
+- [#319](https://github.com/bourquep/mysa2mqtt/pull/319) [`ce81bbf`](https://github.com/bourquep/mysa2mqtt/commit/ce81bbf7ef14b3af65a15f6c02204c57d8c5b153) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps-dev): Bump launch-editor from 2.14.1 to 2.14.2
+
+- [#321](https://github.com/bourquep/mysa2mqtt/pull/321) [`1756413`](https://github.com/bourquep/mysa2mqtt/commit/1756413ac6c3ae6a6f170d25f0c17b7a61c5da36) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps-dev): Bump fast-uri from 3.1.8 to 3.1.9
+
+- [#324](https://github.com/bourquep/mysa2mqtt/pull/324) [`4663633`](https://github.com/bourquep/mysa2mqtt/commit/466363380f9c83d4090c271ff7cbb2626d3597bf) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump ip-address from 10.7.3 to 10.7.6
+
+- [#328](https://github.com/bourquep/mysa2mqtt/pull/328) [`c7081fb`](https://github.com/bourquep/mysa2mqtt/commit/c7081fb8e85a7cecc99b4b71b63108e3b0bf1d67) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump follow-redirects from 1.16.1 to 1.16.3
+
+- [#329](https://github.com/bourquep/mysa2mqtt/pull/329) [`6986f23`](https://github.com/bourquep/mysa2mqtt/commit/6986f23f8c9f0b2dbf6533070db5f08977137484) Thanks [@bourquep](https://github.com/bourquep)! - Make the real-time connection more resilient when Mysa's cloud keeps dropping it, and show an in-floor thermostat's temperature source even when no real-time data arrives.
+
+  - A publish that failed because the client itself was rebuilding a dropped connection was mistaken for Mysa refusing commands for that thermostat. From then on, the thermostat no longer received the periodic request that keeps it streaming live status, which is the only source of an in-floor thermostat's floor temperature. Failures the AWS IoT SDK reports as plain strings are now classified correctly, and a retried publish goes through the rebuilt connection instead of the discarded one.
+  - Rebuilding the connection could crash the process when an operation still in flight on the old connection failed.
+  - In-floor thermostats (INF-V1-0) now publish their **Temperature source** (Ambient/Floor) at startup from the device's settings, instead of leaving it unknown until a real-time status message arrives. The SDK exposes the setting as `DeviceBase.Tracking` and the new `getDeviceTrackedSensor()` helper.
+
+- [#326](https://github.com/bourquep/mysa2mqtt/pull/326) [`93878b4`](https://github.com/bourquep/mysa2mqtt/commit/93878b471e3d02f5d6d2b68958d3a1080b1f4891) Thanks [@vavallee](https://github.com/vavallee)! - Stop logging a `MaxListenersExceededWarning` when the account has more than 10 Mysa devices. Each thermostat adds its own status listener to the shared client, which is expected and not a leak, so the listener limit now scales with the number of devices.
+- Updated dependencies [[`876983d`](https://github.com/bourquep/mysa2mqtt/commit/876983dc54cf98b527923f874520ae0ad677be51), [`bb38949`](https://github.com/bourquep/mysa2mqtt/commit/bb38949336261f02991ec96fcd54ca996bb4547b), [`6986f23`](https://github.com/bourquep/mysa2mqtt/commit/6986f23f8c9f0b2dbf6533070db5f08977137484)]:
+  - mysa-js-sdk@3.5.0
+
 ## 3.3.0
 
 ### Minor Changes

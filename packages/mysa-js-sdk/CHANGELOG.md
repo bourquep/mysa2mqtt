@@ -1,5 +1,21 @@
 # mysa-js-sdk
 
+## 3.5.0
+
+### Minor Changes
+
+- [#329](https://github.com/bourquep/mysa2mqtt/pull/329) [`6986f23`](https://github.com/bourquep/mysa2mqtt/commit/6986f23f8c9f0b2dbf6533070db5f08977137484) Thanks [@bourquep](https://github.com/bourquep)! - Make the real-time connection more resilient when Mysa's cloud keeps dropping it, and show an in-floor thermostat's temperature source even when no real-time data arrives.
+
+  - A publish that failed because the client itself was rebuilding a dropped connection was mistaken for Mysa refusing commands for that thermostat. From then on, the thermostat no longer received the periodic request that keeps it streaming live status, which is the only source of an in-floor thermostat's floor temperature. Failures the AWS IoT SDK reports as plain strings are now classified correctly, and a retried publish goes through the rebuilt connection instead of the discarded one.
+  - Rebuilding the connection could crash the process when an operation still in flight on the old connection failed.
+  - In-floor thermostats (INF-V1-0) now publish their **Temperature source** (Ambient/Floor) at startup from the device's settings, instead of leaving it unknown until a real-time status message arrives. The SDK exposes the setting as `DeviceBase.Tracking` and the new `getDeviceTrackedSensor()` helper.
+
+### Patch Changes
+
+- [#312](https://github.com/bourquep/mysa2mqtt/pull/312) [`876983d`](https://github.com/bourquep/mysa2mqtt/commit/876983dc54cf98b527923f874520ae0ad677be51) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump @aws-sdk/client-iot from 3.1137.0 to 3.1150.0
+
+- [#314](https://github.com/bourquep/mysa2mqtt/pull/314) [`bb38949`](https://github.com/bourquep/mysa2mqtt/commit/bb38949336261f02991ec96fcd54ca996bb4547b) Thanks [@dependabot](https://github.com/apps/dependabot)! - chore(deps): Bump aws-iot-device-sdk-v2 from 1.28.0 to 1.28.1
+
 ## 3.4.0
 
 ### Minor Changes
