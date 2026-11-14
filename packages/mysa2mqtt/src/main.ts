@@ -140,6 +140,13 @@ async function main() {
       )
   );
 
+  // Each thermostat subscribes its own handler to the client's shared emitter, so the listener count grows with the
+  // number of devices. Node warns about a possible leak past 10 listeners, which is a false alarm for 11 or more devices.
+  const maxListeners = client.emitter.getMaxListeners();
+  if (thermostats.length >= maxListeners) {
+    client.emitter.setMaxListeners(thermostats.length + 1);
+  }
+
   // The unmatched keys are device ids or names, so they are not logged: this output is routinely
   // pasted into public issues. The count is enough to prompt a re-read of the configuration.
   const unmatchedHeaterWattsCount = heaterWatts.size - matchedHeaterWattsKeys.size;
