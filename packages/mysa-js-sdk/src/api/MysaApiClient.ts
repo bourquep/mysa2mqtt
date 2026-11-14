@@ -1008,7 +1008,8 @@ export class MysaApiClient {
    * @param payload - The serialized payload (binary buffer or Uint8Array).
    * @param qos - The desired MQTT QoS level for the publish.
    * @param opts - Retry options (defaults: maxAttempts=5, baseDelayMs=500).
-   * @returns A promise that resolves when the publish succeeds, or rejects with {@link MqttPublishError}.
+   * @returns A promise that resolves when the publish succeeds, or rejects with {@link MqttPublishError}. A failure to
+   *   obtain the connection for a retry is rethrown unwrapped.
    */
   private async _publishWithRetry(
     connection: mqtt.MqttClientConnection,
@@ -1024,12 +1025,15 @@ export class MysaApiClient {
 
     while (true) {
       attempt++;
-      try {
-        // A forced reset replaces the connection, and the one it discarded can never deliver the retry.
-        if (attempt > 1) {
-          connection = await this._getMqttConnection();
-        }
 
+      // A forced reset replaces the connection, and the one it discarded can never deliver the retry. Acquired outside
+      // the try below: failing to obtain a connection says nothing about the device's topic, so it must propagate as
+      // is rather than as an MqttPublishError, which _publishToDevice could take for a rejected publish.
+      if (attempt > 1) {
+        connection = await this._getMqttConnection();
+      }
+
+      try {
         // Guard against publishes that never settle: a QoS1 publish the
         // broker silently ignores (e.g. an unauthorized topic) produces no
         // PUBACK and, in practice, no protocol-timeout rejection either —

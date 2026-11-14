@@ -297,6 +297,29 @@ describe('MysaApiClient MQTT publish retries', () => {
     expect(replacement.publish).toHaveBeenCalledTimes(1);
     expect(restUpdates()).toEqual([]);
   });
+
+  it('does not take a failure to reconnect for a retry as the device rejecting publishes', async () => {
+    const { client, publish, restUpdates } = setup();
+    publish.mockRestore();
+
+    const discarded = { publish: vi.fn().mockRejectedValue('Failed to publish: AWS_ERROR_MQTT_CONNECTION_DESTROYED') };
+    const replacement = { publish: vi.fn().mockResolvedValue({ packet_id: 1 }) };
+    vi.spyOn(client as unknown as ClientInternals, '_getMqttConnection')
+      .mockResolvedValueOnce(discarded)
+      .mockRejectedValueOnce(new Error('Unable to establish an authentication session.'))
+      .mockResolvedValue(replacement);
+
+    // The command itself still reaches the device, through the REST API.
+    const first = client.setDeviceState(BB_ID, 20);
+    await vi.advanceTimersByTimeAsync(1000);
+    await first;
+    expect(restUpdates()).toHaveLength(1);
+
+    // Nothing was ever published and rejected, so the next command still goes over MQTT.
+    await client.setDeviceState(BB_ID, 21);
+    expect(replacement.publish).toHaveBeenCalledTimes(1);
+    expect(restUpdates()).toHaveLength(1);
+  });
 });
 
 describe('MysaApiClient MQTT connection reset', () => {
