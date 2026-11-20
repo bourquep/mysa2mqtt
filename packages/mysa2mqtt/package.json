@@ -53,7 +53,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "commander": "15.0.0",
+    "commander": "15.1.0",
     "dotenv": "18.0.7",
     "mqtt2ha": "5.1.4",
     "mysa-js-sdk": "3.5.0",
